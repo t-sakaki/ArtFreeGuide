@@ -95,6 +95,10 @@ export default function ArtFreeGuide() {
   const [showInputDrawer, setShowInputDrawer] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
 
+  // Toast Notification State
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
   // Autocomplete States
   const [artworkSuggestions, setArtworkSuggestions] = useState<ArtworkSuggestion[]>([]);
   const [showArtworkSuggestions, setShowArtworkSuggestions] = useState(false);
@@ -152,6 +156,46 @@ export default function ArtFreeGuide() {
     speakableSegmentsRef.current = speakableSegments;
   }, [speakableSegments]);
 
+  // Toast trigger helper
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 2000);
+  };
+
+  // URL parameters updater
+  const updateUrlParams = (title: string, artistName: string) => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('artwork', title);
+    if (artistName) {
+      url.searchParams.set('artist', artistName);
+    } else {
+      url.searchParams.delete('artist');
+    }
+    window.history.pushState({}, '', url.toString());
+  };
+
+  // URL parameters listener (Deep Linking)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleUrlChange = () => {
+      const params = new URLSearchParams(window.location.search);
+      const artworkParam = params.get('artwork') || '';
+      const artistParam = params.get('artist') || '';
+      if (artworkParam.trim()) {
+        generateGuide(artworkParam, artistParam);
+      }
+    };
+
+    window.addEventListener('popstate', handleUrlChange);
+    // Initial load check
+    handleUrlChange();
+
+    return () => window.removeEventListener('popstate', handleUrlChange);
+  }, []);
+
   // Load initial settings and session on mount
   useEffect(() => {
     // 1. Restore playback speed
@@ -168,45 +212,51 @@ export default function ArtFreeGuide() {
     const draftArtwork = localStorage.getItem('art_free_guide_draft_artwork') || '';
     const draftArtist = localStorage.getItem('art_free_guide_draft_artist') || '';
 
-    setArtwork(draftArtwork);
-    setArtist(draftArtist);
+    // Only set draft inputs if URL parameters are empty
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get('artwork')) {
+      setArtwork(draftArtwork);
+      setArtist(draftArtist);
 
-    if (savedHistoryStr) {
-      try {
-        const parsedHistory = JSON.parse(savedHistoryStr) as HistoryEntry[];
-        setHistory(parsedHistory);
+      if (savedHistoryStr) {
+        try {
+          const parsedHistory = JSON.parse(savedHistoryStr) as HistoryEntry[];
+          setHistory(parsedHistory);
 
-        if (savedIndexStr) {
-          const idx = parseInt(savedIndexStr, 10);
-          if (idx >= 0 && idx < parsedHistory.length) {
-            setHistoryIndex(idx);
-            const entry = parsedHistory[idx];
+          if (savedIndexStr) {
+            const idx = parseInt(savedIndexStr, 10);
+            if (idx >= 0 && idx < parsedHistory.length) {
+              setHistoryIndex(idx);
+              const entry = parsedHistory[idx];
 
-            // If draft artwork/artist is empty, fall back to the active history entry
-            if (!draftArtwork) setArtwork(entry.title);
-            if (!draftArtist) setArtist(entry.artist);
+              if (!draftArtwork) setArtwork(entry.title);
+              if (!draftArtist) setArtist(entry.artist);
 
-            // Restore output states
-            setResponseShort(entry.short || '');
-            setResponseStandard(entry.standard || '');
-            setResponseDeep(entry.deep || '');
-            setExplanationMode('short');
-            setImageUrl(entry.imageUrl);
-            setImageError(entry.imageError);
-            setSearchQuery(entry.searchQuery);
-            setRecommendations(entry.recommendations);
+              // Restore output states
+              setResponseShort(entry.short || '');
+              setResponseStandard(entry.standard || '');
+              setResponseDeep(entry.deep || '');
+              setExplanationMode('short');
+              setImageUrl(entry.imageUrl);
+              setImageError(entry.imageError);
+              setSearchQuery(entry.searchQuery);
+              setRecommendations(entry.recommendations);
+            }
           }
+        } catch (e) {
+          console.error('Failed to parse history from localStorage', e);
         }
-      } catch (e) {
-        console.error('Failed to parse history from localStorage', e);
+      }
+    } else {
+      // Just load history array to enable drawer display
+      if (savedHistoryStr) {
+        try {
+          const parsedHistory = JSON.parse(savedHistoryStr) as HistoryEntry[];
+          setHistory(parsedHistory);
+        } catch (e) {}
       }
     }
   }, []);
-
-  // Save speed when changed
-  useEffect(() => {
-    localStorage.setItem('art_free_guide_playback_speed', String(playbackSpeed));
-  }, [playbackSpeed]);
 
   const updateHistoryEntryByArtwork = (artworkTitle: string, artistName: string, fields: Partial<HistoryEntry>) => {
     setHistory(prev => {
@@ -237,6 +287,9 @@ export default function ArtFreeGuide() {
     localStorage.setItem('art_free_guide_draft_artwork', entry.title);
     localStorage.setItem('art_free_guide_draft_artist', entry.artist);
 
+    // Sync deep linking parameters
+    updateUrlParams(entry.title, entry.artist);
+
     setResponseShort(entry.short || '');
     setResponseStandard(entry.standard || '');
     setResponseDeep(entry.deep || '');
@@ -254,31 +307,6 @@ export default function ArtFreeGuide() {
       stopAmbientSound();
     }
   };
-
-  // SpeechSynthesis and SpeechRecognition Initialization
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      setSpeechSupported(true);
-    }
-
-    if (typeof window !== 'undefined') {
-      const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognitionClass) {
-        const rec = new SpeechRecognitionClass();
-        rec.continuous = false;
-        rec.interimResults = false;
-        rec.lang = 'ja-JP';
-        setRecognition(rec);
-      }
-    }
-
-    return () => {
-      if (typeof window !== 'undefined') {
-        window.speechSynthesis.cancel();
-        stopAmbientSound();
-      }
-    };
-  }, []);
 
   // Split explanation markdown into clean sentence segments
   const parseSegments = (text: string) => {
@@ -767,6 +795,9 @@ export default function ArtFreeGuide() {
       stopAmbientSound();
     }
 
+    // Sync deep linking parameters
+    updateUrlParams(targetArtwork, targetArtist);
+
     const cacheKey = `${targetArtwork.trim().toLowerCase()}::${targetArtist.trim().toLowerCase()}`;
 
     // CHECK CLIENT-SIDE CACHE
@@ -781,10 +812,9 @@ export default function ArtFreeGuide() {
       setSearchQuery(cached.searchQuery);
       setRecommendations(cached.recommendations);
       
-      // Auto Play back from cache
-      setActiveSegmentIndex(0);
-      setIsPlaying(true);
-      startAmbientSound(targetArtwork);
+      // Autoplay Avoidance: Do not autoplay, let user click to play
+      setActiveSegmentIndex(-1);
+      setIsPlaying(false);
 
       // Synced Navigation State in History
       const idx = history.findIndex(
@@ -961,9 +991,9 @@ export default function ArtFreeGuide() {
         // Close input drawer
         setShowInputDrawer(false);
 
-        // Auto-play
-        setActiveSegmentIndex(0);
-        setIsPlaying(true);
+        // Autoplay Avoidance: Do not autoplay, let user click to play
+        setActiveSegmentIndex(-1);
+        setIsPlaying(false);
       }
     } catch (e: any) {
       console.error(e);
@@ -1164,13 +1194,34 @@ export default function ArtFreeGuide() {
     }
   };
 
+  // URL parameters Share trigger
+  const handleShare = () => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('artwork', artwork);
+    if (artist) {
+      url.searchParams.set('artist', artist);
+    } else {
+      url.searchParams.delete('artist');
+    }
+    
+    navigator.clipboard.writeText(url.toString())
+      .then(() => {
+        triggerToast('共有URLをクリップボードにコピーしました！');
+      })
+      .catch(err => {
+        console.error('Failed to copy share link:', err);
+        triggerToast('コピーに失敗しました');
+      });
+  };
+
   const renderInputForm = () => {
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
           {/* Artwork Input with Autocomplete */}
           <div className="relative space-y-2">
-            <label htmlFor="artwork" className="text-sm font-medium text-slate-400 block text-left font-sans select-none">作品名 <span className="text-rose-500">*</span></label>
+            <label htmlFor="artwork" className="text-sm font-medium text-slate-400 block text-left select-none">作品名 <span className="text-rose-500">*</span></label>
             <input
               id="artwork"
               type="text"
@@ -1185,7 +1236,7 @@ export default function ArtFreeGuide() {
               onKeyDown={handleArtworkKeyDown}
               onFocus={() => setShowArtworkSuggestions(true)}
               onBlur={() => setTimeout(() => setShowArtworkSuggestions(false), 200)}
-              className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30 transition-all font-medium text-sm font-sans"
+              className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30 transition-all font-medium text-sm"
               autoComplete="off"
             />
             {showArtworkSuggestions && artworkSuggestions.length > 0 && (
@@ -1194,7 +1245,7 @@ export default function ArtFreeGuide() {
                   <li
                     key={index}
                     onMouseDown={() => selectArtworkSuggestion(suggestion)}
-                    className={`px-4 py-3 cursor-pointer text-sm transition-all flex items-center justify-between font-sans ${
+                    className={`px-4 py-3 cursor-pointer text-sm transition-all flex items-center justify-between ${
                       focusedArtworkIndex === index
                         ? 'bg-teal-500/10 text-teal-400'
                         : 'hover:bg-slate-900/80 text-slate-300'
@@ -1216,7 +1267,7 @@ export default function ArtFreeGuide() {
 
           {/* Artist Input with Autocomplete */}
           <div className="relative space-y-2">
-            <label htmlFor="artist" className="text-sm font-medium text-slate-400 block text-left font-sans select-none">作者名</label>
+            <label htmlFor="artist" className="text-sm font-medium text-slate-400 block text-left select-none">作者名</label>
             <input
               id="artist"
               type="text"
@@ -1231,7 +1282,7 @@ export default function ArtFreeGuide() {
               onKeyDown={handleArtistKeyDown}
               onFocus={() => setShowArtistSuggestions(true)}
               onBlur={() => setTimeout(() => setShowArtistSuggestions(false), 200)}
-              className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30 transition-all font-medium text-sm font-sans"
+              className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30 transition-all font-medium text-sm"
               autoComplete="off"
             />
             {showArtistSuggestions && artistSuggestions.length > 0 && (
@@ -1240,10 +1291,10 @@ export default function ArtFreeGuide() {
                   <li
                     key={index}
                     onMouseDown={() => selectArtistSuggestion(name)}
-                    className={`px-4 py-3 cursor-pointer text-sm transition-all text-left font-sans ${
+                    className={`px-4 py-3 cursor-pointer text-sm transition-all text-left ${
                       focusedArtistIndex === index
                         ? 'bg-teal-500/10 text-teal-400'
-                        : 'hover:bg-slate-900/80 text-slate-305'
+                        : 'hover:bg-slate-900/80 text-slate-300'
                     }`}
                   >
                     {renderHighlightedText(name, artist)}
@@ -1281,16 +1332,44 @@ export default function ArtFreeGuide() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col relative">
 
+      {/* Toast Notification */}
+      {showToast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-55 bg-teal-500 text-slate-950 font-bold px-5 py-2.5 rounded-full shadow-2xl text-xs font-sans animate-fade-in border border-teal-400/20 select-none">
+          {toastMessage}
+        </div>
+      )}
+
       {/* Upper Fixed Layer */}
       {(responseShort || loading) && (
         <div className="fixed top-0 left-0 right-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-900 px-4 py-3 flex flex-col items-center select-none shadow-md">
-          {/* App Title */}
-          <h1 className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-500 bg-clip-text text-transparent select-none font-sans">
-            ArtFreeGuide
-          </h1>
+          {/* Top Row Navigation */}
+          <div className="flex items-center justify-between w-full max-w-md mb-2">
+            <button
+              onClick={() => setShowInputDrawer(true)}
+              className="text-slate-400 hover:text-teal-400 transition-colors text-xs font-sans font-semibold flex items-center gap-1 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg"
+            >
+              <span>🎨</span> <span>作品変更</span>
+            </button>
+            
+            <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-500 bg-clip-text text-transparent font-sans">
+              ArtFreeGuide
+            </h1>
+
+            <button
+              onClick={() => setShowHistorySidebar(true)}
+              className="text-slate-400 hover:text-teal-400 transition-colors text-xs font-sans font-semibold flex items-center gap-1 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg relative"
+            >
+              <span>📜</span> <span>履歴</span>
+              {history.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-teal-500 text-slate-950 font-bold font-mono rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
+                  {history.length}
+                </span>
+              )}
+            </button>
+          </div>
 
           {/* Large Artwork Thumbnail (fixed) */}
-          <div className="relative w-full max-w-md h-36 sm:h-44 mt-2.5 rounded-2xl overflow-hidden bg-slate-900 border border-slate-800/80 shadow-inner flex items-center justify-center group shrink-0">
+          <div className="relative w-full max-w-md h-36 sm:h-44 rounded-2xl overflow-hidden bg-slate-900 border border-slate-800/80 shadow-inner flex items-center justify-center group shrink-0">
             {imageLoading && (
               <div className="absolute inset-0 bg-slate-900/60 flex flex-col items-center justify-center gap-2">
                 <div className="animate-pulse flex space-x-2">
@@ -1319,7 +1398,7 @@ export default function ArtFreeGuide() {
       )}
 
       {/* Scrollable Center Content */}
-      <div className={`w-full max-w-2xl px-4 mx-auto ${responseShort || loading ? 'pt-60 sm:pt-68 pb-28' : 'py-12 md:py-20 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]'}`}>
+      <div className={`w-full max-w-2xl px-4 mx-auto ${responseShort || loading ? 'pt-64 sm:pt-72 pb-32' : 'py-12 md:py-20 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]'}`}>
         
         {/* Empty state: Hero landing / initial search card */}
         {!responseShort && !loading && (
@@ -1372,7 +1451,7 @@ export default function ArtFreeGuide() {
         {/* Guide content */}
         {responseShort && (
           <div className="space-y-6 w-full animate-fade-in">
-            {/* Ambient indicator and subtitle banner */}
+            {/* Subtitle banner */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-900/60 select-none">
               <span className="text-xs text-slate-400 font-semibold truncate pr-2 font-sans">
                 🎧 {artwork} {artist ? `(${artist})` : ''}
@@ -1384,6 +1463,19 @@ export default function ArtFreeGuide() {
                 </div>
               )}
             </div>
+
+            {/* Autoplay Policy Avoidance button */}
+            {activeSegmentIndex === -1 && !isPlaying && (
+              <div className="flex justify-center py-2 animate-bounce">
+                <button
+                  onClick={handlePlayPause}
+                  className="px-8 py-3.5 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-400 hover:to-blue-500 text-slate-950 font-black rounded-full shadow-lg shadow-teal-500/20 active:scale-95 transition-all flex items-center gap-2 text-sm font-sans"
+                >
+                  <span>🎧</span>
+                  <span>音声ガイドを再生する</span>
+                </button>
+              </div>
+            )}
 
             {/* Explanation mode selector tabs */}
             <div className="flex bg-slate-950 border border-slate-900 p-1 rounded-xl select-none w-full max-w-sm mx-auto">
@@ -1400,7 +1492,7 @@ export default function ArtFreeGuide() {
                   className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all active:scale-95 font-sans ${
                     explanationMode === mode
                       ? 'bg-teal-500 text-slate-950 shadow-md font-black'
-                      : 'text-slate-400 hover:text-slate-205'
+                      : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   {mode === 'short' ? '概要' : mode === 'standard' ? '標準' : '詳細'}
@@ -1409,7 +1501,7 @@ export default function ArtFreeGuide() {
             </div>
 
             {/* Highlights Segment Box */}
-            <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-4 md:p-6 max-h-[420px] overflow-y-auto space-y-3 font-serif leading-relaxed text-base selection:bg-teal-500/20 shadow-inner">
+            <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-4 md:p-6 max-h-[380px] overflow-y-auto space-y-3 font-serif leading-relaxed text-base selection:bg-teal-500/20 shadow-inner">
               {segments.length > 0 ? (
                 segments.map((seg, index) => {
                   const isSpeakable = speakableSegments.includes(seg);
@@ -1475,6 +1567,42 @@ export default function ArtFreeGuide() {
               )}
             </div>
 
+            {/* Shared and speech interaction action buttons */}
+            <div className="flex flex-wrap items-center justify-center gap-3 select-none">
+              {recognition && (
+                <button
+                  onClick={startListening}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 shadow-md font-sans ${
+                    isListening
+                      ? 'bg-rose-500 text-white animate-pulse'
+                      : 'bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20'
+                  }`}
+                >
+                  <span>🎙️</span>
+                  <span>{isListening ? 'お話し中...' : '感想を声で伝える'}</span>
+                </button>
+              )}
+
+              <button
+                onClick={handleShare}
+                className="px-5 py-2.5 bg-slate-900 border border-slate-800 hover:border-teal-500/40 text-slate-300 hover:text-teal-400 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-md font-sans"
+              >
+                <span>🔗</span>
+                <span>解説を共有する</span>
+              </button>
+
+              {/* Deep Dive secondary trigger button */}
+              {explanationMode === 'deep' && (
+                <button
+                  onClick={handleDeepDive}
+                  disabled={deepDiveLoading}
+                  className="px-5 py-2.5 bg-gradient-to-r from-teal-500/10 to-blue-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-md font-sans disabled:opacity-40"
+                >
+                  <span>{deepDiveLoading ? '探究中...' : '🔍 さらなる面白裏話を発掘'}</span>
+                </button>
+              )}
+            </div>
+
             {/* Voice feedback transcription indicator */}
             {voiceText && (
               <div className="p-3 bg-slate-950/40 border border-slate-900 rounded-xl text-xs text-slate-400 flex items-start gap-2 select-text font-sans">
@@ -1530,56 +1658,37 @@ export default function ArtFreeGuide() {
         )}
       </div>
 
-      {/* Downward Fixed Controller Panel */}
+      {/* Downward Fixed Controller Panel (Optimized Smartphone Thumb Reach) */}
       {responseShort && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 border-t border-slate-900 px-4 py-3 shadow-2xl flex items-center justify-between gap-2 select-none h-20">
-          
-          {/* Left edge controls: Change artwork & History */}
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setShowInputDrawer(true)}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-900 border border-slate-800 text-slate-350 hover:text-teal-400 transition-all active:scale-90 shadow-md font-sans"
-              title="作品を変える"
-            >
-              🎨
-            </button>
-            <button
-              onClick={() => setShowHistorySidebar(true)}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-900 border border-slate-800 text-slate-350 hover:text-teal-400 transition-all active:scale-90 relative shadow-md font-sans"
-              title="履歴を見る"
-            >
-              📜
-              {history.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-teal-500 text-slate-950 font-bold font-mono rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
-                  {history.length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Center Playback control group */}
-          <div className="flex items-center gap-2">
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 border-t border-slate-900 px-4 py-3 shadow-2xl flex items-center justify-between gap-1 select-none h-24 pb-5">
+          <div className="flex items-center justify-between w-full max-w-lg mx-auto px-1 font-sans">
+            
+            {/* Prev Artwork in History */}
             <button
               onClick={() => loadHistoryEntry(historyIndex - 1)}
               disabled={historyIndex <= 0}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-900 border border-slate-800 text-slate-450 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90 disabled:pointer-events-none"
+              className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90 disabled:pointer-events-none"
               title="前の作品に戻る"
             >
-              ⏮️
+              <span className="text-xl">⏮️</span>
+              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">前作品</span>
             </button>
+
+            {/* Skip 1 segment backward */}
             <button
               onClick={handleSkipBackward}
               disabled={activeSegmentIndex <= 0}
-              className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-900/60 border border-slate-850 text-slate-450 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90"
+              className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90"
               title="1文戻る"
             >
-              ⏪
+              <span className="text-lg">⏪</span>
+              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">1文戻る</span>
             </button>
             
-            {/* Play Pause central circle */}
+            {/* Central Play/Pause button (Enlarged circle) */}
             <button
               onClick={handlePlayPause}
-              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg active:scale-95 relative overflow-hidden shrink-0 ${
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl active:scale-95 relative overflow-hidden shrink-0 mx-2 ${
                 isPlaying
                   ? 'bg-teal-500 text-slate-950 hover:bg-teal-400 hover:shadow-teal-400/20'
                   : 'bg-slate-900 text-teal-400 border border-teal-500/30 hover:border-teal-500 hover:shadow-teal-500/10'
@@ -1599,77 +1708,66 @@ export default function ArtFreeGuide() {
               )}
             </button>
 
+            {/* Skip 1 segment forward */}
             <button
               onClick={handleSkipForward}
               disabled={activeSegmentIndex >= speakableSegments.length - 1}
-              className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-900/60 border border-slate-850 text-slate-450 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90"
+              className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90"
               title="1文進む"
             >
-              ⏩
+              <span className="text-lg">⏩</span>
+              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">1文進む</span>
             </button>
+
+            {/* Next Artwork in History */}
             <button
               onClick={() => loadHistoryEntry(historyIndex + 1)}
               disabled={historyIndex >= history.length - 1}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-900 border border-slate-800 text-slate-450 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90 disabled:pointer-events-none"
+              className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90 disabled:pointer-events-none"
               title="次の作品に進む"
             >
-              ⏭️
+              <span className="text-xl">⏭️</span>
+              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">次作品</span>
             </button>
-          </div>
 
-          {/* Right edge: Speed Menu trigger & speech toggle */}
-          <div className="flex items-center gap-1.5 relative">
             {/* Speed popover button */}
-            <button
-              onClick={() => setShowSpeedMenu(!showSpeedMenu)}
-              className="w-11 h-10 px-1 rounded-xl bg-slate-900 border border-slate-800 text-teal-400 text-xs font-mono font-bold hover:bg-slate-800 active:scale-90 transition-all flex items-center justify-center gap-0.5 shadow-inner"
-              title="再生速度を変更"
-            >
-              <span>⚡</span>
-              <span>{playbackSpeed.toFixed(1)}</span>
-            </button>
-
-            {/* Smart Speed Selector Popover */}
-            {showSpeedMenu && (
-              <div className="absolute bottom-12 right-0 bg-slate-950 border border-slate-850 rounded-2xl p-2 flex flex-col gap-1 shadow-2xl z-50 min-w-[70px] animate-fade-in">
-                {[1.0, 1.2, 1.5, 1.7, 2.0, 2.5].map(sp => {
-                  const isSelected = playbackSpeed === sp;
-                  return (
-                    <button
-                      key={sp}
-                      onClick={() => {
-                        setPlaybackSpeed(sp);
-                        setShowSpeedMenu(false);
-                      }}
-                      className={`py-2 text-[11px] font-mono font-bold rounded-lg transition-all text-center active:scale-95 ${
-                        isSelected
-                          ? 'bg-teal-500 text-slate-950 font-black'
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-                      }`}
-                    >
-                      {sp.toFixed(1)}x
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            
-            {/* Speech interaction trigger */}
-            {recognition && (
+            <div className="flex-1 min-w-0 relative flex justify-center">
               <button
-                onClick={startListening}
-                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 shrink-0 ${
-                  isListening
-                    ? 'bg-rose-500 text-white animate-pulse'
-                    : 'bg-blue-500/10 border border-blue-500/20 text-blue-450 hover:bg-blue-500/20'
-                }`}
-                title="対話する"
+                onClick={() => setShowSpeedMenu(!showSpeedMenu)}
+                className="flex flex-col items-center justify-center gap-1 text-teal-400 hover:text-teal-350 transition-all active:scale-90"
+                title="再生速度を変更"
               >
-                🎙️
+                <span className="text-lg">⚡</span>
+                <span className="text-[8px] sm:text-[9px] font-mono font-bold truncate max-w-full">{playbackSpeed.toFixed(1)}x</span>
               </button>
-            )}
-          </div>
 
+              {/* Smart Speed Selector Popover */}
+              {showSpeedMenu && (
+                <div className="absolute bottom-12 right-0 bg-slate-950 border border-slate-850 rounded-2xl p-2 flex flex-col gap-1 shadow-2xl z-50 min-w-[70px] animate-fade-in">
+                  {[1.0, 1.2, 1.5, 1.7, 2.0, 2.5].map(sp => {
+                    const isSelected = playbackSpeed === sp;
+                    return (
+                      <button
+                        key={sp}
+                        onClick={() => {
+                          setPlaybackSpeed(sp);
+                          setShowSpeedMenu(false);
+                        }}
+                        className={`py-2 text-[11px] font-mono font-bold rounded-lg transition-all text-center active:scale-95 ${
+                          isSelected
+                            ? 'bg-teal-500 text-slate-950 font-black'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                        }`}
+                      >
+                        {sp.toFixed(1)}x
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+          </div>
         </div>
       )}
 
