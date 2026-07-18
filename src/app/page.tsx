@@ -73,6 +73,101 @@ const PRESET_ARTISTS = [
   'ジャン＝ミシェル・バスキア',
 ];
 
+class AudioController {
+  private static speechTimeoutId: any = null;
+
+  static clearQueue() {
+    console.log('[AUDIO] Queue Cancelled');
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    if (this.speechTimeoutId) {
+      clearTimeout(this.speechTimeoutId);
+      this.speechTimeoutId = null;
+    }
+  }
+
+  static forceUnlock() {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        const dummy = new SpeechSynthesisUtterance('');
+        dummy.volume = 0;
+        window.speechSynthesis.speak(dummy);
+      } catch (e) {
+        console.warn('[AUDIO] Force unlock failed:', e);
+      }
+    }
+  }
+
+  static speak(
+    index: number,
+    text: string,
+    rate: number,
+    onStart: () => void,
+    onEnd: () => void,
+    onError: (e: any) => void
+  ) {
+    this.clearQueue();
+
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      return;
+    }
+
+    // Give browser 50ms to register the cancellation
+    setTimeout(() => {
+      console.log(`[AUDIO] Attempting to speak sentence #${index}`);
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ja-JP';
+      utterance.rate = rate;
+
+      let hasFinished = false;
+
+      const handleTransition = (type: 'end' | 'error' | 'timeout', detail?: any) => {
+        if (hasFinished) return;
+        hasFinished = true;
+
+        if (this.speechTimeoutId) {
+          clearTimeout(this.speechTimeoutId);
+          this.speechTimeoutId = null;
+        }
+
+        if (type === 'end') {
+          onEnd();
+        } else if (type === 'error') {
+          onError(detail);
+        } else {
+          console.warn(`[AUDIO] Sentence #${index} Timeout! Forcing transition`);
+          onEnd();
+        }
+      };
+
+      utterance.onstart = () => {
+        console.log(`[AUDIO] Voice started for #${index}`);
+        onStart();
+      };
+
+      utterance.onend = () => {
+        console.log(`[AUDIO] Sentence #${index} Ended`);
+        handleTransition('end');
+      };
+
+      utterance.onerror = (e) => {
+        console.warn(`[AUDIO] Sentence #${index} Error:`, e);
+        handleTransition('error', e);
+      };
+
+      // Safety timeout: 200ms per character, min 15 seconds
+      const timeoutDuration = Math.max(15000, text.length * 200);
+      this.speechTimeoutId = setTimeout(() => {
+        handleTransition('timeout');
+      }, timeoutDuration);
+
+      window.speechSynthesis.speak(utterance);
+    }, 50);
+  }
+}
+
 export default function ArtFreeGuide() {
   const [artwork, setArtwork] = useState('');
   const [artist, setArtist] = useState('');
@@ -141,7 +236,6 @@ export default function ArtFreeGuide() {
   const speedRef = useRef(1.5);
   const activeIndexRef = useRef(-1);
   const speakableSegmentsRef = useRef<string[]>([]);
-  const speechTimeoutRef = useRef<any>(null);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -338,12 +432,8 @@ export default function ArtFreeGuide() {
     // Stop speaking immediately on navigation
     setActiveSegmentIndex(-1);
     setIsPlaying(false);
-    clearSpeechTimeout();
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      console.log(`[TTS] Queue Cleared`);
-      window.speechSynthesis.cancel();
-      stopAmbientSound();
-    }
+    AudioController.clearQueue();
+    stopAmbientSound();
   };
 
   // Split explanation markdown into clean sentence segments
@@ -413,23 +503,10 @@ export default function ArtFreeGuide() {
     }
   }, [activeSegmentIndex, isPlaying]);
 
-  const clearSpeechTimeout = () => {
-    if (speechTimeoutRef.current) {
-      clearTimeout(speechTimeoutRef.current);
-      speechTimeoutRef.current = null;
-    }
-  };
-
   const speakSegment = (index: number) => {
     if (!speechSupported || index < 0 || index >= speakableSegments.length) {
       return;
     }
-
-    // Clear previous safety timeout
-    clearSpeechTimeout();
-
-    console.log(`[TTS] Queue Cleared`);
-    window.speechSynthesis.cancel();
 
     const rawText = speakableSegments[index];
     const cleanText = rawText
@@ -444,7 +521,6 @@ export default function ArtFreeGuide() {
       .trim();
 
     if (!cleanText) {
-      // Skip empty segments
       setTimeout(() => {
         if (isPlayingRef.current && activeIndexRef.current === index) {
           setActiveSegmentIndex(prev => prev + 1);
@@ -453,41 +529,24 @@ export default function ArtFreeGuide() {
       return;
     }
 
-    console.log(`[TTS] Speaking Sentence #${index}: "${cleanText}"`);
-
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = 'ja-JP';
-    utterance.rate = speedRef.current;
-
-    let hasEnded = false;
-
-    const transitionToNext = () => {
-      if (hasEnded) return;
-      hasEnded = true;
-      clearSpeechTimeout();
-      if (isPlayingRef.current && activeIndexRef.current === index) {
-        setActiveSegmentIndex(prev => prev + 1);
+    AudioController.speak(
+      index,
+      cleanText,
+      speedRef.current,
+      () => {
+        // Voice started callback if needed
+      },
+      () => {
+        if (isPlayingRef.current && activeIndexRef.current === index) {
+          setActiveSegmentIndex(prev => prev + 1);
+        }
+      },
+      (err) => {
+        if (isPlayingRef.current && activeIndexRef.current === index) {
+          setActiveSegmentIndex(prev => prev + 1);
+        }
       }
-    };
-
-    utterance.onend = () => {
-      console.log(`[TTS] Sentence #${index} Ended`);
-      transitionToNext();
-    };
-
-    utterance.onerror = (e) => {
-      console.warn(`[TTS] Sentence #${index} Error:`, e);
-      transitionToNext();
-    };
-
-    // Set safety transition timeout in case browser TTS hangs (15s minimum or character-based)
-    const timeoutDuration = Math.max(15000, cleanText.length * 200); // 200ms per character, min 15s
-    speechTimeoutRef.current = setTimeout(() => {
-      console.warn(`[TTS] Sentence #${index} Timeout! Forcing transition to next sentence`);
-      transitionToNext();
-    }, timeoutDuration);
-
-    window.speechSynthesis.speak(utterance);
+    );
   };
 
   // Start Ambient Soundscape using Web Audio API
@@ -921,7 +980,7 @@ export default function ArtFreeGuide() {
     }
 
     if (speechSupported) {
-      window.speechSynthesis.cancel();
+      AudioController.clearQueue();
       setIsPlaying(false);
       stopAmbientSound();
     }
@@ -1161,7 +1220,7 @@ export default function ArtFreeGuide() {
     setDeepDiveLoading(true);
     // Temporarily pause guide
     setIsPlaying(false);
-    window.speechSynthesis.cancel();
+    AudioController.clearQueue();
 
     try {
       const res = await fetch('/api/chat', {
@@ -1225,8 +1284,8 @@ export default function ArtFreeGuide() {
     setVoiceText('');
     
     // Pause BGM & Guide Synthesis
-    window.speechSynthesis.cancel();
     setIsPlaying(false);
+    AudioController.clearQueue();
     stopAmbientSound();
 
     recognition.start();
@@ -1309,13 +1368,27 @@ export default function ArtFreeGuide() {
 
   // Playback Control Handlers
   const handlePlayPause = () => {
+    console.log('[AUDIO] Button Clicked');
+    
+    // 1. Force unlock on user gesture
+    AudioController.forceUnlock();
+
+    // 2. Play Web Audio ambient context if needed
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        const tempCtx = new AudioContextClass();
+        if (tempCtx.state === 'suspended') {
+          tempCtx.resume();
+        }
+      }
+    } catch (e) {}
+
     if (!speechSupported || speakableSegments.length === 0) return;
 
     if (isPlaying) {
       setIsPlaying(false);
-      clearSpeechTimeout();
-      console.log(`[TTS] Queue Cleared`);
-      window.speechSynthesis.cancel();
+      AudioController.clearQueue();
       stopAmbientSound();
     } else {
       if (activeSegmentIndex === -1 || activeSegmentIndex >= speakableSegments.length) {
