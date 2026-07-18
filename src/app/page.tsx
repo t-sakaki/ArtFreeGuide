@@ -141,6 +141,7 @@ export default function ArtFreeGuide() {
   const speedRef = useRef(1.5);
   const activeIndexRef = useRef(-1);
   const speakableSegmentsRef = useRef<string[]>([]);
+  const speechTimeoutRef = useRef<any>(null);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -337,7 +338,9 @@ export default function ArtFreeGuide() {
     // Stop speaking immediately on navigation
     setActiveSegmentIndex(-1);
     setIsPlaying(false);
+    clearSpeechTimeout();
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      console.log(`[TTS] Queue Cleared`);
       window.speechSynthesis.cancel();
       stopAmbientSound();
     }
@@ -410,11 +413,22 @@ export default function ArtFreeGuide() {
     }
   }, [activeSegmentIndex, isPlaying]);
 
+  const clearSpeechTimeout = () => {
+    if (speechTimeoutRef.current) {
+      clearTimeout(speechTimeoutRef.current);
+      speechTimeoutRef.current = null;
+    }
+  };
+
   const speakSegment = (index: number) => {
     if (!speechSupported || index < 0 || index >= speakableSegments.length) {
       return;
     }
 
+    // Clear previous safety timeout
+    clearSpeechTimeout();
+
+    console.log(`[TTS] Queue Cleared`);
     window.speechSynthesis.cancel();
 
     const rawText = speakableSegments[index];
@@ -439,22 +453,39 @@ export default function ArtFreeGuide() {
       return;
     }
 
+    console.log(`[TTS] Speaking Sentence #${index}: "${cleanText}"`);
+
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.lang = 'ja-JP';
     utterance.rate = speedRef.current;
 
-    utterance.onend = () => {
+    let hasEnded = false;
+
+    const transitionToNext = () => {
+      if (hasEnded) return;
+      hasEnded = true;
+      clearSpeechTimeout();
       if (isPlayingRef.current && activeIndexRef.current === index) {
         setActiveSegmentIndex(prev => prev + 1);
       }
     };
 
-    utterance.onerror = (e) => {
-      console.warn('SpeechSynthesis error:', e);
-      if (isPlayingRef.current && activeIndexRef.current === index) {
-        setActiveSegmentIndex(prev => prev + 1);
-      }
+    utterance.onend = () => {
+      console.log(`[TTS] Sentence #${index} Ended`);
+      transitionToNext();
     };
+
+    utterance.onerror = (e) => {
+      console.warn(`[TTS] Sentence #${index} Error:`, e);
+      transitionToNext();
+    };
+
+    // Set safety transition timeout in case browser TTS hangs (15s minimum or character-based)
+    const timeoutDuration = Math.max(15000, cleanText.length * 200); // 200ms per character, min 15s
+    speechTimeoutRef.current = setTimeout(() => {
+      console.warn(`[TTS] Sentence #${index} Timeout! Forcing transition to next sentence`);
+      transitionToNext();
+    }, timeoutDuration);
 
     window.speechSynthesis.speak(utterance);
   };
@@ -1282,6 +1313,8 @@ export default function ArtFreeGuide() {
 
     if (isPlaying) {
       setIsPlaying(false);
+      clearSpeechTimeout();
+      console.log(`[TTS] Queue Cleared`);
       window.speechSynthesis.cancel();
       stopAmbientSound();
     } else {
