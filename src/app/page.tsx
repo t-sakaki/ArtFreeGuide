@@ -26,6 +26,19 @@ interface GuideCacheEntry {
   speakableSegments: string[];
 }
 
+interface HistoryEntry {
+  title: string;
+  artist: string;
+  response: string;
+  imageUrl: string | null;
+  imageError: boolean;
+  searchQuery: string;
+  recommendations: Recommendation[];
+  segments: string[];
+  speakableSegments: string[];
+  timestamp: string;
+}
+
 const PRESET_ARTWORKS: ArtworkSuggestion[] = [
   { title: 'ひまわり', artist: 'フィンセント・ファン・ゴッホ' },
   { title: '星月夜', artist: 'フィンセント・ファン・ゴッホ' },
@@ -64,6 +77,27 @@ export default function ArtFreeGuide() {
   const [artist, setArtist] = useState('');
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // History State
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [showHistorySidebar, setShowHistorySidebar] = useState(false);
+
+  const updateHistoryEntryByArtwork = (artworkTitle: string, artistName: string, fields: Partial<HistoryEntry>) => {
+    setHistory(prev => {
+      const copy = [...prev];
+      const idx = copy.findIndex(
+        entry =>
+          entry.title.trim().toLowerCase() === artworkTitle.trim().toLowerCase() &&
+          (entry.artist || '').trim().toLowerCase() === (artistName || '').trim().toLowerCase()
+      );
+      if (idx !== -1) {
+        copy[idx] = { ...copy[idx], ...fields };
+        localStorage.setItem('art_free_guide_history', JSON.stringify(copy));
+      }
+      return copy;
+    });
+  };
 
   // Client-side cache for fetched guides to avoid redundant API hits & rate limits
   const [guideCache, setGuideCache] = useState<Record<string, GuideCacheEntry>>({});
@@ -124,6 +158,91 @@ export default function ArtFreeGuide() {
   useEffect(() => {
     speakableSegmentsRef.current = speakableSegments;
   }, [speakableSegments]);
+
+  // Load initial settings and session on mount
+  useEffect(() => {
+    // 1. Restore playback speed
+    const savedSpeed = localStorage.getItem('art_free_guide_playback_speed');
+    if (savedSpeed) {
+      setPlaybackSpeed(parseFloat(savedSpeed));
+    } else {
+      setPlaybackSpeed(1.5);
+    }
+
+    // 2. Restore history
+    const savedHistoryStr = localStorage.getItem('art_free_guide_history');
+    const savedIndexStr = localStorage.getItem('art_free_guide_history_index');
+    const draftArtwork = localStorage.getItem('art_free_guide_draft_artwork') || '';
+    const draftArtist = localStorage.getItem('art_free_guide_draft_artist') || '';
+
+    setArtwork(draftArtwork);
+    setArtist(draftArtist);
+
+    if (savedHistoryStr) {
+      try {
+        const parsedHistory = JSON.parse(savedHistoryStr) as HistoryEntry[];
+        setHistory(parsedHistory);
+
+        if (savedIndexStr) {
+          const idx = parseInt(savedIndexStr, 10);
+          if (idx >= 0 && idx < parsedHistory.length) {
+            setHistoryIndex(idx);
+            const entry = parsedHistory[idx];
+
+            // If draft artwork/artist is empty, fall back to the active history entry
+            if (!draftArtwork) setArtwork(entry.title);
+            if (!draftArtist) setArtist(entry.artist);
+
+            // Restore output states
+            setResponse(entry.response);
+            setImageUrl(entry.imageUrl);
+            setImageError(entry.imageError);
+            setSearchQuery(entry.searchQuery);
+            setRecommendations(entry.recommendations);
+            setSegments(entry.segments);
+            setSpeakableSegments(entry.speakableSegments);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse history from localStorage', e);
+      }
+    }
+  }, []);
+
+  // Save speed when changed
+  useEffect(() => {
+    localStorage.setItem('art_free_guide_playback_speed', String(playbackSpeed));
+  }, [playbackSpeed]);
+
+  const loadHistoryEntry = (index: number) => {
+    if (index < 0 || index >= history.length) return;
+    setHistoryIndex(index);
+    localStorage.setItem('art_free_guide_history_index', String(index));
+
+    const entry = history[index];
+    setArtwork(entry.title);
+    setArtist(entry.artist);
+    
+    // Save draft artwork/artist as well so session state is consistent
+    localStorage.setItem('art_free_guide_draft_artwork', entry.title);
+    localStorage.setItem('art_free_guide_draft_artist', entry.artist);
+
+    setResponse(entry.response);
+    setImageUrl(entry.imageUrl);
+    setImageError(entry.imageError);
+    setSearchQuery(entry.searchQuery);
+    setRecommendations(entry.recommendations);
+    setSegments(entry.segments);
+    setSpeakableSegments(entry.speakableSegments);
+
+    // Stop speaking immediately on navigation
+    setActiveSegmentIndex(-1);
+    setIsPlaying(false);
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      stopAmbientSound();
+    }
+  };
 
   // SpeechSynthesis and SpeechRecognition Initialization
   useEffect(() => {
@@ -435,8 +554,10 @@ export default function ArtFreeGuide() {
 
   const selectArtworkSuggestion = (suggestion: ArtworkSuggestion) => {
     setArtwork(suggestion.title);
+    localStorage.setItem('art_free_guide_draft_artwork', suggestion.title);
     if (suggestion.artist) {
       setArtist(suggestion.artist);
+      localStorage.setItem('art_free_guide_draft_artist', suggestion.artist);
     }
     setShowArtworkSuggestions(false);
     setFocusedArtworkIndex(-1);
@@ -444,6 +565,7 @@ export default function ArtFreeGuide() {
 
   const selectArtistSuggestion = (name: string) => {
     setArtist(name);
+    localStorage.setItem('art_free_guide_draft_artist', name);
     setShowArtistSuggestions(false);
     setFocusedArtistIndex(-1);
   };
@@ -502,6 +624,10 @@ export default function ArtFreeGuide() {
             }
             return prev;
           });
+          const parts = cacheKey.split('::');
+          if (parts.length === 2) {
+            updateHistoryEntryByArtwork(parts[0], parts[1], { imageUrl: thumbUrl, imageError: false });
+          }
         }
       } else {
         setImageError(true);
@@ -515,6 +641,10 @@ export default function ArtFreeGuide() {
             }
             return prev;
           });
+          const parts = cacheKey.split('::');
+          if (parts.length === 2) {
+            updateHistoryEntryByArtwork(parts[0], parts[1], { imageError: true });
+          }
         }
       }
     } catch (error) {
@@ -530,13 +660,17 @@ export default function ArtFreeGuide() {
           }
           return prev;
         });
+        const parts = cacheKey.split('::');
+        if (parts.length === 2) {
+          updateHistoryEntryByArtwork(parts[0], parts[1], { imageError: true });
+        }
       }
     } finally {
       setImageLoading(false);
     }
   };
 
-  const fetchRecommendationImages = async (recs: Recommendation[]) => {
+  const fetchRecommendationImages = async (recs: Recommendation[], targetArtwork: string, targetArtist: string) => {
     recs.forEach(async (rec, index) => {
       const query = `${rec.title} ${rec.artist}`.trim();
       try {
@@ -561,6 +695,7 @@ export default function ArtFreeGuide() {
           if (copy[index]) {
             copy[index] = { ...copy[index], imageUrl: imgUrl, imageLoading: false };
           }
+          updateHistoryEntryByArtwork(targetArtwork, targetArtist, { recommendations: copy });
           return copy;
         });
       } catch (error) {
@@ -570,6 +705,7 @@ export default function ArtFreeGuide() {
           if (copy[index]) {
             copy[index] = { ...copy[index], imageUrl: null, imageLoading: false };
           }
+          updateHistoryEntryByArtwork(targetArtwork, targetArtist, { recommendations: copy });
           return copy;
         });
       }
@@ -705,13 +841,51 @@ export default function ArtFreeGuide() {
         
         setGuideCache(prev => ({ ...prev, [cacheKey]: newEntry }));
 
+        // Append to/update History
+        const newHistoryEntry: HistoryEntry = {
+          title: targetArtwork,
+          artist: targetArtist,
+          response: rawExplanation,
+          imageUrl: null, // updated when fetchImage completes
+          imageError: false,
+          searchQuery: queryForImage,
+          recommendations: recs,
+          segments: parsedSegs,
+          speakableSegments: cleanSpeakables,
+          timestamp: new Date().toISOString()
+        };
+
+        const existingIndex = history.findIndex(
+          h => h.title.trim().toLowerCase() === targetArtwork.trim().toLowerCase() &&
+               (h.artist || '').trim().toLowerCase() === (targetArtist || '').trim().toLowerCase()
+        );
+
+        if (existingIndex !== -1) {
+          setHistory(prev => {
+            const copy = [...prev];
+            copy[existingIndex] = { ...newHistoryEntry, imageUrl: prev[existingIndex].imageUrl }; // retain cached image
+            localStorage.setItem('art_free_guide_history', JSON.stringify(copy));
+            localStorage.setItem('art_free_guide_history_index', String(existingIndex));
+            return copy;
+          });
+          setHistoryIndex(existingIndex);
+        } else {
+          setHistory(prev => {
+            const updated = [...prev, newHistoryEntry];
+            localStorage.setItem('art_free_guide_history', JSON.stringify(updated));
+            localStorage.setItem('art_free_guide_history_index', String(updated.length - 1));
+            setHistoryIndex(updated.length - 1);
+            return updated;
+          });
+        }
+
         // Start progressive loading
         fetchImage(queryForImage, cacheKey);
         startAmbientSound(targetArtwork);
 
         if (recs.length > 0) {
           setRecommendations(recs);
-          fetchRecommendationImages(recs);
+          fetchRecommendationImages(recs, targetArtwork, targetArtist);
         }
 
         // Auto-play
@@ -963,6 +1137,15 @@ export default function ArtFreeGuide() {
         <p className="text-slate-400 text-lg md:text-xl font-medium max-w-xl mx-auto">
           AIキュレーターが贈る、あなたのための特別な音声ガイド。美術作品をもっと深く、もっと身近に。
         </p>
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={() => setShowHistorySidebar(true)}
+            className="bg-slate-900/60 border border-slate-800 hover:bg-slate-900 hover:border-teal-500/40 text-slate-350 hover:text-teal-400 px-4 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-md"
+          >
+            <span>📜</span>
+            <span>閲覧履歴 ({history.length})</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Form & Response Layout */}
@@ -1001,6 +1184,7 @@ export default function ArtFreeGuide() {
                   value={artwork}
                   onChange={(e) => {
                     setArtwork(e.target.value);
+                    localStorage.setItem('art_free_guide_draft_artwork', e.target.value);
                     setShowArtworkSuggestions(true);
                     setFocusedArtworkIndex(-1);
                   }}
@@ -1052,6 +1236,7 @@ export default function ArtFreeGuide() {
                   value={artist}
                   onChange={(e) => {
                     setArtist(e.target.value);
+                    localStorage.setItem('art_free_guide_draft_artist', e.target.value);
                     setShowArtistSuggestions(true);
                     setFocusedArtistIndex(-1);
                   }}
@@ -1162,6 +1347,31 @@ export default function ArtFreeGuide() {
                       </div>
                     )}
                   </div>
+
+                  {/* History Navigation Bar */}
+                  {history.length > 0 && (
+                    <div className="flex items-center justify-between bg-slate-950/40 border border-slate-900 px-4 py-2.5 rounded-2xl text-xs select-none">
+                      <button
+                        onClick={() => loadHistoryEntry(historyIndex - 1)}
+                        disabled={historyIndex <= 0}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-teal-400 hover:border-teal-500/20 disabled:opacity-20 disabled:hover:text-slate-400 disabled:hover:border-slate-800 transition-all active:scale-95 disabled:pointer-events-none"
+                      >
+                        <span>◀</span>
+                        <span>前の作品へ戻る</span>
+                      </button>
+                      <span className="font-mono text-slate-500">
+                        {historyIndex + 1} / {history.length}
+                      </span>
+                      <button
+                        onClick={() => loadHistoryEntry(historyIndex + 1)}
+                        disabled={historyIndex >= history.length - 1}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-teal-400 hover:border-teal-500/20 disabled:opacity-20 disabled:hover:text-slate-400 disabled:hover:border-slate-800 transition-all active:scale-95 disabled:pointer-events-none"
+                      >
+                        <span>次の作品へ進む</span>
+                        <span>▶</span>
+                      </button>
+                    </div>
+                  )}
 
                   {/* Artwork Image Section */}
                   <div className="relative w-full aspect-video md:aspect-[21/9] rounded-2xl overflow-hidden bg-slate-950 border border-slate-800/60 shadow-inner flex items-center justify-center group">
@@ -1439,6 +1649,90 @@ export default function ArtFreeGuide() {
           </div>
         )}
       </div>
+
+      {/* History Sidebar Drawer */}
+      {showHistorySidebar && (
+        <div className="fixed inset-0 z-50 flex justify-end select-none animate-fade-in">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+            onClick={() => setShowHistorySidebar(false)}
+          ></div>
+
+          {/* Drawer content */}
+          <div className="relative w-full max-w-xs bg-slate-950 border-l border-slate-900 h-full flex flex-col shadow-2xl p-6 overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-900 pb-4 mb-4">
+              <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
+                <span>📜</span> 閲覧履歴
+              </h3>
+              <button
+                onClick={() => setShowHistorySidebar(false)}
+                className="text-slate-500 hover:text-white transition-colors text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* History List */}
+            <div className="flex-1 space-y-2 overflow-y-auto pr-1 scrollbar-thin">
+              {history.length === 0 ? (
+                <div className="text-slate-650 text-xs py-8 text-center leading-relaxed">
+                  履歴はありません。<br />ガイドを生成するとここに保存されます。
+                </div>
+              ) : (
+                history.map((entry, idx) => {
+                  const isActive = idx === historyIndex;
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        loadHistoryEntry(idx);
+                        setShowHistorySidebar(false);
+                      }}
+                      className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer border transition-all ${
+                        isActive
+                          ? 'bg-teal-500/10 border-teal-500/30 text-teal-400 font-bold'
+                          : 'bg-slate-900/40 border-slate-800/40 hover:border-slate-800 hover:bg-slate-900/60 text-slate-350 hover:text-slate-200'
+                      }`}
+                    >
+                      {/* Minithumb */}
+                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-950 border border-slate-850 flex items-center justify-center shrink-0">
+                        {entry.imageUrl ? (
+                          <img src={entry.imageUrl} alt={entry.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-xs">🖼️</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="font-semibold text-xs truncate">{entry.title}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{entry.artist || '作者不明'}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Clear Button */}
+            {history.length > 0 && (
+              <button
+                onClick={() => {
+                  if (confirm('閲覧履歴をすべて消去しますか？')) {
+                    setHistory([]);
+                    setHistoryIndex(-1);
+                    localStorage.removeItem('art_free_guide_history');
+                    localStorage.removeItem('art_free_guide_history_index');
+                  }
+                }}
+                className="w-full mt-4 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/30 text-rose-400 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              >
+                <span>🗑️</span>
+                <span>履歴をクリア</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }

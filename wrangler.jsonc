@@ -11,6 +11,10 @@
 		"directory": ".open-next/assets",
 		"binding": "ASSETS"
 	},
+	"vars": {
+		"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4",
+		"LLM_PROVIDER": "gemini"
+	},
 	"services": [
 		{
 			// Self-reference service binding, the service name must match the worker name

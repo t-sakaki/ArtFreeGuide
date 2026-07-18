@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getLLMProvider, Message } from '@/lib/llm';
 
-export const runtime = 'edge';
-
 const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富な音声ガイド・キュレーターです。
 ユーザーから入力された美術作品（およびその作者）に対して、親しみやすくかつ知的なトーンで、以下の要件を満たす素晴らしい音声ガイドを提供してください。
 
