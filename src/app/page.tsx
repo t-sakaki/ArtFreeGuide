@@ -75,21 +75,32 @@ const PRESET_ARTISTS = [
 
 class AudioController {
   private static speechTimeoutId: any = null;
+  private static startTimeoutId: any = null;
 
   static clearQueue() {
     console.log('[AUDIO] Queue Cancelled');
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+      try {
+        window.speechSynthesis.resume(); // Unstick if paused
+        window.speechSynthesis.cancel();
+      } catch (e) {
+        console.warn('[AUDIO] Cancel failed:', e);
+      }
     }
     if (this.speechTimeoutId) {
       clearTimeout(this.speechTimeoutId);
       this.speechTimeoutId = null;
+    }
+    if (this.startTimeoutId) {
+      clearTimeout(this.startTimeoutId);
+      this.startTimeoutId = null;
     }
   }
 
   static forceUnlock() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
+        window.speechSynthesis.resume();
         const dummy = new SpeechSynthesisUtterance('');
         dummy.volume = 0;
         window.speechSynthesis.speak(dummy);
@@ -117,6 +128,12 @@ class AudioController {
     setTimeout(() => {
       console.log(`[AUDIO] Attempting to speak sentence #${index}`);
 
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.resume(); // Ensure speaking state is active
+        } catch (e) {}
+      }
+
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'ja-JP';
       utterance.rate = rate;
@@ -131,6 +148,10 @@ class AudioController {
           clearTimeout(this.speechTimeoutId);
           this.speechTimeoutId = null;
         }
+        if (this.startTimeoutId) {
+          clearTimeout(this.startTimeoutId);
+          this.startTimeoutId = null;
+        }
 
         if (type === 'end') {
           onEnd();
@@ -142,7 +163,17 @@ class AudioController {
         }
       };
 
+      // If speech fails to start in 2.5 seconds, force transition to avoid getting stuck
+      this.startTimeoutId = setTimeout(() => {
+        console.warn(`[AUDIO] Sentence #${index} failed to start in 2.5s. Skipping.`);
+        handleTransition('timeout');
+      }, 2500);
+
       utterance.onstart = () => {
+        if (this.startTimeoutId) {
+          clearTimeout(this.startTimeoutId);
+          this.startTimeoutId = null;
+        }
         console.log(`[AUDIO] Voice started for #${index}`);
         onStart();
       };
