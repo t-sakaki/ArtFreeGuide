@@ -14,16 +14,6 @@ interface Recommendation {
   reason: string;
   imageUrl: string | null;
   imageLoading: boolean;
-  exhibition?: {
-    exhibitionExists: boolean;
-    museum: string | null;
-    exhibitionName: string | null;
-    dates: string | null;
-    location: string | null;
-    link: string | null;
-    fallbackMessage?: string | null;
-  } | null;
-  exhibitionLoading?: boolean;
 }
 
 interface GuideCacheEntry {
@@ -586,66 +576,6 @@ export default function ArtFreeGuide() {
     });
   };
 
-  const fetchRecommendationExhibitions = async (recs: Recommendation[], cacheKey?: string) => {
-    recs.forEach(async (rec, index) => {
-      // Stagger requests to avoid exceeding Gemini API RPM rate limits (429)
-      await new Promise(resolve => setTimeout(resolve, index * 2000));
-      try {
-        const res = await fetch('/api/exhibition', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ artwork: rec.title, artist: rec.artist })
-        });
-        const data = await res.json();
-
-        setRecommendations(prev => {
-          const copy = [...prev];
-          if (copy[index]) {
-            copy[index] = {
-              ...copy[index],
-              exhibition: data,
-              exhibitionLoading: false
-            };
-          }
-
-          // Sync into cache if key is present
-          if (cacheKey) {
-            setGuideCache(prevCache => {
-              if (prevCache[cacheKey]) {
-                return {
-                  ...prevCache,
-                  [cacheKey]: { ...prevCache[cacheKey], recommendations: copy }
-                };
-              }
-              return prevCache;
-            });
-          }
-
-          return copy;
-        });
-      } catch (error) {
-        console.error('Error fetching exhibition info:', error);
-        setRecommendations(prev => {
-          const copy = [...prev];
-          if (copy[index]) {
-            copy[index] = {
-              ...copy[index],
-              exhibition: {
-                exhibitionExists: false,
-                museum: null,
-                exhibitionName: null,
-                dates: null,
-                location: null,
-                link: null
-              },
-              exhibitionLoading: false
-            };
-          }
-          return copy;
-        });
-      }
-    });
-  };
 
   const generateGuide = async (customArtwork?: string, customArtist?: string) => {
     const targetArtwork = customArtwork ?? artwork;
@@ -737,9 +667,7 @@ export default function ArtFreeGuide() {
               artist: r.artist,
               reason: r.reason,
               imageUrl: null,
-              imageLoading: true,
-              exhibition: null,
-              exhibitionLoading: true
+              imageLoading: true
             }));
           }
         } catch (jsonError) {
@@ -784,7 +712,6 @@ export default function ArtFreeGuide() {
         if (recs.length > 0) {
           setRecommendations(recs);
           fetchRecommendationImages(recs);
-          fetchRecommendationExhibitions(recs, cacheKey);
         }
 
         // Auto-play
@@ -1502,71 +1429,6 @@ export default function ArtFreeGuide() {
                           {rec.reason}
                         </p>
 
-                        {/* Exhibition Info (Progressive Load with Mobile-Friendly UI) */}
-                        <div className="mt-3 border-t border-slate-800/40 pt-3 space-y-1.5 text-xs text-slate-300 select-none">
-                          {rec.exhibitionLoading ? (
-                            <div className="animate-pulse space-y-1">
-                              <div className="h-3 bg-slate-800 rounded w-2/3"></div>
-                              <div className="h-3 bg-slate-800 rounded w-1/2"></div>
-                            </div>
-                          ) : rec.exhibition ? (
-                            rec.exhibition.exhibitionExists ? (
-                              <div className="space-y-1.5">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
-                                  <span className="font-bold text-rose-400 text-[10px] uppercase tracking-wider">🔴 展示中 / 予定あり</span>
-                                </div>
-                                {rec.exhibition.exhibitionName && (
-                                  <p className="font-medium text-slate-200 line-clamp-1">
-                                    🏆 {rec.exhibition.exhibitionName}
-                                  </p>
-                                )}
-                                {rec.exhibition.museum && (
-                                  <p className="text-slate-400 flex items-center gap-1.5 line-clamp-1">
-                                    <span>🏛️</span>
-                                    <span>
-                                      {rec.exhibition.museum}
-                                      {rec.exhibition.location && ` (${rec.exhibition.location})`}
-                                    </span>
-                                  </p>
-                                )}
-                                {rec.exhibition.dates && (
-                                  <p className="text-slate-500 flex items-center gap-1.5">
-                                    <span>📅</span>
-                                    <span>{rec.exhibition.dates}</span>
-                                  </p>
-                                )}
-                                {rec.exhibition.link && (
-                                  <a
-                                    href={rec.exhibition.link}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()} // Prevent triggering parent card click
-                                    className="inline-flex items-center gap-1 mt-1 text-teal-400 hover:text-teal-350 transition-colors font-semibold text-[11px] hover:underline"
-                                  >
-                                    公式サイト ↗
-                                  </a>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="space-y-1 text-slate-500 text-[11px]">
-                                <div className="flex items-center gap-1.5 text-slate-600 italic">
-                                  <span>🔍</span>
-                                  <span>現在、展示情報はありません</span>
-                                </div>
-                                {rec.exhibition.fallbackMessage && (
-                                  <p className="text-[10px] text-slate-600 leading-relaxed pl-4 font-sans select-text">
-                                    {rec.exhibition.fallbackMessage}
-                                  </p>
-                                )}
-                              </div>
-                            )
-                          ) : (
-                            <div className="text-slate-600 text-[10px] italic">
-                              展示情報の取得待ち...
-                            </div>
-                          )}
-                        </div>
 
                       </div>
                     </div>

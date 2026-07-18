@@ -3,3 +3,11 @@ node_modules
 .env.local
 .env
 *.log
+
+# OpenNext
+.open-next
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
