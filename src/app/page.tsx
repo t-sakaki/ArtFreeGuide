@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 interface ArtworkSuggestion {
   title: string;
   artist: string;
+  isAi?: boolean;
 }
 
 interface Recommendation {
@@ -103,6 +104,7 @@ export default function ArtFreeGuide() {
   const [artworkSuggestions, setArtworkSuggestions] = useState<ArtworkSuggestion[]>([]);
   const [showArtworkSuggestions, setShowArtworkSuggestions] = useState(false);
   const [focusedArtworkIndex, setFocusedArtworkIndex] = useState(-1);
+  const [suggestCache, setSuggestCache] = useState<Record<string, ArtworkSuggestion[]>>({});
 
   const [artistSuggestions, setArtistSuggestions] = useState<string[]>([]);
   const [showArtistSuggestions, setShowArtistSuggestions] = useState(false);
@@ -500,7 +502,28 @@ export default function ArtFreeGuide() {
     setAmbientName(null);
   };
 
-  // Debounce Autocomplete Artwork
+  const fetchAiSuggestions = async (query: string, artistName: string): Promise<ArtworkSuggestion[]> => {
+    try {
+      const res = await fetch('/api/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ artworkQuery: query, artistName })
+      });
+      const data = await res.json();
+      if (data.suggestions && Array.isArray(data.suggestions)) {
+        return data.suggestions.map((title: string) => ({
+          title,
+          artist: artistName || '',
+          isAi: true
+        }));
+      }
+    } catch (e) {
+      console.error('Failed to fetch AI suggestions:', e);
+    }
+    return [];
+  };
+
+  // Debounce Autocomplete Artwork with AI Intellisense Suggestions
   useEffect(() => {
     if (!artwork.trim()) {
       setArtworkSuggestions([]);
@@ -508,32 +531,59 @@ export default function ArtFreeGuide() {
     }
 
     const handler = setTimeout(async () => {
-      // Local Filter
+      const cacheKey = `${artwork.trim().toLowerCase()}::${artist.trim().toLowerCase()}`;
+      if (suggestCache[cacheKey]) {
+        setArtworkSuggestions(suggestCache[cacheKey]);
+        return;
+      }
+
+      // Local preset Filter
       const localMatches = PRESET_ARTWORKS.filter(item =>
         item.title.toLowerCase().includes(artwork.toLowerCase())
-      );
+      ).map(item => ({ ...item, isAi: false }));
 
       // Wikipedia API Search
+      let apiSuggestions: ArtworkSuggestion[] = [];
       try {
-        const url = `https://ja.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(artwork)}&limit=6&namespace=0&format=json&origin=*`;
+        const url = `https://ja.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(artwork)}&limit=4&namespace=0&format=json&origin=*`;
         const res = await fetch(url);
         const data = await res.json();
         const apiTitles: string[] = data[1] || [];
 
-        // Map API results
-        const apiSuggestions = apiTitles
+        apiSuggestions = apiTitles
           .filter(title => !localMatches.some(m => m.title === title))
-          .map(title => ({ title, artist: '' }));
-
-        setArtworkSuggestions([...localMatches, ...apiSuggestions]);
+          .map(title => ({ title, artist: artist || '', isAi: false }));
       } catch (error) {
         console.error('Artwork suggest error:', error);
-        setArtworkSuggestions(localMatches);
       }
-    }, 300);
+
+      // AI Suggestions (もしかして) if input query has length
+      let aiSuggestions: ArtworkSuggestion[] = [];
+      if (artwork.trim().length >= 1) {
+        aiSuggestions = await fetchAiSuggestions(artwork, artist);
+      }
+
+      // Merge results: AI suggestions at the top, then presets, then Wikipedia
+      const merged = [...aiSuggestions, ...localMatches, ...apiSuggestions];
+
+      // De-duplicate based on title
+      const uniqueMap = new Map<string, ArtworkSuggestion>();
+      merged.forEach(item => {
+        const key = item.title.trim().toLowerCase();
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, item);
+        } else if (item.isAi) {
+          uniqueMap.set(key, item);
+        }
+      });
+      const finalSuggestions = Array.from(uniqueMap.values());
+
+      setArtworkSuggestions(finalSuggestions);
+      setSuggestCache(prev => ({ ...prev, [cacheKey]: finalSuggestions }));
+    }, 450); // 450ms debounce
 
     return () => clearTimeout(handler);
-  }, [artwork]);
+  }, [artwork, artist]);
 
   // Debounce Autocomplete Artist
   useEffect(() => {
@@ -617,12 +667,17 @@ export default function ArtFreeGuide() {
   const selectArtworkSuggestion = (suggestion: ArtworkSuggestion) => {
     setArtwork(suggestion.title);
     localStorage.setItem('art_free_guide_draft_artwork', suggestion.title);
+    let targetArtist = artist;
     if (suggestion.artist) {
+      targetArtist = suggestion.artist;
       setArtist(suggestion.artist);
       localStorage.setItem('art_free_guide_draft_artist', suggestion.artist);
     }
     setShowArtworkSuggestions(false);
     setFocusedArtworkIndex(-1);
+    
+    // Auto transition to guide generation on select!
+    generateGuide(suggestion.title, targetArtist);
   };
 
   const selectArtistSuggestion = (name: string) => {
@@ -1240,24 +1295,31 @@ export default function ArtFreeGuide() {
               autoComplete="off"
             />
             {showArtworkSuggestions && artworkSuggestions.length > 0 && (
-              <ul className="absolute z-50 w-full mt-1 bg-slate-950/95 border border-slate-850 rounded-xl overflow-hidden shadow-2xl backdrop-blur-xl max-h-40 overflow-y-auto divide-y divide-slate-800/40">
+              <ul className="absolute z-50 w-full mt-1 bg-slate-950/95 border border-slate-850 rounded-xl overflow-hidden shadow-2xl backdrop-blur-xl max-h-48 overflow-y-auto divide-y divide-slate-800/40">
                 {artworkSuggestions.map((suggestion, index) => (
                   <li
                     key={index}
                     onMouseDown={() => selectArtworkSuggestion(suggestion)}
-                    className={`px-4 py-3 cursor-pointer text-sm transition-all flex items-center justify-between ${
+                    className={`px-4 py-3.5 cursor-pointer text-sm transition-all flex items-center justify-between font-sans ${
                       focusedArtworkIndex === index
-                        ? 'bg-teal-500/10 text-teal-400'
+                        ? 'bg-teal-500/10 text-teal-400 font-bold'
                         : 'hover:bg-slate-900/80 text-slate-300'
                     }`}
                   >
-                    <div className="text-left">
-                      {renderHighlightedText(suggestion.title, artwork)}
-                      {suggestion.artist && (
-                        <span className="text-xs text-slate-500 ml-2 block sm:inline">
-                          by {suggestion.artist}
+                    <div className="text-left flex items-center gap-2">
+                      {suggestion.isAi && (
+                        <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-black shrink-0 uppercase tracking-wider">
+                          もしかして
                         </span>
                       )}
+                      <div>
+                        {renderHighlightedText(suggestion.title, artwork)}
+                        {suggestion.artist && (
+                          <span className="text-xs text-slate-500 ml-2 block sm:inline">
+                            by {suggestion.artist}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </li>
                 ))}
