@@ -1,0 +1,77 @@
+import { NextResponse } from 'next/server';
+import { getLLMProvider, Message } from '@/lib/llm';
+
+export const runtime = 'edge';
+
+const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富な音声ガイド・キュレーターです。
+ユーザーから入力された美術作品（およびその作者）に対して、親しみやすくかつ知的なトーンで、以下の要件を満たす素晴らしい音声ガイドを提供してください。
+
+【ガイドの構成案】
+1. **作品への歓迎と導入**: 作品を目の前にした時のような臨場感のある語りかけから始めます。（例：「こんにちは。今、私たちの目の前にあるのは…」）
+2. **基本情報**: 作品名、作者、制作年代、使用された技法や素材など。
+3. **視覚的な解説（描写）**: 何が描かれているのか、色彩の使い方、光と影のコントラスト、構図など、ユーザーが作品を見る際の視覚的ポイントを案内します。
+4. **画家の想いや背景**: 画家がこの作品を制作した時の状況、心情、歴史的背景、芸術的意図など。
+5. **鑑賞のヒント**: 最後に「この部分を少し近くで見てみてください…」や「この絵の前に立ち、少し目を閉じて感じてみてください…」といった、深い鑑賞体験へ誘う言葉で締めくくります。
+
+【トーン＆マナー】
+- 丁寧語（「です」「ます」調）で、穏やかでありながら美術への情熱が伝わる語り口にします。
+- 音声ガイドとして耳で聞いて心地よい、リズム感のある平易で美しい日本語を使用してください。
+- 専門用語を使う場合は、必ず簡単な補足説明を添えてください。
+
+【出力フォーマットの厳格化】
+必ず指定のJSON構造のみを返してください。会話形式の挨拶、マークダウン記法、余計な前文・後文は一切含めず、純粋なJSONオブジェクト単体としてパース可能なテキストのみを出力してください。
+
+【出力スキーマ】
+{
+  "explanation": "（マークダウン形式の解説テキスト。見出し、太字、箇条書きなどを適宜使用して美しく装飾してください）",
+  "searchQuery": "（Wikimedia Commonsでこの作品の画像を検索するための英語のキーワード。例：'Vincent van Gogh Sunflowers'、'Mona Lisa'）",
+  "recommendations": [
+    {
+      "title": "（関連する作品名。3〜5件）",
+      "artist": "（その関連作品の作者名）",
+      "reason": "（この作品との関連性や推薦理由を一言で解説）"
+    }
+  ]
+}
+`;
+
+export async function POST(req: Request) {
+  try {
+    const { messages } = await req.json();
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return NextResponse.json({ error: 'Messages are required' }, { status: 400 });
+    }
+
+    // Modify the first user message to prepend the curator system prompt
+    const modifiedMessages: Message[] = messages.map((msg, index) => {
+      const isFirstUserMessage = index === 0 || (index > 0 && !messages.slice(0, index).some(m => m.role === 'user'));
+      if (isFirstUserMessage && msg.role === 'user') {
+        return {
+          role: 'user',
+          content: `${CURATOR_SYSTEM_PROMPT}\n\n対象の美術作品情報：\n${msg.content}`
+        };
+      }
+      return {
+        role: msg.role === 'user' ? 'user' : 'model',
+        content: msg.content
+      };
+    });
+
+    const provider = getLLMProvider();
+    const text = await provider.generateResponse(modifiedMessages, { json: true });
+
+    // Bulletproof JSON block extractor
+    let cleanText = text.trim();
+    const firstBrace = cleanText.indexOf('{');
+    const lastBrace = cleanText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    }
+
+    return NextResponse.json({ text: cleanText });
+  } catch (error: any) {
+    console.error('API Route Error:', error);
+    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  }
+}
