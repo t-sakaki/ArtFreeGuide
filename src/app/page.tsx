@@ -419,10 +419,13 @@ export default function ArtFreeGuide() {
 
     const rawText = speakableSegments[index];
     const cleanText = rawText
-      .replace(/#+\s+/g, '')
-      .replace(/[*_`~>]/g, '')
-      .replace(/[-\d]+\.\s+/g, '')
-      .replace(/\[.*?\]/g, '')
+      .replace(/#+\s+/g, '') // Remove headers
+      .replace(/[*_`~>]/g, '') // Remove formatting symbols
+      .replace(/[-\d]+\.\s+/g, '') // Remove list items numbering
+      .replace(/\[.*?\]\(.*?\)/g, '') // Remove links
+      .replace(/\[.*?\]/g, '') // Remove stray bracket syntax
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/<.*?>/g, '') // Cleanse raw HTML tags
       .replace(/\n+/g, ' ')
       .trim();
 
@@ -863,6 +866,29 @@ export default function ArtFreeGuide() {
       localStorage.setItem('art_free_guide_draft_artist', customArtist);
     }
 
+    // Audio Unlock: Trigger dummy utterance and initialize/resume AudioContext on user gesture
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        const dummy = new SpeechSynthesisUtterance('');
+        dummy.volume = 0;
+        window.speechSynthesis.speak(dummy);
+      } catch (e) {
+        console.warn('Speech unlock failed:', e);
+      }
+    }
+
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        const tempCtx = new AudioContextClass();
+        if (tempCtx.state === 'suspended') {
+          tempCtx.resume();
+        }
+      }
+    } catch (e) {
+      console.warn('Web Audio unlock failed:', e);
+    }
+
     if (speechSupported) {
       window.speechSynthesis.cancel();
       setIsPlaying(false);
@@ -896,9 +922,10 @@ export default function ArtFreeGuide() {
       setSearchQuery(cached.searchQuery);
       setRecommendations(cached.recommendations);
       
-      // Autoplay Avoidance: Do not autoplay, let user click to play
-      setActiveSegmentIndex(-1);
-      setIsPlaying(false);
+      // Auto play on cached guide load
+      setActiveSegmentIndex(0);
+      setIsPlaying(true);
+      startAmbientSound(targetArtwork);
 
       // Synced Navigation State in History
       const idx = history.findIndex(
@@ -1075,9 +1102,9 @@ export default function ArtFreeGuide() {
         // Close input drawer
         setShowInputDrawer(false);
 
-        // Autoplay Avoidance: Do not autoplay, let user click to play
-        setActiveSegmentIndex(-1);
-        setIsPlaying(false);
+        // Auto play on generation completion
+        setActiveSegmentIndex(0);
+        setIsPlaying(true);
       }
     } catch (e: any) {
       console.error(e);
