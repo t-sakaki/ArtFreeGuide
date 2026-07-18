@@ -165,20 +165,39 @@ export default function ArtFreeGuide() {
     setTimeout(() => setShowToast(false), 2000);
   };
 
-  // URL parameters updater
-  const updateUrlParams = (title: string, artistName: string) => {
+  // State parameter synchronizer (using replaceState to avoid history clutter)
+  const syncUrlState = (
+    title: string,
+    artistName: string,
+    speedValue: number,
+    modeValue: 'short' | 'standard' | 'deep'
+  ) => {
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
-    url.searchParams.set('artwork', title);
-    if (artistName) {
+    if (title.trim()) {
+      url.searchParams.set('artwork', title);
+    } else {
+      url.searchParams.delete('artwork');
+    }
+    if (artistName && artistName.trim()) {
       url.searchParams.set('artist', artistName);
     } else {
       url.searchParams.delete('artist');
     }
-    window.history.pushState({}, '', url.toString());
+    url.searchParams.set('speed', speedValue.toFixed(1));
+    url.searchParams.set('mode', modeValue);
+
+    window.history.replaceState({}, '', url.toString());
   };
 
-  // URL parameters listener (Deep Linking)
+  // Real-time synchronization effect
+  useEffect(() => {
+    if (artwork.trim()) {
+      syncUrlState(artwork, artist, playbackSpeed, explanationMode);
+    }
+  }, [artwork, artist, playbackSpeed, explanationMode]);
+
+  // URL parameters listener (Deep Linking & Initial State Setup)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -186,8 +205,25 @@ export default function ArtFreeGuide() {
       const params = new URLSearchParams(window.location.search);
       const artworkParam = params.get('artwork') || '';
       const artistParam = params.get('artist') || '';
+      const speedParam = params.get('speed') || '';
+      const modeParam = params.get('mode') || '';
+
+      // 1. Sync speed if present in URL
+      if (speedParam) {
+        const parsedSpeed = parseFloat(speedParam);
+        if (!isNaN(parsedSpeed) && [1.0, 1.2, 1.5, 1.7, 2.0, 2.5].includes(parsedSpeed)) {
+          setPlaybackSpeed(parsedSpeed);
+        }
+      }
+
+      // 2. Sync mode if present in URL
+      if (modeParam && ['short', 'standard', 'deep'].includes(modeParam)) {
+        setExplanationMode(modeParam as 'short' | 'standard' | 'deep');
+      }
+
+      // 3. Sync and generate guide if present in URL
       if (artworkParam.trim()) {
-        generateGuide(artworkParam, artistParam);
+        generateGuide(artworkParam, artistParam, modeParam as 'short' | 'standard' | 'deep');
       }
     };
 
@@ -250,7 +286,7 @@ export default function ArtFreeGuide() {
         }
       }
     } else {
-      // Just load history array to enable drawer display
+      // Just load history array to enable sidebar drawer display
       if (savedHistoryStr) {
         try {
           const parsedHistory = JSON.parse(savedHistoryStr) as HistoryEntry[];
@@ -288,9 +324,6 @@ export default function ArtFreeGuide() {
     // Save draft artwork/artist as well so session state is consistent
     localStorage.setItem('art_free_guide_draft_artwork', entry.title);
     localStorage.setItem('art_free_guide_draft_artist', entry.artist);
-
-    // Sync deep linking parameters
-    updateUrlParams(entry.title, entry.artist);
 
     setResponseShort(entry.short || '');
     setResponseStandard(entry.standard || '');
@@ -687,24 +720,6 @@ export default function ArtFreeGuide() {
     setFocusedArtistIndex(-1);
   };
 
-  const renderHighlightedText = (text: string, query: string) => {
-    if (!query) return <span>{text}</span>;
-    const parts = text.split(new RegExp(`(${query.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')})`, 'gi'));
-    return (
-      <span>
-        {parts.map((part, index) =>
-          part.toLowerCase() === query.toLowerCase() ? (
-            <span key={index} className="font-bold text-teal-400">
-              {part}
-            </span>
-          ) : (
-            part
-          )
-        )}
-      </span>
-    );
-  };
-
   const fetchImage = async (query: string, cacheKey?: string) => {
     setImageLoading(true);
     setImageError(false);
@@ -829,7 +844,11 @@ export default function ArtFreeGuide() {
     });
   };
 
-  const generateGuide = async (customArtwork?: string, customArtist?: string) => {
+  const generateGuide = async (
+    customArtwork?: string,
+    customArtist?: string,
+    customMode?: 'short' | 'standard' | 'deep'
+  ) => {
     const targetArtwork = customArtwork ?? artwork;
     const targetArtist = customArtist ?? artist;
 
@@ -850,8 +869,18 @@ export default function ArtFreeGuide() {
       stopAmbientSound();
     }
 
-    // Sync deep linking parameters
-    updateUrlParams(targetArtwork, targetArtist);
+    // Determine target mode (URL parameters prioritize custom mode)
+    let targetMode: 'short' | 'standard' | 'deep' = 'short';
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const modeParam = params.get('mode') || '';
+      if (['short', 'standard', 'deep'].includes(modeParam)) {
+        targetMode = modeParam as 'short' | 'standard' | 'deep';
+      }
+    }
+    if (customMode) {
+      targetMode = customMode;
+    }
 
     const cacheKey = `${targetArtwork.trim().toLowerCase()}::${targetArtist.trim().toLowerCase()}`;
 
@@ -861,7 +890,7 @@ export default function ArtFreeGuide() {
       setResponseShort(cached.short);
       setResponseStandard(cached.standard);
       setResponseDeep(cached.deep);
-      setExplanationMode('short');
+      setExplanationMode(targetMode);
       setImageUrl(cached.imageUrl);
       setImageError(cached.imageError);
       setSearchQuery(cached.searchQuery);
@@ -889,7 +918,7 @@ export default function ArtFreeGuide() {
     setResponseShort('');
     setResponseStandard('');
     setResponseDeep('');
-    setExplanationMode('short');
+    setExplanationMode(targetMode);
     setActiveSegmentIndex(-1);
     setImageUrl(null);
     setImageError(false);
@@ -981,7 +1010,7 @@ export default function ArtFreeGuide() {
         setResponseShort(shortText);
         setResponseStandard(standardText);
         setResponseDeep(deepText);
-        setExplanationMode('short');
+        setExplanationMode(targetMode);
 
         // Store primary metadata in cache
         const newEntry: GuideCacheEntry = {
@@ -1249,9 +1278,11 @@ export default function ArtFreeGuide() {
     }
   };
 
-  // URL parameters Share trigger
-  const handleShare = () => {
+  // Web Share API with Clipboard Fallback
+  const handleShare = async () => {
     if (typeof window === 'undefined') return;
+
+    // Construct the complete URL containing all active states
     const url = new URL(window.location.href);
     url.searchParams.set('artwork', artwork);
     if (artist) {
@@ -1259,8 +1290,32 @@ export default function ArtFreeGuide() {
     } else {
       url.searchParams.delete('artist');
     }
-    
-    navigator.clipboard.writeText(url.toString())
+    url.searchParams.set('speed', playbackSpeed.toFixed(1));
+    url.searchParams.set('mode', explanationMode);
+
+    const shareData = {
+      title: `ArtFreeGuide - ${artwork}`,
+      text: `この作品のAI音声ガイドを聴いてみて！`,
+      url: url.toString()
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        triggerToast('共有メニューを起動しました');
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.warn('Native share failed:', err);
+          copyToClipboard(url.toString());
+        }
+      }
+    } else {
+      copyToClipboard(url.toString());
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
       .then(() => {
         triggerToast('共有URLをクリップボードにコピーしました！');
       })
@@ -1268,6 +1323,24 @@ export default function ArtFreeGuide() {
         console.error('Failed to copy share link:', err);
         triggerToast('コピーに失敗しました');
       });
+  };
+
+  const renderHighlightedText = (text: string, query: string) => {
+    if (!query) return <span>{text}</span>;
+    const parts = text.split(new RegExp(`(${query.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')})`, 'gi'));
+    return (
+      <span>
+        {parts.map((part, index) =>
+          part.toLowerCase() === query.toLowerCase() ? (
+            <span key={index} className="font-bold text-teal-400">
+              {part}
+            </span>
+          ) : (
+            part
+          )
+        )}
+      </span>
+    );
   };
 
   const renderInputForm = () => {
@@ -1637,7 +1710,7 @@ export default function ArtFreeGuide() {
                   className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 shadow-md font-sans ${
                     isListening
                       ? 'bg-rose-500 text-white animate-pulse'
-                      : 'bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20'
+                      : 'bg-blue-500/10 border border-blue-500/20 text-blue-450 hover:bg-blue-500/20'
                   }`}
                 >
                   <span>🎙️</span>
@@ -1647,7 +1720,7 @@ export default function ArtFreeGuide() {
 
               <button
                 onClick={handleShare}
-                className="px-5 py-2.5 bg-slate-900 border border-slate-800 hover:border-teal-500/40 text-slate-300 hover:text-teal-400 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-md font-sans"
+                className="px-5 py-2.5 bg-slate-900 border border-slate-800 hover:border-teal-500/40 text-slate-350 hover:text-teal-450 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-md font-sans"
               >
                 <span>🔗</span>
                 <span>解説を共有する</span>
@@ -1725,6 +1798,43 @@ export default function ArtFreeGuide() {
         <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 border-t border-slate-900 px-4 py-3 shadow-2xl flex items-center justify-between gap-1 select-none h-24 pb-5">
           <div className="flex items-center justify-between w-full max-w-lg mx-auto px-1 font-sans">
             
+            {/* Playback Speed Popover (Leftmost) */}
+            <div className="flex-1 min-w-0 relative flex justify-center">
+              <button
+                onClick={() => setShowSpeedMenu(!showSpeedMenu)}
+                className="flex flex-col items-center justify-center gap-1 text-teal-400 hover:text-teal-350 transition-all active:scale-90"
+                title="再生速度を変更"
+              >
+                <span className="text-lg">⚡</span>
+                <span className="text-[8px] sm:text-[9px] font-mono font-bold truncate max-w-full">{playbackSpeed.toFixed(1)}x</span>
+              </button>
+
+              {/* Smart Speed Selector Popover */}
+              {showSpeedMenu && (
+                <div className="absolute bottom-12 left-0 bg-slate-950 border border-slate-850 rounded-2xl p-2 flex flex-col gap-1 shadow-2xl z-50 min-w-[70px] animate-fade-in">
+                  {[1.0, 1.2, 1.5, 1.7, 2.0, 2.5].map(sp => {
+                    const isSelected = playbackSpeed === sp;
+                    return (
+                      <button
+                        key={sp}
+                        onClick={() => {
+                          setPlaybackSpeed(sp);
+                          setShowSpeedMenu(false);
+                        }}
+                        className={`py-2 text-[11px] font-mono font-bold rounded-lg transition-all text-center active:scale-95 ${
+                          isSelected
+                            ? 'bg-teal-500 text-slate-950 font-black'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                        }`}
+                      >
+                        {sp.toFixed(1)}x
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Prev Artwork in History */}
             <button
               onClick={() => loadHistoryEntry(historyIndex - 1)}
@@ -1792,42 +1902,15 @@ export default function ArtFreeGuide() {
               <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">次作品</span>
             </button>
 
-            {/* Speed popover button */}
-            <div className="flex-1 min-w-0 relative flex justify-center">
-              <button
-                onClick={() => setShowSpeedMenu(!showSpeedMenu)}
-                className="flex flex-col items-center justify-center gap-1 text-teal-400 hover:text-teal-350 transition-all active:scale-90"
-                title="再生速度を変更"
-              >
-                <span className="text-lg">⚡</span>
-                <span className="text-[8px] sm:text-[9px] font-mono font-bold truncate max-w-full">{playbackSpeed.toFixed(1)}x</span>
-              </button>
-
-              {/* Smart Speed Selector Popover */}
-              {showSpeedMenu && (
-                <div className="absolute bottom-12 right-0 bg-slate-950 border border-slate-850 rounded-2xl p-2 flex flex-col gap-1 shadow-2xl z-50 min-w-[70px] animate-fade-in">
-                  {[1.0, 1.2, 1.5, 1.7, 2.0, 2.5].map(sp => {
-                    const isSelected = playbackSpeed === sp;
-                    return (
-                      <button
-                        key={sp}
-                        onClick={() => {
-                          setPlaybackSpeed(sp);
-                          setShowSpeedMenu(false);
-                        }}
-                        className={`py-2 text-[11px] font-mono font-bold rounded-lg transition-all text-center active:scale-95 ${
-                          isSelected
-                            ? 'bg-teal-500 text-slate-950 font-black'
-                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-                        }`}
-                      >
-                        {sp.toFixed(1)}x
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            {/* Native Share button (Rightmost) */}
+            <button
+              onClick={handleShare}
+              className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-450 hover:text-teal-400 transition-all active:scale-90"
+              title="解説を共有"
+            >
+              <span className="text-lg">📤</span>
+              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">共有する</span>
+            </button>
 
           </div>
         </div>
@@ -1854,7 +1937,7 @@ export default function ArtFreeGuide() {
               </h2>
               <button
                 onClick={() => setShowInputDrawer(false)}
-                className="text-slate-500 hover:text-white transition-colors"
+                className="text-slate-505 hover:text-white transition-colors"
               >
                 ✕
               </button>
