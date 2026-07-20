@@ -1086,6 +1086,16 @@ export default function ArtFreeGuide() {
         }),
       });
 
+      if (!res.ok) {
+        throw new Error(`Server Error: ${res.status} ${res.statusText}`);
+      }
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Invalid Response Format: Expected JSON but received ${contentType}. Body: ${text.substring(0, 100)}`);
+      }
+
       const data = await res.json();
 
       // Graceful Japanese Error Handling for rate limits (429) & server faults
@@ -1266,6 +1276,17 @@ export default function ArtFreeGuide() {
           ]
         })
       });
+
+      if (!res.ok) {
+        throw new Error(`Server Error: ${res.status} ${res.statusText}`);
+      }
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Invalid Response Format: Expected JSON but received ${contentType}. Body: ${text.substring(0, 100)}`);
+      }
+
       const data = await res.json();
       
       if (data.error) {
@@ -1355,6 +1376,17 @@ export default function ArtFreeGuide() {
           ]
         })
       });
+
+      if (!res.ok) {
+        throw new Error(`Server Error: ${res.status} ${res.statusText}`);
+      }
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Invalid Response Format: Expected JSON but received ${contentType}. Body: ${text.substring(0, 100)}`);
+      }
+
       const data = await res.json();
       
       if (data.error) {

@@ -6,9 +6,12 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
-    "build:cf": "opennextjs-cloudflare build",
+    "build:cf": "opennextjs-cloudflare build && rm -rf .opennext && cp -r .open-next .opennext",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "deploy:prod": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "deploy:staging": "opennextjs-cloudflare build && npx wrangler deploy -e staging",
+    "deploy:trial": "npm run build:cf && npx wrangler deploy -e trial",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },

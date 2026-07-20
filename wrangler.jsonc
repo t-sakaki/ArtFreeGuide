@@ -27,5 +27,19 @@
 		// Enable image optimization
 		// see https://opennext.js.org/cloudflare/howtos/image
 		"binding": "IMAGES"
+	},
+	"env": {
+		"trial": {
+			"vars": {
+				"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4",
+				"LLM_PROVIDER": "gemini"
+			}
+		},
+		"staging": {
+			"vars": {
+				"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4",
+				"LLM_PROVIDER": "gemini"
+			}
+		}
 	}
 }
