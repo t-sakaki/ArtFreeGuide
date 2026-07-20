@@ -126,12 +126,16 @@ class AudioController {
 
     // Give browser 50ms to register the cancellation
     setTimeout(() => {
-      console.log(`[AUDIO] Attempting to speak sentence #${index}`);
+      console.log(`[AUDIO-DEBUG] Attempting to speak sentence #${index}`);
 
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         try {
-          window.speechSynthesis.resume(); // Ensure speaking state is active
-        } catch (e) {}
+          // Forced-resume mechanism: Cancel then Resume to wake up the engine
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.resume(); 
+        } catch (e) {
+          console.warn('[AUDIO-DEBUG] Forced-resume failed:', e);
+        }
       }
 
       const utterance = new SpeechSynthesisUtterance(text);
@@ -154,45 +158,45 @@ class AudioController {
         }
 
         if (type === 'end') {
+          console.log(`[AUDIO-DEBUG] Sentence #${index} ended normally`);
           onEnd();
         } else if (type === 'error') {
+          console.warn(`[AUDIO-DEBUG] Sentence #${index} error:`, detail);
           onError(detail);
         } else {
-          console.warn(`[AUDIO] Sentence #${index} Timeout! Forcing transition`);
+          console.warn(`[AUDIO-DEBUG] WATCHDOG: Sentence #${index} failed to start/complete in time. Forcing transition`);
           onEnd();
         }
       };
 
-      // If speech fails to start in 2.5 seconds, force transition to avoid getting stuck
+      // Strict Watchdog: If speech fails to start in 2 seconds, force transition
       this.startTimeoutId = setTimeout(() => {
-        console.warn(`[AUDIO] Sentence #${index} failed to start in 2.5s. Skipping.`);
         handleTransition('timeout');
-      }, 2500);
+      }, 2000);
 
       utterance.onstart = () => {
         if (this.startTimeoutId) {
           clearTimeout(this.startTimeoutId);
           this.startTimeoutId = null;
         }
-        console.log(`[AUDIO] Voice started for #${index}`);
+        console.log(`[AUDIO-DEBUG] Voice successfully started for #${index}`);
         onStart();
       };
 
       utterance.onend = () => {
-        console.log(`[AUDIO] Sentence #${index} Ended`);
         handleTransition('end');
       };
 
       utterance.onerror = (e) => {
-        console.warn(`[AUDIO] Sentence #${index} Error:`, e);
         handleTransition('error', e);
       };
 
       // Safety timeout: 200ms per character, min 15 seconds
       const timeoutDuration = Math.max(15000, text.length * 200);
       this.speechTimeoutId = setTimeout(() => {
-        handleTransition('timeout');
-      }, timeoutDuration);
+        handleTransition('timeout'), 
+        timeoutDuration
+      );
 
       window.speechSynthesis.speak(utterance);
     }, 50);
@@ -541,14 +545,14 @@ export default function ArtFreeGuide() {
 
     const rawText = speakableSegments[index];
     const cleanText = rawText
-      .replace(/#+\s+/g, '') // Remove headers
+      .replace(/#+\\s+/g, '') // Remove headers
       .replace(/[*_`~>]/g, '') // Remove formatting symbols
-      .replace(/[-\d]+\.\s+/g, '') // Remove list items numbering
-      .replace(/\[.*?\]\(.*?\)/g, '') // Remove links
-      .replace(/\[.*?\]/g, '') // Remove stray bracket syntax
+      .replace(/[-\\d]+\\.\\s+/g, '') // Remove list items numbering
+      .replace(/\\[.*?\\]\\(.*?\\)/g, '') // Remove links
+      .replace(/\\[.*?\\]/g, '') // Remove stray bracket syntax
       .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
       .replace(/<.*?>/g, '') // Cleanse raw HTML tags
-      .replace(/\n+/g, ' ')
+      .replace(/\\n+/g, ' ')
       .trim();
 
     if (!cleanText) {
@@ -565,7 +569,10 @@ export default function ArtFreeGuide() {
       cleanText,
       speedRef.current,
       () => {
-        // Voice started callback if needed
+        // Sequence Optimization: Start Ambient Sound ONLY after voice has successfully started
+        if (artwork) {
+          startAmbientSound(artwork);
+        }
       },
       () => {
         if (isPlayingRef.current && activeIndexRef.current === index) {
@@ -1458,7 +1465,7 @@ export default function ArtFreeGuide() {
         setActiveSegmentIndex(0);
       }
       setIsPlaying(true);
-      if (artwork) startAmbientSound(artwork);
+      // Sequence Optimization: startAmbientSound is now called inside the voice onStart callback in speakSegment
     }
   };
 
