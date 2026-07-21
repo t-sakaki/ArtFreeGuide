@@ -532,12 +532,8 @@ export default function ArtFreeGuide() {
     console.log(`[TRACE-11] speakSegment called with index: ${index}`);
     console.log(`[TRACE-11.1] speechSupported: ${speechSupported}, speakableSegments.length: ${speakableSegments.length}`);
     
-    if (!speechSupported) {
-      console.warn('[TRACE-12] Return: speechSupported is false');
-      return;
-    }
     if (index < 0 || index >= speakableSegments.length) {
-      console.warn(`[TRACE-13] Return: index ${index} out of bounds`);
+      console.warn(`[TRACE-12] Return: index ${index} out of bounds`);
       return;
     }
 
