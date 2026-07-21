@@ -6,7 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
-    "build:cf": "opennextjs-cloudflare build && rm -rf .opennext && cp -r .open-next .opennext",
+    "build:cf": "opennextjs-cloudflare build",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "deploy:prod": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
