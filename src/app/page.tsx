@@ -588,80 +588,19 @@ export default function ArtFreeGuide() {
 
   // Start Ambient Soundscape using Web Audio API
   const startAmbientSound = (artworkTitle: string) => {
-    try {
-      stopAmbientSound(); // Reset previous ambient context
-
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) return;
-
-      const ctx = new AudioContextClass();
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.0, ctx.currentTime);
-
-      // Frequencies for a warm, relaxing ambient drone
-      let frequencies = [110, 165, 220]; // A2, E3, A3
-      if (artworkTitle.includes('睡蓮') || artworkTitle.includes('水') || artworkTitle.includes('モネ')) {
-        frequencies = [130.81, 196.00, 261.63]; // C3, G3, C4
-      } else if (artworkTitle.includes('叫び') || artworkTitle.includes('ゲルニカ') || artworkTitle.includes('ピカソ')) {
-        frequencies = [98.00, 146.83, 196.00]; // G2, D3, G3
-      }
-
-      const oscs = frequencies.map(freq => {
-        const osc = ctx.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        osc.detune.setValueAtTime((Math.random() - 0.5) * 12, ctx.currentTime);
-        osc.connect(gain);
-        osc.start();
-        return osc;
-      });
-
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(350, ctx.currentTime);
-
-      gain.connect(filter);
-      filter.connect(ctx.destination);
-
-      // Fade in ambient hum gently to volume 5%
-      gain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 3.0);
-
-      (window as any)._ambientGain = gain;
-      (window as any)._ambientCtx = ctx;
-      (window as any)._ambientOscs = oscs;
-
-      setAmbientName(
-        artworkTitle.includes('睡蓮') || artworkTitle.includes('モネ')
-          ? '水面の揺らぎと森の風（432Hz調和音響）'
-          : artworkTitle.includes('叫び') || artworkTitle.includes('ゲルニカ')
-          ? '深層の心理ドローン（緊張と静寂）'
-          : '夜のカフェテラスと温かい灯火（心地よい低音ドローン）'
-      );
-    } catch (err) {
-      console.warn('Web Audio Ambient error:', err);
-    }
+    console.log(`[MOCK-AUDIO] Ambient Sound Started for: ${artworkTitle}`);
+    setAmbientName(
+      artworkTitle.includes('睡蓮') || artworkTitle.includes('モネ')
+        ? '水面の揺らぎと森の風（MOCK）'
+        : artworkTitle.includes('叫び') || artworkTitle.includes('ゲルニカ')
+        ? '深層の心理ドローン（MOCK）'
+        : '夜のカフェテラスと温かい灯火（MOCK）'
+    );
   };
 
   // Stop Ambient Soundscape
   const stopAmbientSound = () => {
-    const gain = (window as any)._ambientGain;
-    const ctx = (window as any)._ambientCtx;
-    const oscs = (window as any)._ambientOscs;
-
-    if (gain && ctx) {
-      try {
-        gain.gain.linearRampToValueAtTime(0.0, ctx.currentTime + 1.0);
-        setTimeout(() => {
-          if (oscs) oscs.forEach((o: any) => o.stop());
-          ctx.close();
-        }, 1000);
-      } catch (e) {
-        console.warn(e);
-      }
-      (window as any)._ambientGain = null;
-      (window as any)._ambientCtx = null;
-      (window as any)._ambientOscs = null;
-    }
+    console.log('[MOCK-AUDIO] Ambient Sound Stopped');
     setAmbientName(null);
   };
 
