@@ -1392,7 +1392,13 @@ export default function ArtFreeGuide() {
       }
     } catch (e) {}
 
-    if (!speechSupported || speakableSegments.length === 0) return;
+    // DEBUG: Check why it might return early
+    console.log(`[AUDIO-DEBUG] Check: speechSupported=${speechSupported}, speakableSegments.length=${speakableSegments.length}`);
+
+    if (speakableSegments.length === 0) {
+      console.warn('[AUDIO-DEBUG] Return: No speakable segments found');
+      return;
+    }
 
     if (isPlaying) {
       setIsPlaying(false);
@@ -1403,7 +1409,7 @@ export default function ArtFreeGuide() {
         setActiveSegmentIndex(0);
       }
       setIsPlaying(true);
-      // Sequence Optimization: startAmbientSound is now called inside the voice onStart callback in speakSegment
+      if (artwork) startAmbientSound(artwork);
     }
   };
 
