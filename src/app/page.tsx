@@ -98,16 +98,7 @@ class AudioController {
   }
 
   static forceUnlock() {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      try {
-        window.speechSynthesis.resume();
-        const dummy = new SpeechSynthesisUtterance('');
-        dummy.volume = 0;
-        window.speechSynthesis.speak(dummy);
-      } catch (e) {
-        console.warn('[AUDIO] Force unlock failed:', e);
-      }
-    }
+    console.log('[MOCK-AUDIO] forceUnlock called (now disabled)');
   }
 
   static speak(
@@ -932,28 +923,8 @@ export default function ArtFreeGuide() {
       localStorage.setItem('art_free_guide_draft_artist', customArtist);
     }
 
-    // Audio Unlock: Trigger dummy utterance and initialize/resume AudioContext on user gesture
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      try {
-        const dummy = new SpeechSynthesisUtterance('');
-        dummy.volume = 0;
-        window.speechSynthesis.speak(dummy);
-      } catch (e) {
-        console.warn('Speech unlock failed:', e);
-      }
-    }
-
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        const tempCtx = new AudioContextClass();
-        if (tempCtx.state === 'suspended') {
-          tempCtx.resume();
-        }
-      }
-    } catch (e) {
-      console.warn('Web Audio unlock failed:', e);
-    }
+    // Audio Unlock: Now mocked for safety. No real audio trigger here.
+    console.log('[MOCK-AUDIO] Audio unlock triggered in generateGuide');
 
     if (speechSupported) {
       AudioController.clearQueue();
@@ -1382,17 +1353,8 @@ export default function ArtFreeGuide() {
     AudioController.forceUnlock();
 
     // 2. Play Web Audio ambient context if needed
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        const tempCtx = new AudioContextClass();
-        if (tempCtx.state === 'suspended') {
-          tempCtx.resume();
-        }
-      }
-    } catch (e) {}
-
-    // DEBUG: Check why it might return early
+    // Audio Unlock: Now mocked for safety.
+    console.log('[MOCK-AUDIO] Audio unlock triggered in handleDeepDive');
     console.log(`[AUDIO-DEBUG] Check: speechSupported=${speechSupported}, speakableSegments.length=${speakableSegments.length}`);
 
     if (speakableSegments.length === 0) {
