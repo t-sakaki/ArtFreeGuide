@@ -194,9 +194,8 @@ class AudioController {
       // Safety timeout: 200ms per character, min 15 seconds
       const timeoutDuration = Math.max(15000, text.length * 200);
       this.speechTimeoutId = setTimeout(() => {
-        handleTransition('timeout'), 
-        timeoutDuration
-      );
+        handleTransition('timeout');
+      }, timeoutDuration);
 
       window.speechSynthesis.speak(utterance);
     }, 50);
