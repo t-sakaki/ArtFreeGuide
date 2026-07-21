@@ -1351,10 +1351,9 @@ export default function ArtFreeGuide() {
     
     // 1. Force unlock on user gesture
     AudioController.forceUnlock();
-
+    
     // 2. Play Web Audio ambient context if needed
-    // Audio Unlock: Now mocked for safety.
-    console.log('[MOCK-AUDIO] Audio unlock triggered in handleDeepDive');
+    console.log('[MOCK-AUDIO] Audio unlock triggered in handlePlayPause');
     console.log(`[AUDIO-DEBUG] Check: speechSupported=${speechSupported}, speakableSegments.length=${speakableSegments.length}`);
 
     if (speakableSegments.length === 0) {
@@ -1367,11 +1366,23 @@ export default function ArtFreeGuide() {
       AudioController.clearQueue();
       stopAmbientSound();
     } else {
-      if (activeSegmentIndex === -1 || activeSegmentIndex >= speakableSegments.length) {
-        setActiveSegmentIndex(0);
-      }
+      // Determine start index
+      const startIdx = (activeSegmentIndex === -1 || activeSegmentIndex >= speakableSegments.length) 
+        ? 0 
+        : activeSegmentIndex;
+      
+      setActiveSegmentIndex(startIdx);
       setIsPlaying(true);
       if (artwork) startAmbientSound(artwork);
+
+      // SYNCHRONOUS TRIGGER:
+      // To avoid the delay/uncertainty of useEffect, trigger the first segment immediately.
+      // We use a small timeout to ensure state updates (like isPlaying) have been processed 
+      // if any other logic depends on them, but the core call is made here.
+      setTimeout(() => {
+        console.log(`[AUDIO-DEBUG] Synchronously triggering speakSegment(${startIdx})`);
+        speakSegment(startIdx);
+      }, 0);
     }
   };
 
