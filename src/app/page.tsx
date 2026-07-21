@@ -529,23 +529,36 @@ export default function ArtFreeGuide() {
   }, [activeSegmentIndex, isPlaying]);
 
   const speakSegment = (index: number) => {
-    if (!speechSupported || index < 0 || index >= speakableSegments.length) {
+    console.log(`[TRACE-11] speakSegment called with index: ${index}`);
+    console.log(`[TRACE-11.1] speechSupported: ${speechSupported}, speakableSegments.length: ${speakableSegments.length}`);
+    
+    if (!speechSupported) {
+      console.warn('[TRACE-12] Return: speechSupported is false');
+      return;
+    }
+    if (index < 0 || index >= speakableSegments.length) {
+      console.warn(`[TRACE-13] Return: index ${index} out of bounds`);
       return;
     }
 
     const rawText = speakableSegments[index];
+    console.log(`[TRACE-14] Raw text for segment ${index}: ${rawText.substring(0, 30)}...`);
+    
     const cleanText = rawText
       .replace(/#+\\s+/g, '') // Remove headers
       .replace(/[*_`~>]/g, '') // Remove formatting symbols
       .replace(/[-\\d]+\\.\\s+/g, '') // Remove list items numbering
-      .replace(/\\[.*?\\]\\(.*?\\)/g, '') // Remove links
-      .replace(/\\[.*?\\]/g, '') // Remove stray bracket syntax
+      .replace(/\\\[.*?\\\]\\(.*?\\)/g, '') // Remove links
+      .replace(/\\\[.*?\\\]/g, '') // Remove stray bracket syntax
       .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
       .replace(/<.*?>/g, '') // Cleanse raw HTML tags
       .replace(/\\n+/g, ' ')
       .trim();
+    
+    console.log(`[TRACE-15] Clean text: ${cleanText.substring(0, 30)}...`);
 
     if (!cleanText) {
+      console.warn(`[TRACE-16] Return: cleanText is empty for index ${index}`);
       setTimeout(() => {
         if (isPlayingRef.current && activeIndexRef.current === index) {
           setActiveSegmentIndex(prev => prev + 1);
@@ -554,22 +567,25 @@ export default function ArtFreeGuide() {
       return;
     }
 
+    console.log(`[TRACE-17] Calling AudioController.speak for index ${index}`);
     AudioController.speak(
       index,
       cleanText,
       speedRef.current,
       () => {
-        // Sequence Optimization: Start Ambient Sound ONLY after voice has successfully started
+        console.log(`[TRACE-18] AudioController.speak onStart callback for #${index}`);
         if (artwork) {
           startAmbientSound(artwork);
         }
       },
       () => {
+        console.log(`[TRACE-19] AudioController.speak onEnd callback for #${index}`);
         if (isPlayingRef.current && activeIndexRef.current === index) {
           setActiveSegmentIndex(prev => prev + 1);
         }
       },
       (err) => {
+        console.warn(`[TRACE-20] AudioController.speak onError callback for #${index}:`, err);
         if (isPlayingRef.current && activeIndexRef.current === index) {
           setActiveSegmentIndex(prev => prev + 1);
         }
@@ -1347,42 +1363,43 @@ export default function ArtFreeGuide() {
 
   // Playback Control Handlers
   const handlePlayPause = () => {
-    console.log('[AUDIO] Button Clicked');
+    console.log('[TRACE-1] handlePlayPause start');
     
     // 1. Force unlock on user gesture
     AudioController.forceUnlock();
+    console.log('[TRACE-2] After AudioController.forceUnlock');
     
     // 2. Play Web Audio ambient context if needed
-    console.log('[MOCK-AUDIO] Audio unlock triggered in handlePlayPause');
-    console.log(`[AUDIO-DEBUG] Check: speechSupported=${speechSupported}, speakableSegments.length=${speakableSegments.length}`);
-
+    console.log('[TRACE-3] Check state: isPlaying=', isPlaying, 'speakableSegments.length=', speakableSegments.length, 'speechSupported=', speechSupported);
+    
     if (speakableSegments.length === 0) {
-      console.warn('[AUDIO-DEBUG] Return: No speakable segments found');
+      console.warn('[TRACE-4] Return: No speakable segments found');
       return;
     }
+    console.log('[TRACE-5] segments length > 0');
 
     if (isPlaying) {
+      console.log('[TRACE-6] Action: Pause');
       setIsPlaying(false);
       AudioController.clearQueue();
       stopAmbientSound();
     } else {
+      console.log('[TRACE-7] Action: Play');
       // Determine start index
       const startIdx = (activeSegmentIndex === -1 || activeSegmentIndex >= speakableSegments.length) 
         ? 0 
         : activeSegmentIndex;
       
+      console.log(`[TRACE-8] Determined startIdx: ${startIdx}`);
       setActiveSegmentIndex(startIdx);
       setIsPlaying(true);
-      if (artwork) startAmbientSound(artwork);
+      if (artwork) {
+        console.log('[TRACE-9] Starting ambient sound');
+        startAmbientSound(artwork);
+      }
 
-      // SYNCHRONOUS TRIGGER:
-      // To avoid the delay/uncertainty of useEffect, trigger the first segment immediately.
-      // We use a small timeout to ensure state updates (like isPlaying) have been processed 
-      // if any other logic depends on them, but the core call is made here.
-      setTimeout(() => {
-        console.log(`[AUDIO-DEBUG] Synchronously triggering speakSegment(${startIdx})`);
-        speakSegment(startIdx);
-      }, 0);
+      console.log(`[TRACE-10] Direct synchronous call to speakSegment(${startIdx})`);
+      speakSegment(startIdx);
     }
   };
 
