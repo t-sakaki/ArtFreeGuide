@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as line from '@line/bot-sdk';
+import { validateSignature } from '@line/bot-sdk';
 import { lineConfig, replyTextMessage, replyMultipleMessages } from '@/lib/line';
 import { getLLMProvider, Message } from '@/lib/llm';
 
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const signature = req.headers.get('x-line-signature') || '';
 
     // 1. 署名検証 (セキュリティ)
-    if (!line.validateSignature(body, signature, lineConfig.channelSecret)) {
+    if (!validateSignature(body, signature, lineConfig.channelSecret)) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     // イベントを並列処理
-    await Promise.all(events.map(async (event: line.WebhookEvent) => {
+    await Promise.all(events.map(async (event: any) => {
       if (event.type !== 'message' || event.message.type !== 'text') return;
 
       const replyToken = event.replyToken;
