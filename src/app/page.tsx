@@ -75,7 +75,6 @@ const PRESET_ARTISTS = [
 
 class AudioController {
   private static speechTimeoutId: any = null;
-  private static startTimeoutId: any = null;
 
   static clearQueue() {
     console.log('[AUDIO] Queue Cancelled');
@@ -91,14 +90,18 @@ class AudioController {
       clearTimeout(this.speechTimeoutId);
       this.speechTimeoutId = null;
     }
-    if (this.startTimeoutId) {
-      clearTimeout(this.startTimeoutId);
-      this.startTimeoutId = null;
-    }
   }
 
   static forceUnlock() {
-    console.log('[MOCK-AUDIO] forceUnlock called (now disabled)');
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      console.log('[AUDIO] Attempting to force unlock speech engine');
+      try {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
+      } catch (e) {
+        console.warn('[AUDIO] Force unlock failed:', e);
+      }
+    }
   }
 
   static speak(
@@ -143,10 +146,6 @@ class AudioController {
           clearTimeout(this.speechTimeoutId);
           this.speechTimeoutId = null;
         }
-        if (this.startTimeoutId) {
-          clearTimeout(this.startTimeoutId);
-          this.startTimeoutId = null;
-        }
 
         if (type === 'end') {
           console.log(`[AUDIO-DEBUG] Sentence #${index} ended normally`);
@@ -155,21 +154,13 @@ class AudioController {
           console.warn(`[AUDIO-DEBUG] Sentence #${index} error:`, detail);
           onError(detail);
         } else {
-          console.warn(`[AUDIO-DEBUG] WATCHDOG: Sentence #${index} failed to start/complete in time. Forcing transition`);
+          console.warn(`[AUDIO-DEBUG] Safety timeout triggered for sentence #${index}`);
           onEnd();
         }
       };
 
-      // Strict Watchdog: If speech fails to start in 2 seconds, force transition
-      this.startTimeoutId = setTimeout(() => {
-        handleTransition('timeout');
-      }, 2000);
-
       utterance.onstart = () => {
-        if (this.startTimeoutId) {
-          clearTimeout(this.startTimeoutId);
-          this.startTimeoutId = null;
-        }
+        console.log(`[AUDIO-DEBUG] Voice successfully started`);
         console.log(`[AUDIO-DEBUG] Voice successfully started for #${index}`);
         onStart();
       };
@@ -182,7 +173,7 @@ class AudioController {
         handleTransition('error', e);
       };
 
-      // Safety timeout: 200ms per character, min 15 seconds
+      // Safety timeout: 200ms per character, min 15 seconds (does not cut normal playback)
       const timeoutDuration = Math.max(15000, text.length * 200);
       this.speechTimeoutId = setTimeout(() => {
         handleTransition('timeout');
@@ -416,6 +407,13 @@ export default function ArtFreeGuide() {
     }
   }, []);
 
+  // Detect speech synthesis support
+  useEffect(() => {
+    const supported = typeof window !== 'undefined' && 'speechSynthesis' in window;
+    console.log('[AUDIO] speechSynthesis supported:', supported);
+    setSpeechSupported(supported);
+  }, []);
+
   const updateHistoryEntryByArtwork = (artworkTitle: string, artistName: string, fields: Partial<HistoryEntry>) => {
     setHistory(prev => {
       const copy = [...prev];
@@ -574,6 +572,7 @@ export default function ArtFreeGuide() {
       speedRef.current,
       () => {
         console.log(`[TRACE-18] AudioController.speak onStart callback for #${index}`);
+        setIsPlaying(true);
         if (artwork) {
           startAmbientSound(artwork);
         }
@@ -939,9 +938,10 @@ export default function ArtFreeGuide() {
       localStorage.setItem('art_free_guide_draft_artist', customArtist);
     }
 
-    // Audio Unlock: Now mocked for safety. No real audio trigger here.
-    console.log('[MOCK-AUDIO] Audio unlock triggered in generateGuide');
-
+    // Audio Unlock: Forced trigger on generation to attempt auto-play
+    if (typeof window !== 'undefined') {
+      AudioController.forceUnlock();
+    }
     if (speechSupported) {
       AudioController.clearQueue();
       setIsPlaying(false);
@@ -976,6 +976,7 @@ export default function ArtFreeGuide() {
       setRecommendations(cached.recommendations);
       
       // Auto play on cached guide load
+      AudioController.forceUnlock();
       setActiveSegmentIndex(0);
       setIsPlaying(true);
       startAmbientSound(targetArtwork);
@@ -1166,6 +1167,7 @@ export default function ArtFreeGuide() {
         setShowInputDrawer(false);
 
         // Auto play on generation completion
+        AudioController.forceUnlock();
         setActiveSegmentIndex(0);
         setIsPlaying(true);
       }
