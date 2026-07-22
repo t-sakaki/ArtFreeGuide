@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as line from '@line/bot-sdk';
-import { lineConfig, replyTextMessage, replyMultipleMessages } from '@/lib/line';
+import { verifyLineSignature, replyTextMessage, lineConfig } from '@/lib/line';
 import { getLLMProvider, Message } from '@/lib/llm';
 
-// LINE用システムプロンプト: LINEの吹き出し形式に最適化
 const LINE_SYSTEM_PROMPT = `あなたは美術館の情熱的な音声ガイド・キュレーターです。
 LINEユーザーに対し、入力された美術作品について、親しみやすく、かつ知的なトーンで解説を提供してください。
 
@@ -23,46 +21,51 @@ LINEユーザーに対し、入力された美術作品について、親しみ�
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    // 1. Get Raw Body for signature verification
+    const rawBody = await req.text();
     const signature = req.headers.get('x-line-signature') || '';
 
-    // 1. 署名検証 (セキュリティ)
-    if (!line.validateSignature(body, signature, lineConfig.channelSecret)) {
+    // 2. Verify Signature using Web Crypto API
+    const isValid = await verifyLineSignature(rawBody, signature, lineConfig.channelSecret);
+    if (!isValid) {
+      console.error('Invalid LINE signature');
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
+    // 3. Parse Body
+    const body = JSON.parse(rawBody);
     const events = body.events;
     if (!events || events.length === 0) {
       return NextResponse.json({ message: 'No events' });
     }
 
-    // イベントを並列処理
-    await Promise.all(events.map(async (event: line.WebhookEvent) => {
+    // Process events
+    await Promise.all(events.map(async (event: any) => {
       if (event.type !== 'message' || event.message.type !== 'text') return;
 
       const replyToken = event.replyToken;
       const userMessage = event.message.text;
 
       try {
-        // 2. AIによる回答生成
         const provider = getLLMProvider();
         const messages: Message[] = [
           { role: 'user', content: `${LINE_SYSTEM_PROMPT}\n\n対象の美術作品：\n${userMessage}` }
         ];
         
         const aiResponse = await provider.generateResponse(messages, { json: false });
-
-        // 3. LINEへ返信
         await replyTextMessage(replyToken, aiResponse);
       } catch (aiError) {
         console.error('AI Response Error:', aiError);
-        await replyTextMessage(replyToken, 'すみません、うまく解説を生成できませんでした。もう一度作品名を教えていただけますか？🎨');
+        await replyTextMessage(replyToken, 'すみません、うまく解説を生成できませんでした。🎨');
       }
     }));
 
     return NextResponse.json({ message: 'OK' });
   } catch (error: any) {
-    console.error('LINE Webhook Error:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    console.error('Critical LINE Webhook Error:', error);
+    return NextResponse.json({ 
+      error: 'Internal Server Error', 
+      details: error.message 
+    }, { status: 500 });
   }
 }

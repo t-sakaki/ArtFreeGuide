@@ -75,7 +75,6 @@ const PRESET_ARTISTS = [
 
 class AudioController {
   private static speechTimeoutId: any = null;
-  private static startTimeoutId: any = null;
 
   static clearQueue() {
     console.log('[AUDIO] Queue Cancelled');
@@ -91,19 +90,14 @@ class AudioController {
       clearTimeout(this.speechTimeoutId);
       this.speechTimeoutId = null;
     }
-    if (this.startTimeoutId) {
-      clearTimeout(this.startTimeoutId);
-      this.startTimeoutId = null;
-    }
   }
 
   static forceUnlock() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      console.log('[AUDIO] Attempting to force unlock speech engine');
       try {
+        window.speechSynthesis.cancel();
         window.speechSynthesis.resume();
-        const dummy = new SpeechSynthesisUtterance('');
-        dummy.volume = 0;
-        window.speechSynthesis.speak(dummy);
       } catch (e) {
         console.warn('[AUDIO] Force unlock failed:', e);
       }
@@ -126,12 +120,16 @@ class AudioController {
 
     // Give browser 50ms to register the cancellation
     setTimeout(() => {
-      console.log(`[AUDIO] Attempting to speak sentence #${index}`);
+      console.log(`[AUDIO-DEBUG] Attempting to speak sentence #${index}`);
 
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         try {
-          window.speechSynthesis.resume(); // Ensure speaking state is active
-        } catch (e) {}
+          // Forced-resume mechanism: Cancel then Resume to wake up the engine
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.resume(); 
+        } catch (e) {
+          console.warn('[AUDIO-DEBUG] Forced-resume failed:', e);
+        }
       }
 
       const utterance = new SpeechSynthesisUtterance(text);
@@ -148,47 +146,34 @@ class AudioController {
           clearTimeout(this.speechTimeoutId);
           this.speechTimeoutId = null;
         }
-        if (this.startTimeoutId) {
-          clearTimeout(this.startTimeoutId);
-          this.startTimeoutId = null;
-        }
 
         if (type === 'end') {
+          console.log(`[AUDIO-DEBUG] Sentence #${index} ended normally`);
           onEnd();
         } else if (type === 'error') {
+          console.warn(`[AUDIO-DEBUG] Sentence #${index} error:`, detail);
           onError(detail);
         } else {
-          console.warn(`[AUDIO] Sentence #${index} Timeout! Forcing transition`);
+          console.warn(`[AUDIO-DEBUG] Safety timeout triggered for sentence #${index}`);
           onEnd();
         }
       };
 
-      // If speech fails to start in 2.5 seconds, force transition to avoid getting stuck
-      this.startTimeoutId = setTimeout(() => {
-        console.warn(`[AUDIO] Sentence #${index} failed to start in 2.5s. Skipping.`);
-        handleTransition('timeout');
-      }, 2500);
-
       utterance.onstart = () => {
-        if (this.startTimeoutId) {
-          clearTimeout(this.startTimeoutId);
-          this.startTimeoutId = null;
-        }
-        console.log(`[AUDIO] Voice started for #${index}`);
+        console.log(`[AUDIO-DEBUG] Voice successfully started`);
+        console.log(`[AUDIO-DEBUG] Voice successfully started for #${index}`);
         onStart();
       };
 
       utterance.onend = () => {
-        console.log(`[AUDIO] Sentence #${index} Ended`);
         handleTransition('end');
       };
 
       utterance.onerror = (e) => {
-        console.warn(`[AUDIO] Sentence #${index} Error:`, e);
         handleTransition('error', e);
       };
 
-      // Safety timeout: 200ms per character, min 15 seconds
+      // Safety timeout: 200ms per character, min 15 seconds (does not cut normal playback)
       const timeoutDuration = Math.max(15000, text.length * 200);
       this.speechTimeoutId = setTimeout(() => {
         handleTransition('timeout');
@@ -422,6 +407,13 @@ export default function ArtFreeGuide() {
     }
   }, []);
 
+  // Detect speech synthesis support
+  useEffect(() => {
+    const supported = typeof window !== 'undefined' && 'speechSynthesis' in window;
+    console.log('[AUDIO] speechSynthesis supported:', supported);
+    setSpeechSupported(supported);
+  }, []);
+
   const updateHistoryEntryByArtwork = (artworkTitle: string, artistName: string, fields: Partial<HistoryEntry>) => {
     setHistory(prev => {
       const copy = [...prev];
@@ -535,23 +527,36 @@ export default function ArtFreeGuide() {
   }, [activeSegmentIndex, isPlaying]);
 
   const speakSegment = (index: number) => {
-    if (!speechSupported || index < 0 || index >= speakableSegments.length) {
+    console.log(`[TRACE-11] speakSegment called with index: ${index}`);
+    console.log(`[TRACE-11.1] speechSupported: ${speechSupported}, speakableSegments.length: ${speakableSegments.length}`);
+    
+    if (!speechSupported) {
+      console.warn('[TRACE-12] Return: speechSupported is false');
+      return;
+    }
+    if (index < 0 || index >= speakableSegments.length) {
+      console.warn(`[TRACE-13] Return: index ${index} out of bounds`);
       return;
     }
 
     const rawText = speakableSegments[index];
+    console.log(`[TRACE-14] Raw text for segment ${index}: ${rawText.substring(0, 30)}...`);
+    
     const cleanText = rawText
-      .replace(/#+\s+/g, '') // Remove headers
+      .replace(/#+\\s+/g, '') // Remove headers
       .replace(/[*_`~>]/g, '') // Remove formatting symbols
-      .replace(/[-\d]+\.\s+/g, '') // Remove list items numbering
-      .replace(/\[.*?\]\(.*?\)/g, '') // Remove links
-      .replace(/\[.*?\]/g, '') // Remove stray bracket syntax
+      .replace(/[-\\d]+\\.\\s+/g, '') // Remove list items numbering
+      .replace(/\\\[.*?\\\]\\(.*?\\)/g, '') // Remove links
+      .replace(/\\\[.*?\\\]/g, '') // Remove stray bracket syntax
       .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
       .replace(/<.*?>/g, '') // Cleanse raw HTML tags
-      .replace(/\n+/g, ' ')
+      .replace(/\\n+/g, ' ')
       .trim();
+    
+    console.log(`[TRACE-15] Clean text: ${cleanText.substring(0, 30)}...`);
 
     if (!cleanText) {
+      console.warn(`[TRACE-16] Return: cleanText is empty for index ${index}`);
       setTimeout(() => {
         if (isPlayingRef.current && activeIndexRef.current === index) {
           setActiveSegmentIndex(prev => prev + 1);
@@ -560,19 +565,26 @@ export default function ArtFreeGuide() {
       return;
     }
 
+    console.log(`[TRACE-17] Calling AudioController.speak for index ${index}`);
     AudioController.speak(
       index,
       cleanText,
       speedRef.current,
       () => {
-        // Voice started callback if needed
+        console.log(`[TRACE-18] AudioController.speak onStart callback for #${index}`);
+        setIsPlaying(true);
+        if (artwork) {
+          startAmbientSound(artwork);
+        }
       },
       () => {
+        console.log(`[TRACE-19] AudioController.speak onEnd callback for #${index}`);
         if (isPlayingRef.current && activeIndexRef.current === index) {
           setActiveSegmentIndex(prev => prev + 1);
         }
       },
       (err) => {
+        console.warn(`[TRACE-20] AudioController.speak onError callback for #${index}:`, err);
         if (isPlayingRef.current && activeIndexRef.current === index) {
           setActiveSegmentIndex(prev => prev + 1);
         }
@@ -582,80 +594,19 @@ export default function ArtFreeGuide() {
 
   // Start Ambient Soundscape using Web Audio API
   const startAmbientSound = (artworkTitle: string) => {
-    try {
-      stopAmbientSound(); // Reset previous ambient context
-
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) return;
-
-      const ctx = new AudioContextClass();
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.0, ctx.currentTime);
-
-      // Frequencies for a warm, relaxing ambient drone
-      let frequencies = [110, 165, 220]; // A2, E3, A3
-      if (artworkTitle.includes('睡蓮') || artworkTitle.includes('水') || artworkTitle.includes('モネ')) {
-        frequencies = [130.81, 196.00, 261.63]; // C3, G3, C4
-      } else if (artworkTitle.includes('叫び') || artworkTitle.includes('ゲルニカ') || artworkTitle.includes('ピカソ')) {
-        frequencies = [98.00, 146.83, 196.00]; // G2, D3, G3
-      }
-
-      const oscs = frequencies.map(freq => {
-        const osc = ctx.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        osc.detune.setValueAtTime((Math.random() - 0.5) * 12, ctx.currentTime);
-        osc.connect(gain);
-        osc.start();
-        return osc;
-      });
-
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(350, ctx.currentTime);
-
-      gain.connect(filter);
-      filter.connect(ctx.destination);
-
-      // Fade in ambient hum gently to volume 5%
-      gain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 3.0);
-
-      (window as any)._ambientGain = gain;
-      (window as any)._ambientCtx = ctx;
-      (window as any)._ambientOscs = oscs;
-
-      setAmbientName(
-        artworkTitle.includes('睡蓮') || artworkTitle.includes('モネ')
-          ? '水面の揺らぎと森の風（432Hz調和音響）'
-          : artworkTitle.includes('叫び') || artworkTitle.includes('ゲルニカ')
-          ? '深層の心理ドローン（緊張と静寂）'
-          : '夜のカフェテラスと温かい灯火（心地よい低音ドローン）'
-      );
-    } catch (err) {
-      console.warn('Web Audio Ambient error:', err);
-    }
+    console.log(`[MOCK-AUDIO] Ambient Sound Started for: ${artworkTitle}`);
+    setAmbientName(
+      artworkTitle.includes('睡蓮') || artworkTitle.includes('モネ')
+        ? '水面の揺らぎと森の風（MOCK）'
+        : artworkTitle.includes('叫び') || artworkTitle.includes('ゲルニカ')
+        ? '深層の心理ドローン（MOCK）'
+        : '夜のカフェテラスと温かい灯火（MOCK）'
+    );
   };
 
   // Stop Ambient Soundscape
   const stopAmbientSound = () => {
-    const gain = (window as any)._ambientGain;
-    const ctx = (window as any)._ambientCtx;
-    const oscs = (window as any)._ambientOscs;
-
-    if (gain && ctx) {
-      try {
-        gain.gain.linearRampToValueAtTime(0.0, ctx.currentTime + 1.0);
-        setTimeout(() => {
-          if (oscs) oscs.forEach((o: any) => o.stop());
-          ctx.close();
-        }, 1000);
-      } catch (e) {
-        console.warn(e);
-      }
-      (window as any)._ambientGain = null;
-      (window as any)._ambientCtx = null;
-      (window as any)._ambientOscs = null;
-    }
+    console.log('[MOCK-AUDIO] Ambient Sound Stopped');
     setAmbientName(null);
   };
 
@@ -987,29 +938,10 @@ export default function ArtFreeGuide() {
       localStorage.setItem('art_free_guide_draft_artist', customArtist);
     }
 
-    // Audio Unlock: Trigger dummy utterance and initialize/resume AudioContext on user gesture
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      try {
-        const dummy = new SpeechSynthesisUtterance('');
-        dummy.volume = 0;
-        window.speechSynthesis.speak(dummy);
-      } catch (e) {
-        console.warn('Speech unlock failed:', e);
-      }
+    // Audio Unlock: Forced trigger on generation to attempt auto-play
+    if (typeof window !== 'undefined') {
+      AudioController.forceUnlock();
     }
-
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        const tempCtx = new AudioContextClass();
-        if (tempCtx.state === 'suspended') {
-          tempCtx.resume();
-        }
-      }
-    } catch (e) {
-      console.warn('Web Audio unlock failed:', e);
-    }
-
     if (speechSupported) {
       AudioController.clearQueue();
       setIsPlaying(false);
@@ -1044,6 +976,7 @@ export default function ArtFreeGuide() {
       setRecommendations(cached.recommendations);
       
       // Auto play on cached guide load
+      AudioController.forceUnlock();
       setActiveSegmentIndex(0);
       setIsPlaying(true);
       startAmbientSound(targetArtwork);
@@ -1085,6 +1018,16 @@ export default function ArtFreeGuide() {
           ]
         }),
       });
+
+      if (!res.ok) {
+        throw new Error(`Server Error: ${res.status} ${res.statusText}`);
+      }
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Invalid Response Format: Expected JSON but received ${contentType}. Body: ${text.substring(0, 100)}`);
+      }
 
       const data = await res.json();
 
@@ -1224,6 +1167,7 @@ export default function ArtFreeGuide() {
         setShowInputDrawer(false);
 
         // Auto play on generation completion
+        AudioController.forceUnlock();
         setActiveSegmentIndex(0);
         setIsPlaying(true);
       }
@@ -1266,6 +1210,17 @@ export default function ArtFreeGuide() {
           ]
         })
       });
+
+      if (!res.ok) {
+        throw new Error(`Server Error: ${res.status} ${res.statusText}`);
+      }
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Invalid Response Format: Expected JSON but received ${contentType}. Body: ${text.substring(0, 100)}`);
+      }
+
       const data = await res.json();
       
       if (data.error) {
@@ -1355,6 +1310,17 @@ export default function ArtFreeGuide() {
           ]
         })
       });
+
+      if (!res.ok) {
+        throw new Error(`Server Error: ${res.status} ${res.statusText}`);
+      }
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Invalid Response Format: Expected JSON but received ${contentType}. Body: ${text.substring(0, 100)}`);
+      }
+
       const data = await res.json();
       
       if (data.error) {
@@ -1399,34 +1365,43 @@ export default function ArtFreeGuide() {
 
   // Playback Control Handlers
   const handlePlayPause = () => {
-    console.log('[AUDIO] Button Clicked');
+    console.log('[TRACE-1] handlePlayPause start');
     
     // 1. Force unlock on user gesture
     AudioController.forceUnlock();
-
+    console.log('[TRACE-2] After AudioController.forceUnlock');
+    
     // 2. Play Web Audio ambient context if needed
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        const tempCtx = new AudioContextClass();
-        if (tempCtx.state === 'suspended') {
-          tempCtx.resume();
-        }
-      }
-    } catch (e) {}
-
-    if (!speechSupported || speakableSegments.length === 0) return;
+    console.log('[TRACE-3] Check state: isPlaying=', isPlaying, 'speakableSegments.length=', speakableSegments.length, 'speechSupported=', speechSupported);
+    
+    if (speakableSegments.length === 0) {
+      console.warn('[TRACE-4] Return: No speakable segments found');
+      return;
+    }
+    console.log('[TRACE-5] segments length > 0');
 
     if (isPlaying) {
+      console.log('[TRACE-6] Action: Pause');
       setIsPlaying(false);
       AudioController.clearQueue();
       stopAmbientSound();
     } else {
-      if (activeSegmentIndex === -1 || activeSegmentIndex >= speakableSegments.length) {
-        setActiveSegmentIndex(0);
-      }
+      console.log('[TRACE-7] Action: Play');
+      // Determine start index
+      const startIdx = (activeSegmentIndex === -1 || activeSegmentIndex >= speakableSegments.length) 
+        ? 0 
+        : activeSegmentIndex;
+      
+      console.log(`[TRACE-8] Determined startIdx: ${startIdx}`);
+      setActiveSegmentIndex(startIdx);
       setIsPlaying(true);
-      if (artwork) startAmbientSound(artwork);
+      if (artwork) {
+        console.log('[TRACE-9] Starting ambient sound');
+        startAmbientSound(artwork);
+      }
+
+      console.log(`[TRACE-10] Direct synchronous call to speakSegment(${startIdx})`);
+      speakSegment(startIdx);
     }
   };
 
