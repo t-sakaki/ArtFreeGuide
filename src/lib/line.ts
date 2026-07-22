@@ -6,6 +6,8 @@
 export const lineConfig = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
   channelSecret: process.env.LINE_CHANNEL_SECRET || '',
+  // Base URL for the Web App to link to audio guides
+  appBaseUrl: 'https://art-free-guide-trial.taira-sakakibara.workers.dev',
 };
 
 /**
@@ -23,7 +25,6 @@ export async function verifyLineSignature(bodyText: string, signature: string | 
       ['verify']
     );
     
-    // Convert base64 signature to Uint8Array
     const signatureBytes = Uint8Array.from(atob(signature.trim()), c => c.charCodeAt(0));
     const bodyBytes = encoder.encode(bodyText);
     
@@ -80,4 +81,59 @@ export async function replyMultipleMessages(replyToken: string, messages: any[])
   }
 
   return response;
+}
+
+/**
+ * Create a Flex Message for Audio Guide induction
+ */
+export function createAudioGuideFlex(artworkName: string) {
+  const url = `${lineConfig.appBaseUrl}/?work=${encodeURIComponent(artworkName)}`;
+  
+  return {
+    type: 'flex',
+    altText: '音声ガイドで聴く',
+    contents: {
+      type: 'bubble',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'text',
+            text: '🎧 音声ガイドで体験する',
+            weight: 'bold',
+            size: 'md',
+            align: 'center',
+            margin: 'md'
+          },
+          {
+            type: 'text',
+            text: `「${artworkName}」の物語を、心ゆくまで音声で堪能してください。`,
+            wrap: true,
+            size: 'sm',
+            align: 'center',
+            margin: 'sm',
+            color: '#666666'
+          }
+        ]
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'button',
+            action: {
+              type: 'uri',
+              label: '今すぐ聴く',
+              uri: url
+            },
+            style: 'primary',
+            color: '#E67E22',
+            margin: 'md'
+          }
+        ]
+      }
+    }
+  };
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyLineSignature, replyTextMessage, replyMultipleMessages, lineConfig } from '@/lib/line';
+import { verifyLineSignature, replyTextMessage, replyMultipleMessages, lineConfig, createAudioGuideFlex } from '@/lib/line';
 import { getLLMProvider, Message } from '@/lib/llm';
 import { fetchArtworkImage } from '@/lib/image';
 
@@ -51,7 +51,6 @@ export async function POST(req: NextRequest) {
       const userMessage = event.message.text;
 
       try {
-        // AI回答生成と画像検索を並列で実行してレスポンス時間を短縮
         const [aiResponse, imageUrl] = await Promise.all([
           (async () => {
             const provider = getLLMProvider();
@@ -63,16 +62,28 @@ export async function POST(req: NextRequest) {
           fetchArtworkImage(userMessage)
         ]);
 
+        // メッセージ配列を構築
+        const messagesToReply: any[] = [];
+
+        // 1. 画像があれば追加
         if (imageUrl) {
-          // 画像が見つかった場合は [画像] + [テキスト] を送信
-          await replyMultipleMessages(replyToken, [
-            { type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl },
-            { type: 'text', text: aiResponse }
-          ]);
-        } else {
-          // 画像がない場合はテキストのみ送信
-          await replyTextMessage(replyToken, aiResponse);
+          messagesToReply.push({ 
+            type: 'image', 
+            originalContentUrl: imageUrl, 
+            previewImageUrl: imageUrl 
+          });
         }
+
+        // 2. AIの解説テキストを追加
+        messagesToReply.push({ 
+          type: 'text', 
+          text: aiResponse 
+        });
+
+        // 3. 音声ガイドへの誘導ボタン (Flex Message) を追加
+        messagesToReply.push(createAudioGuideFlex(userMessage));
+
+        await replyMultipleMessages(replyToken, messagesToReply);
       } catch (aiError) {
         console.error('AI Response or Image Error:', aiError);
         await replyTextMessage(replyToken, 'すみません、うまく解説を生成できませんでした。🎨');
