@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateSignature } from '@line/bot-sdk';
-import { lineConfig, replyTextMessage } from '@/lib/line';
+import { verifyLineSignature, replyTextMessage, lineConfig } from '@/lib/line';
 import { getLLMProvider, Message } from '@/lib/llm';
 
 const LINE_SYSTEM_PROMPT = `あなたは美術館の情熱的な音声ガイド・キュレーターです。
@@ -22,34 +21,25 @@ LINEユーザーに対し、入力された美術作品について、親しみ�
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Raw Body を取得 (署名検証には文字列が必要)
+    // 1. Get Raw Body for signature verification
     const rawBody = await req.text();
     const signature = req.headers.get('x-line-signature') || '';
 
-    if (!signature) {
-      console.error('Missing x-line-signature header');
-      return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
+    // 2. Verify Signature using Web Crypto API
+    const isValid = await verifyLineSignature(rawBody, signature, lineConfig.channelSecret);
+    if (!isValid) {
+      console.error('Invalid LINE signature');
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
-    // 2. 署名検証
-    try {
-      if (!validateSignature(rawBody, signature, lineConfig.channelSecret)) {
-        console.error('Invalid LINE signature');
-        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-      }
-    } catch (sigError) {
-      console.error('Signature validation crash:', sigError);
-      return NextResponse.json({ error: 'Signature validation error' }, { status: 500 });
-    }
-
-    // 3. Body を JSON としてパース
+    // 3. Parse Body
     const body = JSON.parse(rawBody);
     const events = body.events;
     if (!events || events.length === 0) {
       return NextResponse.json({ message: 'No events' });
     }
 
-    // イベント処理 (並列実行)
+    // Process events
     await Promise.all(events.map(async (event: any) => {
       if (event.type !== 'message' || event.message.type !== 'text') return;
 
