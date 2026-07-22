@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyLineSignature, replyTextMessage, lineConfig } from '@/lib/line';
+import { verifyLineSignature, replyTextMessage, replyMultipleMessages, lineConfig } from '@/lib/line';
 import { getLLMProvider, Message } from '@/lib/llm';
+import { fetchArtworkImage } from '@/lib/image';
 
 const LINE_SYSTEM_PROMPT = `あなたは美術館の情熱的な音声ガイド・キュレーターです。
 LINEユーザーに対し、入力された美術作品について、親しみやすく、かつ知的なトーンで解説を提供してください。
@@ -50,15 +51,30 @@ export async function POST(req: NextRequest) {
       const userMessage = event.message.text;
 
       try {
-        const provider = getLLMProvider();
-        const messages: Message[] = [
-          { role: 'user', content: `${LINE_SYSTEM_PROMPT}\n\n対象の美術作品：\n${userMessage}` }
-        ];
-        
-        const aiResponse = await provider.generateResponse(messages, { json: false });
-        await replyTextMessage(replyToken, aiResponse);
+        // AI回答生成と画像検索を並列で実行してレスポンス時間を短縮
+        const [aiResponse, imageUrl] = await Promise.all([
+          (async () => {
+            const provider = getLLMProvider();
+            const messages: Message[] = [
+              { role: 'user', content: `${LINE_SYSTEM_PROMPT}\n\n対象の美術作品：\n${userMessage}` }
+            ];
+            return await provider.generateResponse(messages, { json: false });
+          })(),
+          fetchArtworkImage(userMessage)
+        ]);
+
+        if (imageUrl) {
+          // 画像が見つかった場合は [画像] + [テキスト] を送信
+          await replyMultipleMessages(replyToken, [
+            { type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl },
+            { type: 'text', text: aiResponse }
+          ]);
+        } else {
+          // 画像がない場合はテキストのみ送信
+          await replyTextMessage(replyToken, aiResponse);
+        }
       } catch (aiError) {
-        console.error('AI Response Error:', aiError);
+        console.error('AI Response or Image Error:', aiError);
         await replyTextMessage(replyToken, 'すみません、うまく解説を生成できませんでした。🎨');
       }
     }));
