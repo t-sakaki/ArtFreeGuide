@@ -1,7 +1,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"main": ".open-next/worker.js",
-	"name": "art-free-guide",
+	"name": "art-free-guide-trial",
 	"compatibility_date": "2026-07-18",
 	"compatibility_flags": [
 		"nodejs_compat",
