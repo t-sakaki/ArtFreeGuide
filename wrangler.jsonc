@@ -12,33 +12,72 @@
 		"binding": "ASSETS"
 	},
 	"vars": {
-		"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4",
-		"LLM_PROVIDER": "gemini"
+		"LLM_PROVIDER": "nvidia",
+		"LLM_MODEL": "google/gemma-4-31b-it",
+		"NVIDIA_BASE_URL": "https://integrate.api.nvidia.com/v1",
+		"NVIDIA_API_KEY": "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",
+		"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4"
 	},
 	"services": [
 		{
-			// Self-reference service binding, the service name must match the worker name
-			// see https://opennext.js.org/cloudflare/caching
 			"binding": "WORKER_SELF_REFERENCE",
 			"service": "art-free-guide"
 		}
 	],
 	"images": {
-		// Enable image optimization
-		// see https://opennext.js.org/cloudflare/howtos/image
 		"binding": "IMAGES"
 	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "artfreeguide_db_trial",
+			"database_id": "1028e2d0-e5d5-47e7-b828-bacea0c934d0",
+			"migrations_dir": "migrations"
+		}
+	],
 	"env": {
 		"trial": {
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "artfreeguide_db_trial",
+					"database_id": "1028e2d0-e5d5-47e7-b828-bacea0c934d0",
+					"migrations_dir": "migrations"
+				}
+			],
 			"vars": {
-				"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4",
-				"LLM_PROVIDER": "gemini"
+				"LLM_PROVIDER": "nvidia",
+				"LLM_MODEL": "google/gemma-4-31b-it",
+				"NVIDIA_BASE_URL": "https://integrate.api.nvidia.com/v1",
+				"NVIDIA_API_KEY": "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",
+				"GEMINI_API_KEY": "AIzaSyDDdOzbQzjl6gUkOW0AydnACMYlBRwd5zM"
+			},
+			"services": [
+				{
+					"binding": "WORKER_SELF_REFERENCE",
+					"service": "art-free-guide"
+				}
+			],
+			"images": {
+				"binding": "IMAGES"
 			}
 		},
 		"staging": {
 			"vars": {
-				"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4",
-				"LLM_PROVIDER": "gemini"
+				"LLM_PROVIDER": "nvidia",
+				"LLM_MODEL": "google/gemma-4-31b-it",
+				"NVIDIA_BASE_URL": "https://integrate.api.nvidia.com/v1",
+				"NVIDIA_API_KEY": "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",
+				"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4"
+			},
+			"services": [
+				{
+					"binding": "WORKER_SELF_REFERENCE",
+					"service": "art-free-guide"
+				}
+			],
+			"images": {
+				"binding": "IMAGES"
 			}
 		}
 	}

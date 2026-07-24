@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getLLMProvider, Message } from '@/lib/llm';
+import { findArtwork, saveArtwork, getArtworkImages } from '@/lib/db';
+import { fetchArtworkImage } from '@/lib/image';
 
 const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富な音声ガイド・キュレーターです。
 ユーザーから入力された美術作品（およびその作者）に対して、親しみやすくかつ知的なトーンで、以下の要件を満たす素晴らしい音声ガイドを提供してください。
@@ -43,6 +45,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Messages are required' }, { status: 400 });
     }
 
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const inputContent = lastUserMsg ? lastUserMsg.content : '';
+
+    // Check DB first if input looks like an artwork request
+    if (inputContent) {
+      const existing = await findArtwork(inputContent);
+      if (existing) {
+        console.log(`[/api/chat] DB Hit for query: "${inputContent}"`);
+        let recs = [];
+        if (existing.recommendations) {
+          try { recs = JSON.parse(existing.recommendations); } catch (_) {}
+        }
+        const cachedPayload = {
+          id: existing.id,
+          title: existing.title,
+          artist: existing.artist,
+          short: existing.guide_short,
+          standard: existing.guide_standard,
+          deep: existing.guide_deep,
+          searchQuery: existing.search_query,
+          recommendations: recs,
+          from_cache: true
+        };
+
+        return NextResponse.json({ text: JSON.stringify(cachedPayload) });
+      }
+    }
+
     // Modify the first user message to prepend the curator system prompt
     const modifiedMessages: Message[] = messages.map((msg, index) => {
       const isFirstUserMessage = index === 0 || (index > 0 && !messages.slice(0, index).some(m => m.role === 'user'));
@@ -58,7 +88,7 @@ export async function POST(req: Request) {
       };
     });
 
-    const provider = getLLMProvider();
+    const provider = await getLLMProvider();
     const text = await provider.generateResponse(modifiedMessages, { json: true });
 
     // Bulletproof JSON block extractor
@@ -67,6 +97,30 @@ export async function POST(req: Request) {
     const lastBrace = cleanText.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
       cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    }
+
+    // Save to DB asynchronously / in background context if valid JSON
+    try {
+      const parsed = JSON.parse(cleanText);
+      const title = inputContent || 'Unknown Artwork';
+      const searchQuery = parsed.searchQuery || title;
+
+      // Fetch primary image asynchronously for storage
+      fetchArtworkImage(searchQuery).then(imgUrl => {
+        saveArtwork({
+          title,
+          artist: '',
+          guide_short: parsed.short || '',
+          guide_standard: parsed.standard || '',
+          guide_deep: parsed.deep || '',
+          search_query: searchQuery,
+          recommendations: parsed.recommendations || [],
+          imageUrl: imgUrl
+        });
+      }).catch(e => console.warn('Background save error:', e));
+
+    } catch (parseErr) {
+      console.warn('Could not parse generated text to JSON for DB caching:', parseErr);
     }
 
     return NextResponse.json({ text: cleanText });

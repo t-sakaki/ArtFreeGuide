@@ -1,34 +1,47 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { LLMProvider, Message } from './provider';
+import { LLMProvider, Message, LLMOptions } from './provider';
 
-// Fallback models in case the primary one is overloaded (503) or unavailable
-const FALLBACK_MODELS = [
+const DEFAULT_FALLBACK_MODELS = [
   'gemini-2.5-flash',
   'gemini-2.0-flash',
   'gemini-3.5-flash',
   'gemini-3.1-flash-lite'
 ];
 
+export interface GeminiProviderConfig {
+  apiKey?: string;
+  defaultModel?: string;
+}
+
 export class GeminiProvider implements LLMProvider {
   private genAI: GoogleGenerativeAI;
+  private fallbackModels: string[];
 
-  constructor() {
-    const apiKey = process.env.GEMINI_API_KEY;
+  constructor(config: GeminiProviderConfig = {}) {
+    const apiKey = config.apiKey || process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error('GEMINI_API_KEY environment variable is not set. Please check your .env.local configuration.');
+      console.warn('[GeminiProvider] GEMINI_API_KEY environment variable is not set.');
     }
-    this.genAI = new GoogleGenerativeAI(apiKey);
+    this.genAI = new GoogleGenerativeAI(apiKey || 'dummy');
+
+    const primaryModel = config.defaultModel || process.env.LLM_MODEL;
+    if (primaryModel && primaryModel.startsWith('gemini')) {
+      this.fallbackModels = Array.from(new Set([primaryModel, ...DEFAULT_FALLBACK_MODELS]));
+    } else {
+      this.fallbackModels = DEFAULT_FALLBACK_MODELS;
+    }
   }
 
-  async generateResponse(messages: Message[], options?: { json?: boolean }): Promise<string> {
+  async generateResponse(messages: Message[], options?: LLMOptions): Promise<string> {
     const contents = messages.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
+      role: msg.role === 'user' || msg.role === 'system' ? 'user' : 'model',
       parts: [{ text: msg.content }]
     }));
 
     let lastError: any = null;
+    const modelChain = options?.model ? [options.model, ...this.fallbackModels] : this.fallbackModels;
 
-    for (const modelName of FALLBACK_MODELS) {
+    for (const modelName of modelChain) {
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           const model = this.genAI.getGenerativeModel({
@@ -49,12 +62,10 @@ export class GeminiProvider implements LLMProvider {
           lastError = error;
           console.warn(`Model ${modelName} failed on attempt ${attempt}/3:`, error.message || error);
 
-          // If the model is not found (404), switch to the next fallback model immediately without retrying
           if (error.status === 404) {
             break;
           }
 
-          // Exponential backoff for 503 Service Unavailable or 429 Rate Limit
           if (attempt < 3) {
             await new Promise(resolve => setTimeout(resolve, attempt * 1000));
           }

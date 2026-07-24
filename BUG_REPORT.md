@@ -2,27 +2,27 @@
 ...
 ---
 
-## Bug Report: Deploy时不生成 .open-next/ 目录
+## Bug Report: デプロイ時に .open-next/ ディレクトリが生成されない
 
-**日期:** 2026-07-24
-**环境:** ArtFreeGuide trial deployment
+**日付:** 2026-07-24
+**環境:** ArtFreeGuide trial deployment
 
-### Symptom
-执行 `npm run build && npx wrangler deploy -e trial` 时，虽然构建成功，但Cloudflare部署时显示 "No updated asset files to upload"，导致代码变更未生效。
+### 現象
+`npm run build && npx wrangler deploy -e trial` を実行した際、ビルドは成功するが、Cloudflareへのデプロイ時に "No updated asset files to upload" と表示され、コードの変更が反映されない。
 
 **原因分析:**
-- `npm run build` 只运行 `next build`，生成 `.next/` 目录
-- Cloudflare Workers 部署需要 `.open-next/` 目录（由 `@opennextjs/cloudflare` 生成）
-- `next build` 不会自动触发 `opennextjs-cloudflare build`，因此 `.open-next/` 不会被生成
-- 之前存在的 `.open-next/` 是旧版本/其他环境生成的，导致部署时Cloudflare认为没有更新
+- `npm run build` は `next build` のみを実行し、`.next/` ディレクトリを生成する。
+- Cloudflare Workers へのデプロイには、`@opennextjs/cloudflare` によって生成される `.open-next/` ディレクトリが必要である。
+- `next build` では `opennextjs-cloudflare build` が自動的にトリガーされないため、`.open-next/` が生成されない。
+- 既存の `.open-next/` が旧バージョンや別環境のものである場合、Cloudflareは更新がないと判断する。
 
 ### 解決策
-使用 `npm run build:cf` (即 `opennextjs-cloudflare build`) 代替 `npm run build`：
+`npm run build` の代わりに `npm run build:cf` (即ち `opennextjs-cloudflare build`) を使用する：
 ```bash
 npm run build:cf && npx wrangler deploy -e trial
 ```
 
-または package.json の scripts を使用：
+または `package.json` の scripts を使用：
 ```bash
 npm run deploy:trial
 ```
@@ -31,8 +31,8 @@ npm run deploy:trial
 | コマンド | .open-next 生成 | Cloudflare デプロイ |
 |---------|----------------|-------------------|
 | `npm run build` | ✗ | ✗ (変更反映なし) |
-| `npm run build:cf` | ✓ | ✓ (3アセット更新) |
-| `npm run deploy:trial` | ✓ | ✓ (推奨)
+| `npm run build:cf` | ✓ | ✓ (アセット更新あり) |
+| `npm run deploy:trial` | ✓ | ✓ (推奨) |
 
 ## Symptom
 The application starts playing the ambient background sound, but the voice guidance (SpeechSynthesis) fails to produce any sound, effectively "deadlocking" at the first segment. The UI indicates playback is active, but no voice is heard, and the `onstart` event of the `SpeechSynthesisUtterance` is never triggered.

@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       try {
         const [aiResponse, imageUrl] = await Promise.all([
           (async () => {
-            const provider = getLLMProvider();
+            const provider = await getLLMProvider();
             const messages: Message[] = [
               { role: 'user', content: `${LINE_SYSTEM_PROMPT}\n\n対象の美術作品：\n${userMessage}` }
             ];

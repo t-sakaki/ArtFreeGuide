@@ -1,8 +1,15 @@
 export interface Message {
-  role: 'user' | 'model';
+  role: 'user' | 'model' | 'system' | 'assistant';
   content: string;
 }
 
+export interface LLMOptions {
+  json?: boolean;
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
 export interface LLMProvider {
-  generateResponse(messages: Message[], options?: { json?: boolean }): Promise<string>;
+  generateResponse(messages: Message[], options?: LLMOptions): Promise<string>;
 }
