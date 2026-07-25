@@ -104,3 +104,13 @@ export interface PlaylistData {
   slug?: string | null;
   items: Array<InitialGuideData & { position: number }>;
 }
+
+export interface PlaylistSummary {
+  id: number;
+  name: string;
+  description: string | null;
+  slug: string;
+  itemCount: number;
+  thumbnailUrl: string | null;
+}
+

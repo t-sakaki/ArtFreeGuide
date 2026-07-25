@@ -1,5 +1,5 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
-import { ArtworkRecord, ArtworkImageRecord, FeedbackRecord, RecommendationItem, PlaylistRecord, PlaylistData } from '@/types/knowledgeBase';
+import { ArtworkRecord, ArtworkImageRecord, FeedbackRecord, RecommendationItem, PlaylistRecord, PlaylistData, PlaylistSummary } from '@/types/knowledgeBase';
 
 export function slugify(text: string): string {
   if (!text) return '';
@@ -224,6 +224,76 @@ export async function getPlaylistBySlug(slugOrId: string | number): Promise<Play
 
 // Backward compatibility alias
 export const getPlaylist = getPlaylistBySlug;
+
+/**
+ * Retrieves all playlists with thumbnail images (first artwork image of each playlist).
+ */
+export async function getAllPlaylists(): Promise<PlaylistSummary[]> {
+  const db = await getD1DB();
+  if (!db) {
+    return [
+      {
+        id: 1,
+        name: 'ゴッホと情熱の色彩ツアー',
+        description: '星月夜、ひまわり、夜のカフェテラスなど、ゴッホの代表作を巡る感動の音声ガイドツアー。',
+        slug: 'gogh-tour',
+        itemCount: 3,
+        thumbnailUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/1280px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg'
+      },
+      {
+        id: 2,
+        name: '印象派の名画巡りツアー',
+        description: 'モネ、ルノワール、ドガの光と色彩に溢れる名画の世界を体感。',
+        slug: 'impressionism-tour',
+        itemCount: 4,
+        thumbnailUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/Claude_Monet%2C_Impression%2C_soleil_levant.jpg/1280px-Claude_Monet%2C_Impression%2C_soleil_levant.jpg'
+      }
+    ];
+  }
+
+  try {
+    const res = (await db.prepare(`SELECT * FROM playlists ORDER BY id ASC`).all()) as { results: PlaylistRecord[] };
+    const playlists = res.results || [];
+
+    const list = await Promise.all(
+      playlists.map(async (p) => {
+        const itemsRes = (await db.prepare(`
+          SELECT pi.position, a.id, a.title, a.artist
+          FROM playlist_items pi
+          JOIN artworks a ON pi.artwork_id = a.id
+          WHERE pi.playlist_id = ?
+          ORDER BY pi.position ASC
+        `).bind(p.id).all()) as { results: any[] };
+
+        const items = itemsRes.results || [];
+        let thumbnailUrl: string | null = null;
+
+        if (items.length > 0) {
+          const firstArtworkId = items[0].id;
+          const images = await getArtworkImages(firstArtworkId, true);
+          if (images.length > 0) {
+            thumbnailUrl = images[0].url;
+          }
+        }
+
+        return {
+          id: p.id,
+          name: p.name,
+          description: p.description || null,
+          slug: p.playlist_slug || String(p.id),
+          itemCount: items.length,
+          thumbnailUrl
+        };
+      })
+    );
+
+    return list;
+  } catch (error) {
+    console.error('[D1] Error fetching all playlists:', error);
+    return [];
+  }
+}
+
 
 /**
  * Saves a newly generated artwork and its initial primary image.

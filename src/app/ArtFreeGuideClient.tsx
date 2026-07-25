@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { FeedbackControls } from '@/components/FeedbackControls';
+import HistoryPlaylistDrawer from '@/components/HistoryPlaylistDrawer';
 import { InitialGuideData, RecommendationItem, PlaylistData } from '@/types/knowledgeBase';
 
 interface ArtworkSuggestion {
@@ -1768,7 +1769,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
 
     const shareData = {
       title: playlist ? `ArtFreeGuide - ${playlist.name}` : `ArtFreeGuide - ${artwork}`,
-      text: playlist ? `「${playlist.name}」音声ガイドツアーを聴いてみて！` : `「${artwork}」${artist ? ` (${artist})` : ''}のAI音声ガイドを聴いてみて！`,
+      text: playlist ? `「${playlist.name}」音声ガイドツアーを聴いてみて！` : `「${artwork}」${artist ? ` (${artist})` : ''}の専属音声ガイドを聴いてみて！`,
       url: canonicalShareUrl
     };
 
@@ -1922,7 +1923,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <span>AIキュレーターが分析中...</span>
+              <span>キュレーターがガイドを準備中...</span>
             </>
           ) : (
             <>
@@ -1948,30 +1949,10 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
       {(responseShort || loading) && (
         <div className="fixed top-0 left-0 right-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-900 px-4 py-2.5 flex flex-col items-center select-none shadow-md">
           <div className="flex items-center justify-between w-full max-w-md mb-2">
-            {playlist ? (
-              <div className="flex items-center gap-1.5 bg-teal-500/10 border border-teal-500/30 text-teal-400 px-3 py-1 rounded-full text-xs font-bold font-sans animate-pulse">
-                <span>🏛️</span>
-                <span className="truncate max-w-[140px] sm:max-w-[180px]">{playlist.name}</span>
-                <span className="text-[10px] bg-teal-400 text-slate-950 px-1.5 py-0.2 rounded-full font-mono font-black ml-1">
-                  {historyIndex >= 0 ? historyIndex + 1 : 1} / {history.length}
-                </span>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowInputDrawer(true)}
-                className="text-slate-400 hover:text-teal-400 transition-colors text-xs font-sans font-semibold flex items-center gap-1 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg"
-              >
-                <span>🎨</span> <span>作品変更</span>
-              </button>
-            )}
-            
-            <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-500 bg-clip-text text-transparent font-sans">
-              ArtFreeGuide
-            </h1>
-
+            {/* Left: 履歴 / ツアー順 ボタン */}
             <button
               onClick={() => setShowHistorySidebar(true)}
-              className="text-slate-400 hover:text-teal-400 transition-colors text-xs font-sans font-semibold flex items-center gap-1 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg relative"
+              className="text-slate-400 hover:text-teal-400 transition-colors text-xs font-sans font-semibold flex items-center gap-1 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg relative shrink-0"
             >
               <span>📜</span> <span>{playlist ? 'ツアー順' : '履歴'}</span>
               {history.length > 0 && (
@@ -1980,6 +1961,29 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
                 </span>
               )}
             </button>
+
+            {/* Center: Title / Logo */}
+            <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-500 bg-clip-text text-transparent font-sans">
+              ArtFreeGuide
+            </h1>
+
+            {/* Right: 作品変更 ボタン / Tour Badge */}
+            {playlist ? (
+              <div className="flex items-center gap-1.5 bg-teal-500/10 border border-teal-500/30 text-teal-400 px-3 py-1 rounded-full text-xs font-bold font-sans animate-pulse shrink-0">
+                <span>🏛️</span>
+                <span className="truncate max-w-[100px] sm:max-w-[140px]">{playlist.name}</span>
+                <span className="text-[10px] bg-teal-400 text-slate-950 px-1.5 py-0.2 rounded-full font-mono font-black ml-1">
+                  {historyIndex >= 0 ? historyIndex + 1 : 1} / {history.length}
+                </span>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowInputDrawer(true)}
+                className="text-slate-400 hover:text-teal-400 transition-colors text-xs font-sans font-semibold flex items-center gap-1 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg shrink-0"
+              >
+                <span>🎨</span> <span>作品変更</span>
+              </button>
+            )}
           </div>
 
           {/* Physical Scroll Snap Carousel Container with PC Drag-to-Scroll Support */}
@@ -2078,7 +2082,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
                 ArtFreeGuide
               </h1>
               <p className="text-slate-400 text-base md:text-lg font-medium max-w-xl mx-auto font-sans leading-relaxed">
-                AIキュレーターが贈る、あなたのための特別な音声ガイド。美術作品をもっと深く、もっと身近に。
+                専属キュレーターが贈る、あなたのための特別な音声ガイド。美術作品をもっと深く、もっと身近に。
               </p>
               <div className="flex justify-center pt-2">
                 <button
@@ -2188,7 +2192,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
               ))}
             </div>
 
-            {/* Vertical Explanation Scroll Container with Museum Catalog Markdown Styling & Text Selection */}
+            {/* Highlights Segment Box */}
             <div
               ref={scrollRef}
               onMouseDown={handleMouseDown}
@@ -2211,14 +2215,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
                   if (seg.startsWith('\n>')) {
                     return (
                       <div key={index} className="py-1">
-                        <ReactMarkdown
-                          components={{
-                            blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-teal-500/50 bg-slate-950/60 rounded-r-xl pl-4 pr-3 py-2 italic text-slate-300 my-2 shadow-sm font-sans" {...props} />,
-                            strong: ({node, ...props}) => <strong className="font-bold text-teal-400" {...props} />
-                          }}
-                        >
-                          {seg}
-                        </ReactMarkdown>
+                        <ReactMarkdown>{seg}</ReactMarkdown>
                       </div>
                     );
                   }
@@ -2227,24 +2224,20 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
                     <div
                       key={index}
                       id={`seg-${speakableIndex}`}
-                      className={`transition-all duration-500 rounded-xl px-3 py-1.5 border-l-3 ${
+                      className={`transition-all duration-500 rounded-xl px-3 py-2 border-l-4 font-sans text-sm md:text-base leading-relaxed text-slate-200 ${
                         isActive
-                          ? 'bg-teal-500/10 text-teal-300 border-teal-500 font-medium pl-4 scale-[1.01] shadow-sm'
-                          : 'text-slate-350 border-transparent hover:bg-slate-900/10 hover:text-slate-200'
+                          ? 'bg-teal-500/10 border-teal-500 pl-4 border-y border-r border-teal-500/20 shadow-sm'
+                          : 'border-transparent hover:bg-slate-900/20 hover:text-slate-100'
                       }`}
                     >
                       <ReactMarkdown
                         components={{
-                          p: ({node, ...props}) => <span className="leading-relaxed" {...props} />,
-                          h1: ({node, ...props}) => <h1 className="text-xl font-black tracking-tight text-teal-400 mt-4 mb-2 border-b border-teal-500/20 pb-1 font-sans" {...props} />,
-                          h2: ({node, ...props}) => <h2 className="text-lg font-bold text-slate-100 mt-3 mb-1.5 font-sans flex items-center gap-2"><span className="text-teal-400 text-xs">◆</span><span {...props} /></h2>,
-                          h3: ({node, ...props}) => <h3 className="text-base font-bold text-teal-300 mt-2 mb-1 font-sans" {...props} />,
-                          strong: ({node, ...props}) => <strong className="font-extrabold text-teal-300 bg-teal-500/10 px-1 py-0.5 rounded" {...props} />,
-                          em: ({node, ...props}) => <em className="italic text-slate-300 font-serif" {...props} />,
-                          blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-teal-500/50 bg-slate-950/60 rounded-r-xl pl-4 pr-3 py-2 italic text-slate-300 my-2 shadow-sm font-sans" {...props} />,
-                          ul: ({node, ...props}) => <ul className="list-disc list-inside space-y-1.5 my-2 pl-2 text-slate-300 font-sans" {...props} />,
-                          ol: ({node, ...props}) => <ol className="list-decimal list-inside space-y-1.5 my-2 pl-2 text-slate-300 font-sans" {...props} />,
-                          li: ({node, ...props}) => <li className="text-slate-300 leading-relaxed font-sans" {...props} />,
+                          p: ({node, ...props}) => <p className="m-0 leading-relaxed font-sans" {...props} />,
+                          strong: ({node, ...props}) => <strong className="font-extrabold text-teal-300 bg-teal-500/10 px-1 py-0.5 rounded font-sans" {...props} />,
+                          em: ({node, ...props}) => <em className="italic text-teal-200/90 font-serif" {...props} />,
+                          h1: ({node, ...props}) => <h1 className="text-lg md:text-xl font-black text-teal-400 font-sans my-1" {...props} />,
+                          h2: ({node, ...props}) => <h2 className="text-base md:text-lg font-bold text-slate-100 font-sans my-1" {...props} />,
+                          h3: ({node, ...props}) => <h3 className="text-sm md:text-base font-bold text-teal-300 font-sans my-1" {...props} />
                         }}
                       >
                         {seg}
@@ -2253,7 +2246,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
                   );
                 })
               ) : (
-                <div className="text-slate-350">解説を読み込み中...</div>
+                <div className="text-slate-350 font-sans">解説を読み込み中...</div>
               )}
 
               {explanationMode !== 'deep' && (
@@ -2372,38 +2365,14 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
 
       {/* Downward Fixed Ultra-Compact Controller Panel */}
       {responseShort && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 border-t border-slate-900 px-3 py-1.5 shadow-2xl flex items-center justify-between gap-1 select-none h-16 pb-2">
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 backdrop-blur-md border-t border-slate-900 px-3 sm:px-6 py-2 shadow-2xl flex items-center justify-between select-none h-16 pb-safe">
           <div className="flex items-center justify-between w-full max-w-md mx-auto px-1 font-sans">
             
-            {/* Play/Pause Button */}
-            <button
-              onClick={handlePlayPause}
-              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl active:scale-95 relative overflow-hidden shrink-0 mr-1 ${
-                isPlaying
-                  ? 'bg-teal-500 text-slate-950 hover:bg-teal-400 hover:shadow-teal-400/20'
-                  : 'bg-slate-900 text-teal-400 border border-teal-500/30 hover:border-teal-500'
-              }`}
-              title={isPlaying ? "一時停止" : "再生"}
-            >
-              {isPlaying && (
-                <span className="absolute inset-0 rounded-full animate-ping bg-teal-500/20 opacity-75"></span>
-              )}
-              {isPlaying ? (
-                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                </svg>
-              ) : (
-                <svg className="w-4 h-4 fill-current translate-x-0.5" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z"/>
-                </svg>
-              )}
-            </button>
-
-            {/* Playback Speed Popover */}
+            {/* 1. 再生速度 (倍速設定) */}
             <div className="relative flex justify-center">
               <button
                 onClick={() => setShowSpeedMenu(!showSpeedMenu)}
-                className="flex flex-col items-center justify-center text-teal-400 hover:text-teal-350 transition-all active:scale-90 px-1.5"
+                className="flex flex-col items-center justify-center text-teal-400 hover:text-teal-350 transition-all active:scale-90 px-2"
                 title="再生速度を変更"
               >
                 <span className="text-sm">⚡</span>
@@ -2432,58 +2401,60 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
               )}
             </div>
 
-            {/* Sentence Backward */}
-            <button
-              onClick={handleSkipBackward}
-              disabled={activeSegmentIndex <= 0 && (!playlist || historyIndex <= 0)}
-              className="flex flex-col items-center justify-center text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all px-1.5"
-              title="前の一文"
-            >
-              <span className="text-sm">⏪</span>
-              <span className="text-[9px] font-semibold">前文</span>
-            </button>
-
-            {/* Sentence Forward */}
-            <button
-              onClick={handleSkipForward}
-              disabled={activeSegmentIndex >= speakableSegments.length - 1 && (!playlist || historyIndex >= history.length - 1)}
-              className="flex flex-col items-center justify-center text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all px-1.5"
-              title="次の一文"
-            >
-              <span className="text-sm">⏩</span>
-              <span className="text-[9px] font-semibold">次文</span>
-            </button>
-
-            {/* Artwork Backward (Sequence Navigation) */}
+            {/* 2. 前作品 */}
             <button
               onClick={() => loadHistoryEntry(historyIndex - 1)}
               disabled={historyIndex <= 0}
-              className="flex flex-col items-center justify-center text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all px-1.5 disabled:pointer-events-none"
+              className="flex flex-col items-center justify-center text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all px-2 disabled:pointer-events-none"
               title="前の作品"
             >
               <span className="text-sm">⏮️</span>
               <span className="text-[9px] font-semibold">前作品</span>
             </button>
 
-            {/* Artwork Forward (Sequence Navigation) */}
+            {/* 3. 次作品 */}
             <button
               onClick={() => loadHistoryEntry(historyIndex + 1)}
               disabled={historyIndex >= history.length - 1 && !playlist}
-              className="flex flex-col items-center justify-center text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all px-1.5"
+              className="flex flex-col items-center justify-center text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all px-2"
               title="次の作品"
             >
               <span className="text-sm">⏭️</span>
               <span className="text-[9px] font-semibold">次作品</span>
             </button>
 
-            {/* Consolidated Share Button (Copies Permanent Slug URL or Playlist Link) */}
+            {/* 4. 共有 */}
             <button
               onClick={handleShare}
-              className="flex flex-col items-center justify-center text-teal-400 hover:text-teal-300 transition-all px-1.5"
-              title="解説を共有（パーマネントURLをコピー）"
+              className="flex flex-col items-center justify-center text-teal-400 hover:text-teal-300 transition-all px-2"
+              title="解説を共有"
             >
               <span className="text-sm">📤</span>
               <span className="text-[9px] font-semibold">共有</span>
+            </button>
+
+            {/* 5. 再生/一時停止 (最右端) */}
+            <button
+              onClick={handlePlayPause}
+              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl active:scale-95 relative overflow-hidden shrink-0 ml-auto ${
+                isPlaying
+                  ? 'bg-teal-500 text-slate-950 hover:bg-teal-400 hover:shadow-teal-400/20'
+                  : 'bg-slate-900 text-teal-400 border border-teal-500/30 hover:border-teal-500'
+              }`}
+              title={isPlaying ? "一時停止" : "再生"}
+            >
+              {isPlaying && (
+                <span className="absolute inset-0 rounded-full animate-ping bg-teal-500/20 opacity-75"></span>
+              )}
+              {isPlaying ? (
+                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                </svg>
+              ) : (
+                <svg className="w-4 h-4 fill-current translate-x-0.5" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              )}
             </button>
 
           </div>
@@ -2555,83 +2526,24 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
         </div>
       )}
 
-      {showHistorySidebar && (
-        <div className="fixed inset-0 z-50 flex justify-end select-none animate-fade-in">
-          <div
-            className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
-            onClick={() => setShowHistorySidebar(false)}
-          ></div>
-
-          <div className="relative w-full max-w-xs bg-slate-950 border-l border-slate-900 h-full flex flex-col shadow-2xl p-6 overflow-y-auto z-50">
-            <div className="flex items-center justify-between border-b border-slate-900 pb-4 mb-4 font-sans">
-              <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
-                <span>📜</span> {playlist ? 'ツアー作品一覧' : '閲覧履歴'}
-              </h3>
-              <button
-                onClick={() => setShowHistorySidebar(false)}
-                className="text-slate-500 hover:text-white transition-colors text-lg"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex-1 space-y-2 overflow-y-auto pr-1 scrollbar-thin font-sans">
-              {history.length === 0 ? (
-                <div className="text-slate-650 text-xs py-8 text-center leading-relaxed">
-                  履歴はありません。<br />ガイドを生成するとここに保存されます。
-                </div>
-              ) : (
-                history.map((entry, idx) => {
-                  const isActive = idx === historyIndex;
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => {
-                        loadHistoryEntry(idx);
-                        setShowHistorySidebar(false);
-                      }}
-                      className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer border transition-all ${
-                        isActive
-                          ? 'bg-teal-500/10 border-teal-500/30 text-teal-400 font-bold'
-                          : 'bg-slate-900/40 border-slate-800/40 hover:border-slate-800 hover:bg-slate-900/60 text-slate-350 hover:text-slate-200'
-                      }`}
-                    >
-                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-950 border border-slate-850 flex items-center justify-center shrink-0">
-                        {entry.imageUrl ? (
-                          <img src={entry.imageUrl} alt={entry.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-xs">🖼️</span>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0 text-left">
-                        <p className="font-semibold text-xs truncate">{entry.title}</p>
-                        <p className="text-[10px] text-slate-500 truncate">{entry.artist || '作者不明'}</p>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {history.length > 0 && !playlist && (
-              <button
-                onClick={() => {
-                  if (confirm('閲覧履歴をすべて消去しますか？')) {
-                    setHistory([]);
-                    setHistoryIndex(-1);
-                    localStorage.removeItem('art_free_guide_history');
-                    localStorage.removeItem('art_free_guide_history_index');
-                  }
-                }}
-                className="w-full mt-4 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/30 text-rose-400 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5 font-sans"
-              >
-                <span>🗑️</span>
-                <span>履歴をクリア</span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Integrated History & Playlist Pop-up Drawer */}
+      <HistoryPlaylistDrawer
+        isOpen={showHistorySidebar}
+        onClose={() => setShowHistorySidebar(false)}
+        history={history}
+        historyIndex={historyIndex}
+        onSelectHistory={(index) => loadHistoryEntry(index)}
+        onClearHistory={() => {
+          setHistory([]);
+          setHistoryIndex(-1);
+          localStorage.removeItem('art_free_guide_history');
+          localStorage.removeItem('art_free_guide_history_index');
+        }}
+        currentPlaylistSlug={playlist?.slug}
+        onSelectPlaylist={(slug) => {
+          window.location.href = `/playlist/${slug}`;
+        }}
+      />
     </main>
   );
 }
