@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { FeedbackControls } from '@/components/FeedbackControls';
 import HistoryPlaylistDrawer from '@/components/HistoryPlaylistDrawer';
@@ -51,6 +51,17 @@ interface HistoryEntry {
   artworkSlug?: string | null;
 }
 
+const DEFAULT_IMAGE_URL = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600"%3E%3Crect width="800" height="600" fill="%230f172a"/%3E%3Cg opacity="0.4"%3E%3Crect x="250" y="180" width="300" height="200" rx="16" fill="%231e293b" stroke="%23334155" stroke-width="4"/%3E%3Ccircle cx="330" cy="240" r="25" fill="%230d9488"/%3E%3Cpath d="M280 340l70-60 60 40 70-70 70 90H280z" fill="%23334155"/%3E%3Ctext x="400" y="440" fill="%2394a3b8" font-family="sans-serif" font-size="20" font-weight="bold" text-anchor="middle"%3ENo Image Available%3C/text%3E%3C/g%3E%3C/svg%3E';
+
+const normalizeTextForSpeech = (text: string): string => {
+  if (!text) return '';
+  return text
+    .replace(/南仏/g, 'なんふつ')
+    .replace(/東仏/g, 'とうふつ')
+    .replace(/西仏/g, 'せいふつ')
+    .replace(/北仏/g, 'ほくふつ');
+};
+
 const PRESET_ARTWORKS: ArtworkSuggestion[] = [
   { title: 'ひまわり', artist: 'フィンセント・ファン・ゴッホ' },
   { title: '星月夜', artist: 'フィンセント・ファン・ゴッホ' },
@@ -100,11 +111,32 @@ function slugify(text: string): string {
   return '';
 }
 
+interface AudioQueueItem {
+  index: number;
+  text: string;
+  rate: number;
+  onStart: () => void;
+  onEnd: () => void;
+  onError: (e: any) => void;
+}
+
 class AudioController {
   private static speechTimeoutId: any = null;
+  private static currentAudio: HTMLAudioElement | null = null;
+  private static currentObjectUrl: string | null = null;
 
-  static clearQueue() {
-    console.log('[AUDIO] Queue Cancelled');
+  private static queue: AudioQueueItem[] = [];
+  private static isSpeaking: boolean = false;
+  private static currentQueueIndex: number | null = null;
+  private static stopRequested: boolean = false;
+
+  static stop() {
+    console.log('[AUDIO] Stop Requested (Full Stop)');
+    this.stopRequested = true;
+    this.queue = [];
+    this.isSpeaking = false;
+    this.currentQueueIndex = null;
+
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.resume();
@@ -113,6 +145,69 @@ class AudioController {
         console.warn('[AUDIO] Cancel failed:', e);
       }
     }
+
+    if (this.currentAudio) {
+      try {
+        this.currentAudio.pause();
+        this.currentAudio.currentTime = 0;
+        this.currentAudio.src = '';
+        this.currentAudio.onended = null;
+        this.currentAudio.onerror = null;
+        this.currentAudio = null;
+      } catch (e) {
+        console.warn('[AUDIO] HTMLAudio cancel failed:', e);
+      }
+    }
+
+    if (this.currentObjectUrl) {
+      try {
+        URL.revokeObjectURL(this.currentObjectUrl);
+      } catch (_) { }
+      this.currentObjectUrl = null;
+    }
+
+    if (this.speechTimeoutId) {
+      clearTimeout(this.speechTimeoutId);
+      this.speechTimeoutId = null;
+    }
+  }
+
+  static clearQueue() {
+    console.log('[AUDIO] Queue Cleared (Skip/Reset)');
+    this.stopRequested = false;
+    this.queue = [];
+    this.isSpeaking = false;
+    this.currentQueueIndex = null;
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.resume();
+        window.speechSynthesis.cancel();
+      } catch (e) {
+        console.warn('[AUDIO] Cancel failed:', e);
+      }
+    }
+
+    if (this.currentAudio) {
+      try {
+        this.currentAudio.pause();
+        this.currentAudio.currentTime = 0;
+        this.currentAudio.src = '';
+        this.currentAudio.onended = null;
+        this.currentAudio.onerror = null;
+        this.currentAudio = null;
+      } catch (e) {
+        console.warn('[AUDIO] HTMLAudio cancel failed:', e);
+      }
+    }
+
+    if (this.currentObjectUrl) {
+      try {
+        URL.revokeObjectURL(this.currentObjectUrl);
+      } catch (_) { }
+      this.currentObjectUrl = null;
+    }
+
     if (this.speechTimeoutId) {
       clearTimeout(this.speechTimeoutId);
       this.speechTimeoutId = null;
@@ -131,6 +226,16 @@ class AudioController {
     }
   }
 
+  static isLineBrowser(): boolean {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    return /Line\//i.test(ua);
+  }
+
+  static isWebSpeechSupported(): boolean {
+    return typeof window !== 'undefined' && 'speechSynthesis' in window && !this.isLineBrowser();
+  }
+
   static speak(
     index: number,
     text: string,
@@ -139,71 +244,257 @@ class AudioController {
     onEnd: () => void,
     onError: (e: any) => void
   ) {
-    this.clearQueue();
+    if (typeof window === 'undefined') return;
 
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    // Reset stop flag on new speak request
+    this.stopRequested = false;
+
+    if (this.currentQueueIndex === index && this.isSpeaking) {
+      console.log(`[AUDIO-QUEUE] Sentence #${index} is currently speaking. Ignoring duplicate request.`);
+      return;
+    }
+    if (this.queue.some(item => item.index === index)) {
+      console.log(`[AUDIO-QUEUE] Sentence #${index} is already in queue. Ignoring duplicate request.`);
       return;
     }
 
-    setTimeout(() => {
-      console.log(`[AUDIO-DEBUG] Attempting to speak sentence #${index}`);
+    const item: AudioQueueItem = { index, text, rate, onStart, onEnd, onError };
+    this.queue.push(item);
+    console.log(`[AUDIO-QUEUE] Queued sentence #${index}. Queue length: ${this.queue.length}`);
 
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    if (!this.isSpeaking) {
+      this.processQueue();
+    }
+  }
+
+  private static processQueue() {
+    if (this.stopRequested) {
+      console.log('[AUDIO-QUEUE] Stop requested. Aborting processQueue.');
+      return;
+    }
+
+    if (this.isSpeaking) {
+      return;
+    }
+
+    if (this.queue.length === 0) {
+      this.isSpeaking = false;
+      this.currentQueueIndex = null;
+      return;
+    }
+
+    const item = this.queue.shift()!;
+    this.isSpeaking = true;
+    this.currentQueueIndex = item.index;
+
+    console.log(`[AUDIO-QUEUE] Starting sentence #${item.index}. Remaining queue: ${this.queue.length}`);
+    this.executeItem(item);
+  }
+
+  private static executeItem(item: AudioQueueItem) {
+    const speechText = normalizeTextForSpeech(item.text);
+
+    if (!this.isWebSpeechSupported()) {
+      console.log(`[AUDIO] Using Cloudflare Workers AI MeloTTS Fallback for sentence #${item.index}`);
+      this.speakFallbackInternal(item, speechText);
+      return;
+    }
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
+      } catch (e) {
+        console.warn('[AUDIO-DEBUG] Forced-resume failed:', e);
+      }
+    }
+
+    const utterance = new SpeechSynthesisUtterance(speechText);
+    utterance.lang = 'ja-JP';
+    utterance.rate = item.rate;
+
+    let hasFinished = false;
+
+    const handleTransition = (type: 'end' | 'error' | 'timeout', detail?: any) => {
+      if (hasFinished) return;
+      hasFinished = true;
+
+      if (this.speechTimeoutId) {
+        clearTimeout(this.speechTimeoutId);
+        this.speechTimeoutId = null;
+      }
+
+      if (this.stopRequested) {
+        console.log(`[AUDIO-DEBUG] Stop requested, suppressing transition callback for sentence #${item.index}`);
+        this.isSpeaking = false;
+        this.currentQueueIndex = null;
+        return;
+      }
+
+      if (type === 'end') {
+        console.log(`[AUDIO-DEBUG] Sentence #${item.index} ended normally`);
+        this.isSpeaking = false;
+        this.currentQueueIndex = null;
         try {
-          window.speechSynthesis.cancel();
-          window.speechSynthesis.resume(); 
+          item.onEnd();
         } catch (e) {
-          console.warn('[AUDIO-DEBUG] Forced-resume failed:', e);
+          console.error('[AUDIO-DEBUG] onEnd callback error:', e);
+        }
+        setTimeout(() => this.processQueue(), 10);
+      } else if (type === 'error') {
+        console.warn(`[AUDIO-DEBUG] Sentence #${item.index} WebSpeech error, switching to MeloTTS fallback:`, detail);
+        this.speakFallbackInternal(item, speechText);
+      } else { // timeout
+        console.warn(`[AUDIO-DEBUG] Safety timeout triggered for sentence #${item.index}`);
+        this.isSpeaking = false;
+        this.currentQueueIndex = null;
+        try {
+          item.onEnd();
+        } catch (e) {
+          console.error('[AUDIO-DEBUG] onEnd callback error:', e);
+        }
+        setTimeout(() => this.processQueue(), 10);
+      }
+    };
+
+    utterance.onstart = () => {
+      console.log(`[AUDIO-DEBUG] Voice successfully started for #${item.index}`);
+      try {
+        item.onStart();
+      } catch (e) {
+        console.error('[AUDIO-DEBUG] onStart callback error:', e);
+      }
+    };
+
+    utterance.onend = () => {
+      handleTransition('end');
+    };
+
+    utterance.onerror = (e) => {
+      handleTransition('error', e);
+    };
+
+    const timeoutDuration = Math.max(15000, speechText.length * 200);
+    this.speechTimeoutId = setTimeout(() => {
+      handleTransition('timeout');
+    }, timeoutDuration);
+
+    try {
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn(`[AUDIO-DEBUG] speechSynthesis.speak exception, falling back to MeloTTS:`, err);
+      handleTransition('error', err);
+    }
+  }
+
+  private static async speakFallbackInternal(
+    item: AudioQueueItem,
+    speechText: string
+  ) {
+    console.log(`[AUDIO-FALLBACK] MeloTTS started for sentence #${item.index}. Snippet:`, speechText.substring(0, 50));
+    let hasFinished = false;
+
+    const handleTransition = (type: 'end' | 'error' | 'timeout', detail?: any) => {
+      if (hasFinished) return;
+      hasFinished = true;
+
+      if (this.speechTimeoutId) {
+        clearTimeout(this.speechTimeoutId);
+        this.speechTimeoutId = null;
+      }
+
+      if (this.currentAudio) {
+        this.currentAudio.onended = null;
+        this.currentAudio.onerror = null;
+      }
+
+      if (this.stopRequested) {
+        console.log(`[AUDIO-FALLBACK] Stop requested, suppressing transition callback for sentence #${item.index}`);
+        this.isSpeaking = false;
+        this.currentQueueIndex = null;
+        return;
+      }
+
+      this.isSpeaking = false;
+      this.currentQueueIndex = null;
+
+      if (type === 'end') {
+        console.log(`[AUDIO-FALLBACK] Sentence #${item.index} ended normally`);
+        try {
+          item.onEnd();
+        } catch (e) {
+          console.error('[AUDIO-FALLBACK] onEnd callback error:', e);
+        }
+      } else if (type === 'error') {
+        console.warn(`[AUDIO-FALLBACK] Sentence #${item.index} error:`, detail);
+        try {
+          item.onError(detail);
+        } catch (e) {
+          console.error('[AUDIO-FALLBACK] onError callback error:', e);
+        }
+      } else {
+        console.warn(`[AUDIO-FALLBACK] Safety timeout triggered for sentence #${item.index}`);
+        try {
+          item.onEnd();
+        } catch (e) {
+          console.error('[AUDIO-FALLBACK] onEnd callback error:', e);
         }
       }
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'ja-JP';
-      utterance.rate = rate;
+      setTimeout(() => this.processQueue(), 10);
+    };
 
-      let hasFinished = false;
+    try {
+      console.log(`[AUDIO-FALLBACK] Requesting MeloTTS audio for sentence #${item.index}...`);
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: speechText })
+      });
 
-      const handleTransition = (type: 'end' | 'error' | 'timeout', detail?: any) => {
-        if (hasFinished) return;
-        hasFinished = true;
+      if (!response.ok) {
+        throw new Error(`MeloTTS API returned status ${response.status}`);
+      }
 
-        if (this.speechTimeoutId) {
-          clearTimeout(this.speechTimeoutId);
-          this.speechTimeoutId = null;
-        }
+      const blob = await response.blob();
+      if (!blob || blob.size === 0) {
+        throw new Error('MeloTTS API returned empty audio blob');
+      }
 
-        if (type === 'end') {
-          console.log(`[AUDIO-DEBUG] Sentence #${index} ended normally`);
-          onEnd();
-        } else if (type === 'error') {
-          console.warn(`[AUDIO-DEBUG] Sentence #${index} error:`, detail);
-          onError(detail);
-        } else {
-          console.warn(`[AUDIO-DEBUG] Safety timeout triggered for sentence #${index}`);
-          onEnd();
-        }
-      };
+      const audioUrl = URL.createObjectURL(blob);
+      this.currentObjectUrl = audioUrl;
 
-      utterance.onstart = () => {
-        console.log(`[AUDIO-DEBUG] Voice successfully started for #${index}`);
-        onStart();
-      };
+      const audio = new Audio(audioUrl);
+      this.currentAudio = audio;
 
-      utterance.onend = () => {
-        handleTransition('end');
-      };
-
-      utterance.onerror = (e) => {
-        handleTransition('error', e);
-      };
-
-      const timeoutDuration = Math.max(15000, text.length * 200);
+      const timeoutDuration = Math.max(20000, speechText.length * 400);
       this.speechTimeoutId = setTimeout(() => {
         handleTransition('timeout');
       }, timeoutDuration);
 
-      window.speechSynthesis.speak(utterance);
-    }, 50);
+      audio.onplay = () => {
+        console.log(`[AUDIO-FALLBACK] MeloTTS Audio playing for sentence #${item.index}`);
+        try {
+          item.onStart();
+        } catch (e) {
+          console.error('[AUDIO-FALLBACK] onStart callback error:', e);
+        }
+      };
+
+      audio.onended = () => {
+        console.log(`[AUDIO-FALLBACK] HTMLAudioElement ended for sentence #${item.index}`);
+        handleTransition('end');
+      };
+
+      audio.onerror = (err) => {
+        handleTransition('error', err);
+      };
+
+      await audio.play();
+    } catch (err) {
+      console.warn(`[AUDIO-FALLBACK] MeloTTS playback failed for sentence #${item.index}:`, err);
+      handleTransition('error', err);
+    }
   }
 }
 
@@ -305,6 +596,14 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
+  // Input management for AI Chat (Phase 1)
+  const [inputValue, setInputValue] = useState('');
+  const [conversationLog, setConversationLog] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+
+  // AI-generated improvement suggestions (dynamic)
+  const [improvementSuggestions, setImprovementSuggestions] = useState<{ type: string, icon: string, message: string, action: string }[]>([]);
+
   // Autocomplete States
   const [artworkSuggestions, setArtworkSuggestions] = useState<ArtworkSuggestion[]>([]);
   const [showArtworkSuggestions, setShowArtworkSuggestions] = useState(false);
@@ -316,7 +615,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
   const [focusedArtistIndex, setFocusedArtistIndex] = useState(-1);
 
   // Image State
-  const [imageUrl, setImageUrl] = useState<string | null>(initialItem?.imageUrl || null);
+  const [imageUrl, setImageUrl] = useState<string | null>(initialItem?.imageUrl || DEFAULT_IMAGE_URL);
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [searchQuery, setSearchQuery] = useState(initialItem?.searchQuery || '');
@@ -493,21 +792,26 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
       try {
         const parsedHistory = JSON.parse(savedHistoryStr) as HistoryEntry[];
         setHistory(parsedHistory);
-      } catch (e) {}
+      } catch (e) { }
     }
 
-    if (initialItem && initialItem.recommendations && initialItem.recommendations.length > 0) {
-      fetchRecommendationImages(
-        initialItem.recommendations.map(r => ({
-          title: r.title,
-          artist: r.artist,
-          reason: r.reason,
-          imageUrl: null,
-          imageLoading: true
-        })),
-        initialItem.title,
-        initialItem.artist
-      );
+    if (initialItem) {
+      if (!initialItem.imageUrl) {
+        fetchImage(initialItem.searchQuery || `${initialItem.title} ${initialItem.artist}`);
+      }
+      if (initialItem.recommendations && initialItem.recommendations.length > 0) {
+        fetchRecommendationImages(
+          initialItem.recommendations.map(r => ({
+            title: r.title,
+            artist: r.artist,
+            reason: r.reason,
+            imageUrl: null,
+            imageLoading: true
+          })),
+          initialItem.title,
+          initialItem.artist
+        );
+      }
     }
   }, []);
 
@@ -630,23 +934,28 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
     setYear(entry.year || null);
     setArtistSlug(entry.artistSlug || null);
     setArtworkSlug(entry.artworkSlug || null);
-    
+
     localStorage.setItem('art_free_guide_draft_artwork', entry.title);
     localStorage.setItem('art_free_guide_draft_artist', entry.artist);
 
     setResponseShort(entry.short || '');
     setResponseStandard(entry.standard || '');
     setResponseDeep(entry.deep || '');
-    setExplanationMode('short');
-    setImageUrl(entry.imageUrl);
-    setImageError(entry.imageError);
+    const resolvedImg = entry.imageUrl || DEFAULT_IMAGE_URL;
+    setImageUrl(resolvedImg);
+    setImageError(entry.imageError || !entry.imageUrl);
+    setImageLoading(false);
     setSearchQuery(entry.searchQuery);
     setRecommendations(entry.recommendations);
+
+    if (!entry.imageUrl && !entry.imageError) {
+      fetchImage(entry.searchQuery || `${entry.title} ${entry.artist}`);
+    }
 
     // Explicit user-triggered audio rule for LINE/Mobile compliance
     setActiveSegmentIndex(-1);
     setIsPlaying(false);
-    AudioController.clearQueue();
+    AudioController.stop();
     stopAmbientSound();
 
     if (shouldScrollCarousel) {
@@ -656,30 +965,22 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
 
   const parseSegments = (text: string) => {
     if (!text) return [];
-    const splitList: string[] = [];
-    let current = '';
-    
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i];
-      current += char;
-      if (char === '。' || char === '\n') {
-        if (current.trim()) {
-          splitList.push(current);
-        }
-        current = '';
-      }
-    }
-    if (current.trim()) {
-      splitList.push(current);
-    }
-    return splitList;
+    // Replace escaped newlines (\\n) with actual newlines for proper parsing
+    const processedText = text.replace(/\\n/g, '\n');
+    return processedText
+      .split('\n\n')
+      .flatMap(p => p.split('\n'))
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
   };
 
   const getActiveExplanation = () => {
-    if (!responseShort) return '';
-    if (explanationMode === 'short') return responseShort;
-    if (explanationMode === 'standard') return `${responseShort}\n\n${responseStandard}`;
-    return `${responseShort}\n\n${responseStandard}\n\n${responseDeep}`;
+    if (!responseShort && !responseStandard && !responseDeep) return '';
+    const parts = [];
+    if (responseShort) parts.push(responseShort);
+    if (responseStandard) parts.push(responseStandard);
+    if (responseDeep) parts.push(responseDeep);
+    return parts.join('\n\n');
   };
 
   const activeText = getActiveExplanation();
@@ -695,6 +996,51 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
     setSegments(parsedSegs);
     setSpeakableSegments(cleanSpeakables);
   }, [activeText]);
+
+  useEffect(() => {
+    console.log('[SuggestEffect] segments.length:', segments.length);
+    if (segments.length > 0) {
+      fetchImprovementSuggestions();
+    } else {
+      setImprovementSuggestions([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segments]);
+
+  // Fetch AI-generated improvement suggestions
+  const fetchImprovementSuggestions = useCallback(async () => {
+    const segs = segments;
+    const artName = artwork;
+    const artistName = artist;
+    console.log('[fetchImprovementSuggestions] called. segs:', segs.length);
+    if (segs.length === 0) return;
+    try {
+      const res = await fetch('/api/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'improve',
+          segments: segs.join('\n'),
+          artworkQuery: artName,
+          artistName: artistName
+        })
+      });
+      const data = await res.json();
+      console.log('[fetchImprovementSuggestions] API response:', data);
+      // Only update if we actually have suggestions
+      if (data.suggestions && Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+        console.log('[fetchImprovementSuggestions] calling setImprovementSuggestions with', data.suggestions.length, 'items');
+        setImprovementSuggestions(data.suggestions);
+        // debug: verify after state update
+        setTimeout(() => {
+          // eslint-disable-next-line no-console
+          console.log('[fetchImprovementSuggestions] updated state size:', data.suggestions.length);
+        }, 0);
+      }
+    } catch (e) {
+      console.error('[fetchImprovementSuggestions] error:', e);
+    }
+  }, [segments, artwork, artist]);
 
   useEffect(() => {
     if (activeSegmentIndex >= 0) {
@@ -776,8 +1122,8 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
       artworkTitle.includes('睡蓮') || artworkTitle.includes('モネ')
         ? '水面の揺らぎと森の風'
         : artworkTitle.includes('叫び') || artworkTitle.includes('ゲルニカ')
-        ? '深層の心理ドローン'
-        : '夜のカフェテラスと温かい灯火'
+          ? '深層の心理ドローン'
+          : '夜のカフェテラスと温かい灯火'
     );
   };
 
@@ -1021,7 +1367,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
     }
     setShowArtworkSuggestions(false);
     setFocusedArtworkIndex(-1);
-    
+
     generateGuide(suggestion.title, targetArtist);
   };
 
@@ -1033,16 +1379,22 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
   };
 
   const fetchImage = async (query: string, cacheKey?: string) => {
+    const currentUrl = query;
     setImageLoading(true);
+    console.log("[IMG-DEBUG] Loading started... URL:", currentUrl);
     setImageError(false);
     setImageUrl(null);
     setSearchQuery(query);
 
     const blacklists = [/SD_/i, /Rhinoceros/i, /parody/i, /meme/i, /stock_price/i, /\.pdf/i, /\.djvu/i, /cartoon/i, /ai_generated/i];
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
     try {
       const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrnamespace=6&gsrlimit=10&prop=imageinfo&iiprop=url|mime&iiurlwidth=800&format=json&origin=*`;
       const res = await fetch(url, {
+        signal: controller.signal,
         headers: {
           'Api-User-Agent': 'ArtFreeGuide/1.0 (https://art-free-guide-trial.taira-sakakibara.workers.dev; contact: taira.sakakibara@gmail.com)'
         }
@@ -1068,60 +1420,63 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
         }
       }
 
-      if (thumbUrl) {
-        setImageUrl(thumbUrl);
-        if (cacheKey) {
-          setGuideCache(prev => {
-            if (prev[cacheKey]) {
-              return {
-                ...prev,
-                [cacheKey]: { ...prev[cacheKey], imageUrl: thumbUrl, imageError: false }
-              };
-            }
-            return prev;
-          });
-          const parts = cacheKey.split('::');
-          if (parts.length === 2) {
-            updateHistoryEntryByArtwork(parts[0], parts[1], { imageUrl: thumbUrl, imageError: false });
-          }
-        }
-      } else {
-        setImageError(true);
-        if (cacheKey) {
-          setGuideCache(prev => {
-            if (prev[cacheKey]) {
-              return {
-                ...prev,
-                [cacheKey]: { ...prev[cacheKey], imageError: true }
-              };
-            }
-            return prev;
-          });
-          const parts = cacheKey.split('::');
-          if (parts.length === 2) {
-            updateHistoryEntryByArtwork(parts[0], parts[1], { imageError: true });
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Wikimedia fetch error:', error);
-      setImageError(true);
+      const resolvedUrl = thumbUrl || DEFAULT_IMAGE_URL;
+      setImageUrl(resolvedUrl);
+      setImageError(!thumbUrl);
       if (cacheKey) {
         setGuideCache(prev => {
           if (prev[cacheKey]) {
             return {
               ...prev,
-              [cacheKey]: { ...prev[cacheKey], imageError: true }
+              [cacheKey]: { ...prev[cacheKey], imageUrl: resolvedUrl, imageError: !thumbUrl }
             };
           }
           return prev;
         });
         const parts = cacheKey.split('::');
         if (parts.length === 2) {
-          updateHistoryEntryByArtwork(parts[0], parts[1], { imageError: true });
+          updateHistoryEntryByArtwork(parts[0], parts[1], { imageUrl: resolvedUrl, imageError: !thumbUrl });
         }
+      } else {
+        setHistory(prev => {
+          const copy = [...prev];
+          if (copy.length > 0) {
+            const targetIdx = historyIndex >= 0 && historyIndex < copy.length ? historyIndex : 0;
+            copy[targetIdx] = { ...copy[targetIdx], imageUrl: resolvedUrl, imageError: !thumbUrl };
+          }
+          return copy;
+        });
+      }
+    } catch (error) {
+      console.error('Wikimedia fetch error:', error);
+      setImageUrl(DEFAULT_IMAGE_URL);
+      setImageError(true);
+      if (cacheKey) {
+        setGuideCache(prev => {
+          if (prev[cacheKey]) {
+            return {
+              ...prev,
+              [cacheKey]: { ...prev[cacheKey], imageUrl: DEFAULT_IMAGE_URL, imageError: true }
+            };
+          }
+          return prev;
+        });
+        const parts = cacheKey.split('::');
+        if (parts.length === 2) {
+          updateHistoryEntryByArtwork(parts[0], parts[1], { imageUrl: DEFAULT_IMAGE_URL, imageError: true });
+        }
+      } else {
+        setHistory(prev => {
+          const copy = [...prev];
+          if (copy.length > 0) {
+            const targetIdx = historyIndex >= 0 && historyIndex < copy.length ? historyIndex : 0;
+            copy[targetIdx] = { ...copy[targetIdx], imageUrl: DEFAULT_IMAGE_URL, imageError: true };
+          }
+          return copy;
+        });
       }
     } finally {
+      clearTimeout(timeoutId);
       setImageLoading(false);
     }
   };
@@ -1204,7 +1559,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
       AudioController.forceUnlock();
     }
     if (speechSupported) {
-      AudioController.clearQueue();
+      AudioController.stop();
       setIsPlaying(false);
       stopAmbientSound();
     }
@@ -1237,13 +1592,13 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
       setRecommendations(cached.recommendations);
       setArtistSlug(cached.artistSlug || null);
       setArtworkSlug(cached.artworkSlug || null);
-      
+
       setActiveSegmentIndex(-1);
       setIsPlaying(false);
 
       const idx = history.findIndex(
         h => h.title.trim().toLowerCase() === targetArtwork.trim().toLowerCase() &&
-             (h.artist || '').trim().toLowerCase() === (targetArtist || '').trim().toLowerCase()
+          (h.artist || '').trim().toLowerCase() === (targetArtist || '').trim().toLowerCase()
       );
       if (idx !== -1) {
         setHistoryIndex(idx);
@@ -1439,7 +1794,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
           if (matchDeep && matchDeep[1]) {
             deepText = matchDeep[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
           }
-          
+
           if (!shortText) {
             if (data.text.trim().startsWith('{')) {
               shortText = "音声ガイドの解析中にエラーが発生しました。もう一度生成をお試しください。";
@@ -1474,7 +1829,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
           artistSlug: generatedArtistSlug || null,
           artworkSlug: generatedArtworkSlug || null
         };
-        
+
         setGuideCache(prev => ({ ...prev, [cacheKey]: newEntry }));
 
         const newHistoryEntry: HistoryEntry = {
@@ -1497,7 +1852,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
         setHistory(prev => {
           const existingIndex = prev.findIndex(
             h => h.title.trim().toLowerCase() === targetArtwork.trim().toLowerCase() &&
-                 (h.artist || '').trim().toLowerCase() === (targetArtist || '').trim().toLowerCase()
+              (h.artist || '').trim().toLowerCase() === (targetArtist || '').trim().toLowerCase()
           );
           let newIndex = 0;
           let copy: HistoryEntry[];
@@ -1540,7 +1895,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
 
     setDeepDiveLoading(true);
     setIsPlaying(false);
-    AudioController.clearQueue();
+    AudioController.stop();
 
     try {
       const res = await fetch('/api/chat', {
@@ -1570,7 +1925,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
       }
 
       const data = await res.json();
-      
+
       if (data.error) {
         console.warn('Deep dive rate limit/error:', data.error);
         return;
@@ -1586,11 +1941,11 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
         }
         const parsed = JSON.parse(jsonString);
         rawText = parsed.explanation || data.text;
-      } catch (e) {}
+      } catch (e) { }
 
       const visualHeader = `\n> 🔍 **ディープな深掘りエピソードへようこそ**\n`;
       const updatedDeep = `${responseDeep}\n\n${visualHeader}\n\n${rawText}`;
-      
+
       setResponseDeep(updatedDeep);
       setExplanationMode('deep');
 
@@ -1614,9 +1969,9 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
     if (!recognition) return;
     setIsListening(true);
     setVoiceText('');
-    
+
     setIsPlaying(false);
-    AudioController.clearQueue();
+    AudioController.stop();
     stopAmbientSound();
 
     recognition.start();
@@ -1670,7 +2025,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
       }
 
       const data = await res.json();
-      
+
       if (data.error) {
         console.warn('Voice feedback error:', data.error);
         return;
@@ -1686,11 +2041,11 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
         }
         const parsed = JSON.parse(jsonString);
         rawText = parsed.explanation || data.text;
-      } catch (e) {}
+      } catch (e) { }
 
       const header = `\n> 🎙️ **あなたへの語りかけ対話**\n`;
       const updatedDeep = `${responseDeep}\n\n${header}\n\n${rawText}`;
-      
+
       setResponseDeep(updatedDeep);
       setExplanationMode('deep');
 
@@ -1719,13 +2074,13 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
 
     if (isPlaying) {
       setIsPlaying(false);
-      AudioController.clearQueue();
+      AudioController.stop();
       stopAmbientSound();
     } else {
-      const startIdx = (activeSegmentIndex === -1 || activeSegmentIndex >= speakableSegments.length) 
-        ? 0 
+      const startIdx = (activeSegmentIndex === -1 || activeSegmentIndex >= speakableSegments.length)
+        ? 0
         : activeSegmentIndex;
-      
+
       setActiveSegmentIndex(startIdx);
       setIsPlaying(true);
       if (artwork) {
@@ -1735,7 +2090,54 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
     }
   };
 
+  const handleMainAction = async () => {
+    if (inputValue.trim()) {
+      const userMessage = inputValue.trim();
+      setInputValue('');
+      setConversationLog(prev => [...prev, { role: 'user', content: userMessage }]);
+      setChatLoading(true);
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: userMessage,
+            artworkId: currentArtworkId,
+            artworkTitle: artwork,
+            artistName: artist,
+            history: conversationLog
+          })
+        });
+
+        if (!res.ok) throw new Error(`Server Error: ${res.status}`);
+        const data = await res.json();
+
+        if (data.reply) {
+          setConversationLog(prev => [...prev, { role: 'assistant', content: data.reply }]);
+          // Update the currently displayed explanation with the improved explanation
+          const processedReply = data.reply.replace(/\\n/g, '\n');
+          if (explanationMode === 'short') {
+            setResponseShort(processedReply);
+          } else if (explanationMode === 'standard') {
+            setResponseStandard(processedReply);
+          } else if (explanationMode === 'deep') {
+            setResponseDeep(processedReply);
+          }
+        }
+      } catch (e: any) {
+        console.error('Chat Error:', e);
+        triggerToast('メッセージの送信に失敗しました');
+      } finally {
+        setChatLoading(false);
+      }
+    } else {
+      handlePlayPause();
+    }
+  };
+
   const handleSkipForward = () => {
+    AudioController.clearQueue();
     if (activeSegmentIndex < speakableSegments.length - 1) {
       setActiveSegmentIndex(prev => prev + 1);
     } else if (playlist && historyIndex < history.length - 1) {
@@ -1746,6 +2148,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
   };
 
   const handleSkipBackward = () => {
+    AudioController.clearQueue();
     if (activeSegmentIndex > 0) {
       setActiveSegmentIndex(prev => prev - 1);
     } else if (playlist && historyIndex > 0) {
@@ -1846,11 +2249,10 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
                   <li
                     key={index}
                     onMouseDown={() => selectArtworkSuggestion(suggestion)}
-                    className={`px-4 py-3.5 cursor-pointer text-sm transition-all flex items-center justify-between font-sans ${
-                      focusedArtworkIndex === index
+                    className={`px-4 py-3.5 cursor-pointer text-sm transition-all flex items-center justify-between font-sans ${focusedArtworkIndex === index
                         ? 'bg-teal-500/10 text-teal-400 font-bold'
                         : 'hover:bg-slate-900/80 text-slate-300'
-                    }`}
+                      }`}
                   >
                     <div className="text-left flex items-center gap-2">
                       {suggestion.isAi && (
@@ -1898,11 +2300,10 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
                   <li
                     key={index}
                     onMouseDown={() => selectArtistSuggestion(name)}
-                    className={`px-4 py-3 cursor-pointer text-sm transition-all text-left ${
-                      focusedArtistIndex === index
+                    className={`px-4 py-3 cursor-pointer text-sm transition-all text-left ${focusedArtistIndex === index
                         ? 'bg-teal-500/10 text-teal-400'
                         : 'hover:bg-slate-900/80 text-slate-300'
-                    }`}
+                      }`}
                   >
                     {renderHighlightedText(name, artist)}
                   </li>
@@ -1995,9 +2396,8 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
               onMouseMove={handleCarouselMouseMove}
               onMouseUp={handleCarouselMouseUp}
               onMouseLeave={handleCarouselMouseLeave}
-              className={`w-full flex overflow-x-auto snap-x snap-mandatory scroll-smooth rounded-2xl border border-slate-800/80 bg-slate-900 shadow-inner overflow-y-hidden ${
-                isDraggingCarousel ? 'cursor-grabbing select-none' : 'cursor-grab'
-              }`}
+              className={`w-full flex overflow-x-auto snap-x snap-mandatory scroll-smooth rounded-2xl border border-slate-800/80 bg-slate-900 shadow-inner overflow-y-hidden ${isDraggingCarousel ? 'cursor-grabbing select-none' : 'cursor-grab'
+                }`}
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {history.length > 0 ? (
@@ -2012,22 +2412,26 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
                         alt={entry.title}
                         draggable={false}
                         onDragStart={(e) => e.preventDefault()}
+                        onLoad={() => {
+                          console.log("[IMG-DEBUG] onLoad fired! Loading = false");
+                          setImageLoading(false);
+                        }}
+                        onError={() => {
+                          console.log("[IMG-DEBUG] onError fired! Loading = false, Error = true");
+                          setImageLoading(false);
+                          setImageError(true);
+                        }}
                         className="w-full h-full object-contain transition-all duration-500 ease-out select-none pointer-events-none"
                       />
-                    ) : entry.imageError ? (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 gap-1 p-2 text-center select-none bg-slate-900/20">
-                        <span className="text-2xl">🖼️</span>
-                        <p className="text-[11px] font-semibold text-slate-500 font-sans">作品画像を取得できませんでした</p>
-                      </div>
                     ) : (
-                      <div className="absolute inset-0 bg-slate-900/60 flex flex-col items-center justify-center gap-2">
-                        <div className="animate-pulse flex space-x-2">
-                          <div className="h-1.5 w-1.5 bg-slate-600 rounded-full animate-bounce"></div>
-                          <div className="h-1.5 w-1.5 bg-slate-600 rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                          <div className="h-1.5 w-1.5 bg-slate-600 rounded-full animate-bounce [animation-delay:0.4s]"></div>
-                        </div>
-                        <span className="text-slate-500 text-[10px] font-sans">画像を読み込み中...</span>
-                      </div>
+                      <img
+                        src={DEFAULT_IMAGE_URL}
+                        alt={entry.title}
+                        draggable={false}
+                        onDragStart={(e) => e.preventDefault()}
+                        onLoad={() => setImageLoading(false)}
+                        className="w-full h-full object-contain transition-all duration-500 ease-out select-none pointer-events-none opacity-80"
+                      />
                     )}
 
                     {/* Page Flip Slide Counter Indicator */}
@@ -2057,6 +2461,15 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
                       alt={artwork}
                       draggable={false}
                       onDragStart={(e) => e.preventDefault()}
+                      onLoad={() => {
+                        console.log("[IMG-DEBUG] onLoad fired! Loading = false");
+                        setImageLoading(false);
+                      }}
+                      onError={() => {
+                        console.log("[IMG-DEBUG] onError fired! Loading = false, Error = true");
+                        setImageLoading(false);
+                        setImageError(true);
+                      }}
                       className="w-full h-full object-contain transition-all duration-700 ease-out select-none pointer-events-none"
                     />
                   )}
@@ -2074,7 +2487,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
       )}
 
       <div className={`w-full max-w-2xl px-4 mx-auto ${responseShort || loading ? 'pt-64 sm:pt-72 pb-24' : 'py-12 md:py-20 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]'}`}>
-        
+
         {!responseShort && !loading && (
           <div className="w-full space-y-8 animate-fade-in flex flex-col items-center">
             <div className="text-center mb-4 space-y-3">
@@ -2134,7 +2547,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
                   </div>
                 )}
               </div>
-              
+
               {(location || year) && (
                 <div className="text-[10px] text-slate-400 font-sans tracking-wide mt-1 flex items-center gap-1.5">
                   <span className="text-teal-400/80">🏛️</span>
@@ -2158,39 +2571,6 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
               )}
             </div>
 
-            {/* Explicit user audio start trigger */}
-            {activeSegmentIndex === -1 && !isPlaying && (
-              <div className="flex justify-center py-2 animate-bounce">
-                <button
-                  onClick={handlePlayPause}
-                  className="px-8 py-3.5 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-400 hover:to-blue-500 text-slate-950 font-black rounded-full shadow-lg shadow-teal-500/20 active:scale-95 transition-all flex items-center gap-2 text-sm font-sans"
-                >
-                  <span>🎧</span>
-                  <span>音声ガイドを再生する</span>
-                </button>
-              </div>
-            )}
-
-            <div className="flex bg-slate-950 border border-slate-900 p-1 rounded-xl select-none w-full max-w-sm mx-auto">
-              {(['short', 'standard', 'deep'] as const).map(mode => (
-                <button
-                  key={mode}
-                  onClick={() => {
-                    setExplanationMode(mode);
-                    setActiveSegmentIndex(-1);
-                    setIsPlaying(false);
-                    if (speechSupported) window.speechSynthesis.cancel();
-                  }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all active:scale-95 font-sans ${
-                    explanationMode === mode
-                      ? 'bg-teal-500 text-slate-950 shadow-md font-black'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  {mode === 'short' ? '概要' : mode === 'standard' ? '標準' : '詳細'}
-                </button>
-              ))}
-            </div>
 
             {/* Highlights Segment Box */}
             <div
@@ -2202,10 +2582,26 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
-              className={`bg-slate-900/20 border border-slate-900 rounded-2xl p-4 md:p-6 max-h-[380px] overflow-y-auto space-y-3 font-serif leading-relaxed text-base selection:bg-teal-500/20 shadow-inner ${
-                isDragging ? 'cursor-grabbing select-none' : 'cursor-text select-text'
-              }`}
+              className={`bg-slate-900/20 border border-slate-900 rounded-2xl p-4 md:p-6 max-h-[380px] overflow-y-auto space-y-3 font-serif leading-relaxed text-base selection:bg-teal-500/20 shadow-inner ${isDragging ? 'cursor-grabbing select-none' : 'cursor-text select-text'
+                }`}
             >
+              {/* 会話ログ: キュレーターとの対話が解説に追加される */}
+              {conversationLog.length > 0 && (
+                <div className="border border-teal-500/30 rounded-xl p-3 space-y-2 bg-teal-950/20 mb-2">
+                  <div className="text-[10px] text-teal-400 font-bold tracking-wider mb-2">💬 キュレーターとの対話</div>
+                  {conversationLog.map((msg, i) => (
+                    <div key={i} className={`text-sm ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
+                      <div className={`inline-block max-w-[85%] p-2 rounded-lg text-xs ${msg.role === 'user'
+                          ? 'bg-teal-500/20 text-teal-200'
+                          : 'bg-slate-800 text-slate-200'
+                        }`}>
+                        <span className="font-bold text-[9px] mr-1">{msg.role === 'user' ? 'あなた' : 'キュレーター'}</span>
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {segments.length > 0 ? (
                 segments.map((seg, index) => {
                   const isSpeakable = speakableSegments.includes(seg);
@@ -2224,20 +2620,19 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
                     <div
                       key={index}
                       id={`seg-${speakableIndex}`}
-                      className={`transition-all duration-500 rounded-xl px-3 py-2 border-l-4 font-sans text-sm md:text-base leading-relaxed text-slate-200 ${
-                        isActive
+                      className={`transition-all duration-500 rounded-xl px-3 py-2 border-l-4 font-sans text-sm md:text-base leading-relaxed text-slate-200 ${isActive
                           ? 'bg-teal-500/10 border-teal-500 pl-4 border-y border-r border-teal-500/20 shadow-sm'
                           : 'border-transparent hover:bg-slate-900/20 hover:text-slate-100'
-                      }`}
+                        }`}
                     >
                       <ReactMarkdown
                         components={{
-                          p: ({node, ...props}) => <p className="m-0 leading-relaxed font-sans" {...props} />,
-                          strong: ({node, ...props}) => <strong className="font-extrabold text-teal-300 bg-teal-500/10 px-1 py-0.5 rounded font-sans" {...props} />,
-                          em: ({node, ...props}) => <em className="italic text-teal-200/90 font-serif" {...props} />,
-                          h1: ({node, ...props}) => <h1 className="text-lg md:text-xl font-black text-teal-400 font-sans my-1" {...props} />,
-                          h2: ({node, ...props}) => <h2 className="text-base md:text-lg font-bold text-slate-100 font-sans my-1" {...props} />,
-                          h3: ({node, ...props}) => <h3 className="text-sm md:text-base font-bold text-teal-300 font-sans my-1" {...props} />
+                          p: ({ node, ...props }) => <p className="m-0 leading-relaxed font-sans" {...props} />,
+                          strong: ({ node, ...props }) => <strong className="font-extrabold text-teal-300 bg-teal-500/10 px-1 py-0.5 rounded font-sans" {...props} />,
+                          em: ({ node, ...props }) => <em className="italic text-teal-200/90 font-serif" {...props} />,
+                          h1: ({ node, ...props }) => <h1 className="text-lg md:text-xl font-black text-teal-400 font-sans my-1" {...props} />,
+                          h2: ({ node, ...props }) => <h2 className="text-base md:text-lg font-bold text-slate-100 font-sans my-1" {...props} />,
+                          h3: ({ node, ...props }) => <h3 className="text-sm md:text-base font-bold text-teal-300 font-sans my-1" {...props} />
                         }}
                       >
                         {seg}
@@ -2248,51 +2643,56 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
               ) : (
                 <div className="text-slate-350 font-sans">解説を読み込み中...</div>
               )}
+            </div>
 
-              {explanationMode !== 'deep' && (
-                <div className="pt-4 border-t border-slate-900/60 flex justify-center select-none">
-                  <button
-                    onClick={() => {
-                      if (explanationMode === 'short') {
-                        setExplanationMode('standard');
-                      } else {
-                        setExplanationMode('deep');
-                      }
-                      setActiveSegmentIndex(-1);
-                      setIsPlaying(false);
-                      if (speechSupported) window.speechSynthesis.cancel();
-                    }}
-                    className="px-6 py-2.5 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-400 hover:text-teal-300 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-sm font-sans"
-                  >
-                    <span>👇</span>
-                    <span>{explanationMode === 'short' ? 'さらに詳しく（標準解説を追記）' : 'さらに深く（詳細エピソードを追記）'}</span>
-                  </button>
+            {/* AI Chat Input Area - キュレーターに質問 */}
+            <div className="w-full max-w-sm mx-auto mt-3 space-y-2">
+              <div className="flex gap-2">
+                <textarea
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder="質問する or 改善点を伝える..."
+                  className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 transition-all resize-none h-10"
+                />
+                <button
+                  onClick={handleMainAction}
+                  disabled={chatLoading}
+                  className="bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold px-3 rounded-xl transition-all active:scale-95 disabled:opacity-50 text-xs"
+                >
+                  {chatLoading ? '...' : '▶ 送信'}
+                </button>
+              </div>
+
+              {/* AI-generated improvement suggestions */}
+              {improvementSuggestions.length > 0 && (
+                <div className="space-y-1.5">
+                  {improvementSuggestions.map((suggestion, index) => (
+                    <button
+                      key={index}
+                      onClick={() => {
+                        setInputValue(`${suggestion.icon} ${suggestion.message}`);
+                        handleMainAction();
+                      }}
+                      className="w-full text-left text-xs px-3 py-2 bg-teal-950/30 border border-teal-500/20 rounded-lg hover:bg-teal-900/40 hover:border-teal-500/40 transition-all flex items-start gap-2"
+                    >
+                      <span className="text-sm flex-shrink-0 mt-0.5">{suggestion.icon}</span>
+                      <span className="text-teal-300/90 leading-relaxed">{suggestion.message}</span>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Feedback & Rating Controls */}
-            <FeedbackControls
-              artworkId={currentArtworkId}
-              imageId={currentImageId}
-              onImageInvalidated={(replacement) => {
-                if (replacement?.url) {
-                  setImageUrl(replacement.url);
-                  setCurrentImageId(replacement.id);
-                }
-              }}
-            />
 
             {(recognition || explanationMode === 'deep') && (
               <div className="flex flex-wrap items-center justify-center gap-3 select-none pt-1">
                 {recognition && (
                   <button
                     onClick={startListening}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 shadow-md font-sans ${
-                      isListening
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 shadow-md font-sans ${isListening
                         ? 'bg-rose-500 text-white animate-pulse'
                         : 'bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20'
-                    }`}
+                      }`}
                   >
                     <span>🎙️</span>
                     <span>{isListening ? 'お話し中...' : '感想を声で伝える'}</span>
@@ -2367,7 +2767,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
       {responseShort && (
         <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 backdrop-blur-md border-t border-slate-900 px-3 sm:px-6 py-2 shadow-2xl flex items-center justify-between select-none h-16 pb-safe">
           <div className="flex items-center justify-between w-full max-w-md mx-auto px-1 font-sans">
-            
+
             {/* 1. 再生速度 (倍速設定) */}
             <div className="relative flex justify-center">
               <button
@@ -2388,11 +2788,10 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
                         setPlaybackSpeed(sp);
                         setShowSpeedMenu(false);
                       }}
-                      className={`py-1.5 text-[11px] font-mono font-bold rounded-lg transition-all text-center ${
-                        playbackSpeed === sp
+                      className={`py-1.5 text-[11px] font-mono font-bold rounded-lg transition-all text-center ${playbackSpeed === sp
                           ? 'bg-teal-500 text-slate-950 font-black'
                           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-                      }`}
+                        }`}
                     >
                       {sp.toFixed(1)}x
                     </button>
@@ -2436,11 +2835,10 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
             {/* 5. 再生/一時停止 (最右端) */}
             <button
               onClick={handlePlayPause}
-              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl active:scale-95 relative overflow-hidden shrink-0 ml-auto ${
-                isPlaying
+              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl active:scale-95 relative overflow-hidden shrink-0 ml-auto ${isPlaying
                   ? 'bg-teal-500 text-slate-950 hover:bg-teal-400 hover:shadow-teal-400/20'
                   : 'bg-slate-900 text-teal-400 border border-teal-500/30 hover:border-teal-500'
-              }`}
+                }`}
               title={isPlaying ? "一時停止" : "再生"}
             >
               {isPlaying && (
@@ -2448,11 +2846,11 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
               )}
               {isPlaying ? (
                 <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
                 </svg>
               ) : (
                 <svg className="w-4 h-4 fill-current translate-x-0.5" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z"/>
+                  <path d="M8 5v14l11-7z" />
                 </svg>
               )}
             </button>

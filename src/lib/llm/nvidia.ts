@@ -12,9 +12,9 @@ export class NVIDIAProvider implements LLMProvider {
   private defaultModel: string;
 
   constructor(config: NVIDIAProviderConfig = {}) {
-    this.apiKey = config.apiKey || process.env.NVIDIA_API_KEY || '';
+    this.apiKey = config.apiKey || process.env.NVIDIA_API_KEY || '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';
     this.baseUrl = (config.baseUrl || process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1').replace(/\/+$/, '');
-    this.defaultModel = config.defaultModel || process.env.LLM_MODEL || 'google/gemma-4-31b-it';
+    this.defaultModel = config.defaultModel || process.env.LLM_MODEL || 'meta/llama-3.1-70b-instruct';
   }
 
   async generateResponse(messages: Message[], options?: LLMOptions): Promise<string> {

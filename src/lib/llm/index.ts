@@ -55,7 +55,7 @@ export async function getLLMProvider(overrideEnv?: Record<string, any>): Promise
 
   const mergedEnv = { ...process.env, ...cfEnv, ...overrideEnv };
   const providerType = (mergedEnv.LLM_PROVIDER || 'nvidia').toLowerCase();
-  const modelName = mergedEnv.LLM_MODEL || 'google/gemma-4-31b-it';
+  const modelName = mergedEnv.LLM_MODEL || 'meta/llama-3.1-70b-instruct';
 
   console.log(`[LLMOrchestrator] Selected Provider: ${providerType}, Model: ${modelName}`);
 

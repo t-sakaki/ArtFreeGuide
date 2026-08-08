@@ -39,8 +39,43 @@ const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富�
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const body = await req.json();
+    const { messages, message, artworkId, artworkTitle, artistName, history } = body;
 
+    // Phase 1 Chat API: 新形式 (handleMainAction から呼ばれる)
+    if (message !== undefined) {
+      const chatHistory = history || [];
+
+      // Check if this is an improvement suggestion (starts with 💡🔧📜❓💬)
+      const improvementIcons = ['💡', '🔧', '📜', '❓', '💬'];
+      const isImprovement = improvementIcons.some(icon => message.startsWith(icon));
+
+      const systemHint = isImprovement
+        ? `\n【重要な指示】このメッセージは解説の改善 요청입니다。\n- まず謝罪や共感を示す\n- 該当する解説問題を修正した新しいテキストを提示\n- 修正内容を簡潔説明\n- 返答は自然な会話文で（JSON不要）`
+        : '';
+
+      const chatMessages: Message[] = [
+        ...chatHistory.map((m: { role: string; content: string }) => ({
+          role: m.role as 'user' | 'model',
+          content: m.content
+        })),
+        { role: 'user' as const, content: message + systemHint }
+      ];
+
+      const provider = await getLLMProvider();
+      const text = await provider.generateResponse(chatMessages, { json: false });
+
+      // 返答から reply フィールドを抽出を試みる
+      let reply = text.trim();
+      try {
+        const parsed = JSON.parse(reply);
+        reply = parsed.reply || parsed.text || parsed.content || reply;
+      } catch (_) {}
+
+      return NextResponse.json({ reply });
+    }
+
+    // 既存形式: messages 配列
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: 'Messages are required' }, { status: 400 });
     }

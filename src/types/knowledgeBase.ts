@@ -4,6 +4,8 @@ export interface ArtworkRecord {
   artist: string;
   location?: string | null;
   year?: string | null;
+  medium?: string | null;
+  dimensions?: string | null;
   guide_short: string;
   guide_standard: string;
   guide_deep: string;
@@ -11,6 +13,9 @@ export interface ArtworkRecord {
   recommendations?: string | null; // JSON string
   artist_slug?: string | null;
   artwork_slug?: string | null;
+  imageUrl?: string | null;
+  autoFilled?: string | string[] | null;
+  updated_by?: string | null;
   view_count?: number;
   created_at?: string;
   updated_at?: string;
@@ -47,18 +52,27 @@ export interface ImageItem {
   is_valid: boolean;
 }
 
+import type { Gaps } from '@/lib/gaps';
+
 export interface GuideResponse {
   id: number;
   title: string;
   artist: string;
   location?: string | null;
   year?: string | null;
+  medium?: string | null;
+  dimensions?: string | null;
+  imageUrl?: string | null;
+  autoFilled?: string[];
+  updated_by?: string | null;
+  pendingCompletion?: boolean;
   short: string;
   standard: string;
   deep: string;
   searchQuery?: string | null;
   images: ImageItem[];
   recommendations: RecommendationItem[];
+  gaps?: Gaps;
   artist_slug?: string | null;
   artwork_slug?: string | null;
   view_count?: number;
@@ -71,12 +85,17 @@ export interface InitialGuideData {
   artist: string;
   location?: string | null;
   year?: string | null;
+  medium?: string | null;
+  dimensions?: string | null;
   short: string;
   standard: string;
   deep: string;
   searchQuery?: string | null;
   imageUrl?: string | null;
+  autoFilled?: string[];
+  pendingCompletion?: boolean;
   recommendations?: RecommendationItem[];
+  gaps?: Gaps;
   artistSlug?: string | null;
   artworkSlug?: string | null;
 }
@@ -113,4 +132,26 @@ export interface PlaylistSummary {
   itemCount: number;
   thumbnailUrl: string | null;
 }
+
+export interface UpdateArtworkImageRequest {
+  imageUrl: string;
+}
+
+export interface UpdateArtworkImageSuccessResponse {
+  success: true;
+  id: number;
+  imageUrl: string;
+}
+
+export interface UpdateArtworkImageErrorResponse {
+  error: string;
+}
+
+export type UpdateArtworkImageResponse = UpdateArtworkImageSuccessResponse | UpdateArtworkImageErrorResponse;
+
+export interface ArtworkSearchResponse {
+  artworks: ArtworkRecord[];
+  total: number;
+}
+
 

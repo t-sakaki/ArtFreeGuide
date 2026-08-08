@@ -1,84 +1,61 @@
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"main": ".open-next/worker.js",
-	"name": "art-free-guide",
-	"compatibility_date": "2026-07-18",
-	"compatibility_flags": [
-		"nodejs_compat",
-		"global_fetch_strictly_public"
-	],
-	"assets": {
-		"directory": ".open-next/assets",
-		"binding": "ASSETS"
-	},
-	"vars": {
-		"LLM_PROVIDER": "nvidia",
-		"LLM_MODEL": "google/gemma-4-31b-it",
-		"NVIDIA_BASE_URL": "https://integrate.api.nvidia.com/v1",
-		"NVIDIA_API_KEY": "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",
-		"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4"
-	},
-	"services": [
-		{
-			"binding": "WORKER_SELF_REFERENCE",
-			"service": "art-free-guide"
-		}
-	],
-	"images": {
-		"binding": "IMAGES"
-	},
-	"d1_databases": [
-		{
-			"binding": "DB",
-			"database_name": "artfreeguide_db_trial",
-			"database_id": "1028e2d0-e5d5-47e7-b828-bacea0c934d0",
-			"migrations_dir": "migrations"
-		}
-	],
-	"env": {
-		"trial": {
-			"d1_databases": [
-				{
-					"binding": "DB",
-					"database_name": "artfreeguide_db_trial",
-					"database_id": "1028e2d0-e5d5-47e7-b828-bacea0c934d0",
-					"migrations_dir": "migrations"
-				}
-			],
-			"vars": {
-				"LLM_PROVIDER": "nvidia",
-				"LLM_MODEL": "google/gemma-4-31b-it",
-				"NVIDIA_BASE_URL": "https://integrate.api.nvidia.com/v1",
-				"NVIDIA_API_KEY": "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",
-				"GEMINI_API_KEY": "AIzaSyDDdOzbQzjl6gUkOW0AydnACMYlBRwd5zM"
-			},
-			"services": [
-				{
-					"binding": "WORKER_SELF_REFERENCE",
-					"service": "art-free-guide"
-				}
-			],
-			"images": {
-				"binding": "IMAGES"
-			}
-		},
-		"staging": {
-			"vars": {
-				"LLM_PROVIDER": "nvidia",
-				"LLM_MODEL": "google/gemma-4-31b-it",
-				"NVIDIA_BASE_URL": "https://integrate.api.nvidia.com/v1",
-				"NVIDIA_API_KEY": "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",
-				"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4"
-			},
-			"services": [
-				{
-					"binding": "WORKER_SELF_REFERENCE",
-					"service": "art-free-guide"
-				}
-			],
-			"images": {
-				"binding": "IMAGES"
-			}
-		}
-	}
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "art-free-guide",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-07-18",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "env": {
+    "trial": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "artfreeguide_db_trial",
+          "database_id": "1028e2d0-e5d5-47e7-b828-bacea0c934d0",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "vars": {
+        "LLM_PROVIDER": "nvidia",
+        "LLM_MODEL": "meta/llama-3.1-70b-instruct",
+        "NVIDIA_BASE_URL": "https://integrate.api.nvidia.com/v1",
+        "NVIDIA_API_KEY": "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",
+        "GEMINI_API_KEY": "«redacted:AIza…»"
+      },
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "art-free-guide"
+        }
+      ],
+      "images": {
+        "binding": "IMAGES"
+      },
+      "ai": {
+        "binding": "AI"
+      }
+    },
+    "staging": {
+      "vars": {
+        "LLM_PROVIDER": "nvidia",
+        "LLM_MODEL": "meta/llama-3.1-70b-instruct",
+        "NVIDIA_BASE_URL": "https://integrate.api.nvidia.com/v1",
+        "NVIDIA_API_KEY": "«redacted:nvapi…»",
+        "GEMINI_API_KEY": "«redacted:AIza…»"
+      },
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "art-free-guide"
+        }
+      ],
+      "images": {
+        "binding": "IMAGES"
+      }
+    }
+  },
+  "observability": {
+    "enabled": true
+  }
 }

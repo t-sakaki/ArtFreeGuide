@@ -41,24 +41,28 @@ export async function findArtwork(title: string, artist?: string): Promise<Artwo
   const normalizedArtist = artist ? artist.trim().toLowerCase() : '';
 
   try {
-    if (normalizedArtist) {
-      const row = (await db.prepare(
-        `SELECT * FROM artworks 
-         WHERE LOWER(title) LIKE ? AND LOWER(artist) LIKE ?
-         ORDER BY id DESC LIMIT 1`
-      ).bind(`%${normalizedTitle}%`, `%${normalizedArtist}%`).first()) as ArtworkRecord | null;
+    const allRows = (await db.prepare(`SELECT * FROM artworks ORDER BY id DESC`).all()) as { results: ArtworkRecord[] };
+    if (allRows && allRows.results) {
+      const match = allRows.results.find(item => {
+        const itemTitle = (item.title || '').trim().toLowerCase();
+        const itemArtist = (item.artist || '').trim().toLowerCase();
 
-      if (row) return row;
+        const titleMatched = itemTitle === normalizedTitle ||
+          itemTitle.includes(normalizedTitle) ||
+          normalizedTitle.includes(itemTitle);
+
+        const artistMatched = !normalizedArtist ||
+          itemArtist === normalizedArtist ||
+          itemArtist.includes(normalizedArtist) ||
+          normalizedArtist.includes(itemArtist);
+
+        return titleMatched && artistMatched;
+      });
+
+      if (match) return match;
     }
 
-    // Fallback: title search only
-    const row = (await db.prepare(
-      `SELECT * FROM artworks 
-       WHERE LOWER(title) LIKE ? 
-       ORDER BY id DESC LIMIT 1`
-    ).bind(`%${normalizedTitle}%`).first()) as ArtworkRecord | null;
-
-    return row || null;
+    return null;
   } catch (error) {
     console.error('[D1] Error in findArtwork:', error);
     return null;
@@ -418,5 +422,163 @@ export async function addArtworkImage(artworkId: number, url: string, isPrimary 
   } catch (error) {
     console.error('[D1] Error adding artwork image:', error);
     return null;
+  }
+}
+
+/**
+ * Updates the imageUrl for a given artwork ID in D1 database using prepared statements.
+ */
+export async function updateArtworkImageUrl(artworkId: number, imageUrl: string): Promise<{ success: boolean; notFound?: boolean }> {
+  const db = await getD1DB();
+  if (!db) {
+    // If D1 DB binding is not present (local dev without D1), return success simulated result
+    return { success: true };
+  }
+
+  try {
+    const existing = await db.prepare(`SELECT id FROM artworks WHERE id = ?`).bind(artworkId).first();
+    if (!existing) {
+      return { success: false, notFound: true };
+    }
+
+    await db.prepare(`UPDATE artworks SET imageUrl = ? WHERE id = ?`).bind(imageUrl, artworkId).run();
+
+    try {
+      await db.prepare(`UPDATE artwork_images SET is_primary = 0 WHERE artwork_id = ?`).bind(artworkId).run();
+      await db.prepare(
+        `INSERT INTO artwork_images (artwork_id, url, is_primary, is_valid) VALUES (?, ?, 1, 1)`
+      ).bind(artworkId, imageUrl).run();
+    } catch {
+      // Ignore if optional artwork_images table differs
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('[D1] Error updating artwork imageUrl:', error);
+    return { success: false };
+  }
+}
+
+/**
+ * Searches artworks table in D1 based on search, artist, and title query parameters using prepared statements.
+ */
+export async function searchArtworks(params: {
+  search?: string;
+  artist?: string;
+  title?: string;
+}): Promise<{ artworks: ArtworkRecord[]; total: number }> {
+  const db = await getD1DB();
+  if (!db) {
+    return { artworks: [], total: 0 };
+  }
+
+  try {
+    const search = (params.search || '').trim().toLowerCase();
+    const artist = (params.artist || '').trim().toLowerCase();
+    const title = (params.title || '').trim().toLowerCase();
+
+    let sql = 'SELECT * FROM artworks';
+    let countSql = 'SELECT COUNT(*) as total FROM artworks';
+    const conditions: string[] = [];
+    const bindings: any[] = [];
+
+    if (search) {
+      conditions.push('(LOWER(title) LIKE ? OR LOWER(artist) LIKE ?)');
+      bindings.push(`%${search}%`, `%${search}%`);
+    } else {
+      if (artist) {
+        conditions.push('LOWER(artist) = ?');
+        bindings.push(artist);
+      }
+      if (title) {
+        conditions.push('LOWER(title) LIKE ?');
+        bindings.push(`%${title}%`);
+      }
+    }
+
+    if (conditions.length > 0) {
+      const whereClause = ' WHERE ' + conditions.join(' AND ');
+      sql += whereClause;
+      countSql += whereClause;
+    }
+
+    sql += ' ORDER BY id DESC LIMIT 20';
+
+    const countRes = (await db.prepare(countSql).bind(...bindings).first()) as { total: number } | null;
+    const total = countRes?.total || 0;
+
+    const res = (await db.prepare(sql).bind(...bindings).all()) as { results: ArtworkRecord[] };
+    const artworks = res.results || [];
+
+    return { artworks, total };
+  } catch (error) {
+    console.error('[D1] Error in searchArtworks:', error);
+    return { artworks: [], total: 0 };
+  }
+}
+
+/**
+ * Updates metadata fields (year, location, medium, dimensions, imageUrl, autoFilled, updated_by) for an artwork in D1.
+ */
+export async function updateArtworkMetadata(
+  id: number,
+  updates: {
+    year?: string | null;
+    location?: string | null;
+    medium?: string | null;
+    dimensions?: string | null;
+    imageUrl?: string | null;
+    autoFilled?: string[] | null;
+    updated_by?: string | null;
+  }
+): Promise<boolean> {
+  const db = await getD1DB();
+  if (!db || !id) return false;
+
+  try {
+    const fieldsToSet: string[] = [];
+    const values: any[] = [];
+
+    if (updates.year !== undefined) {
+      fieldsToSet.push('year = ?');
+      values.push(updates.year);
+    }
+    if (updates.location !== undefined) {
+      fieldsToSet.push('location = ?');
+      values.push(updates.location);
+    }
+    if (updates.medium !== undefined) {
+      fieldsToSet.push('medium = ?');
+      values.push(updates.medium);
+    }
+    if (updates.dimensions !== undefined) {
+      fieldsToSet.push('dimensions = ?');
+      values.push(updates.dimensions);
+    }
+    if (updates.imageUrl !== undefined) {
+      fieldsToSet.push('imageUrl = ?');
+      values.push(updates.imageUrl);
+    }
+    if (updates.autoFilled !== undefined) {
+      fieldsToSet.push('autoFilled = ?');
+      values.push(updates.autoFilled ? JSON.stringify(updates.autoFilled) : null);
+    }
+    if (updates.updated_by !== undefined) {
+      fieldsToSet.push('updated_by = ?');
+      values.push(updates.updated_by);
+    }
+
+    fieldsToSet.push('updated_at = CURRENT_TIMESTAMP');
+
+    if (fieldsToSet.length === 1) return true; // Only updated_at
+
+    const sql = `UPDATE artworks SET ${fieldsToSet.join(', ')} WHERE id = ?`;
+    values.push(id);
+
+    await db.prepare(sql).bind(...values).run();
+    return true;
+  } catch (error) {
+    console.error('[D1] Error updating artwork metadata:', error);
+    return false;
   }
 }

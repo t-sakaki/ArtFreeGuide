@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
-import { findArtwork, getArtworkImages, saveArtwork, addArtworkImage, incrementArtworkViewCount } from '@/lib/db';
+import { findArtwork, getArtworkImages, saveArtwork, incrementArtworkViewCount } from '@/lib/db';
 import { getLLMProvider, Message } from '@/lib/llm';
 import { fetchArtworkImage } from '@/lib/image';
+import { detectGaps } from '@/lib/gaps';
+import { triggerAutoCompleteAsync } from '@/lib/autoCompleteAsync';
 import { GuideResponse, RecommendationItem, ImageItem } from '@/types/knowledgeBase';
 
 const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富な音声ガイド・キュレーターです。
@@ -45,50 +47,63 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const work = searchParams.get('work') || searchParams.get('title') || '';
     const artist = searchParams.get('artist') || '';
+    const autoFillEnabled = searchParams.get('autoFill') !== 'false';
+    const forceRefresh = searchParams.get('forceRefresh') === 'true';
 
     if (!work && !artist) {
       return NextResponse.json({ error: 'work or artist parameter is required' }, { status: 400 });
     }
 
-    // 1. DB Search
+    // 1. Fast DB Search
     const existingArtwork = await findArtwork(work, artist);
 
-    if (existingArtwork) {
+    if (existingArtwork && !forceRefresh) {
       console.log(`[GuideAPI] Cache HIT for work="${work}" artist="${artist}" (ID: ${existingArtwork.id})`);
       
-      // Asynchronously increment view_count
       incrementArtworkViewCount(existingArtwork.id).catch(err => {
         console.warn('[GuideAPI] Non-blocking view_count increment error:', err);
       });
 
-      let imagesRecords = await getArtworkImages(existingArtwork.id, true);
+      const imagesRecords = await getArtworkImages(existingArtwork.id, true);
+      const primaryImgUrl = (existingArtwork as any).imageUrl || (imagesRecords.length > 0 ? imagesRecords[0].url : null);
+      const currentYear = existingArtwork.year;
+      const currentLocation = existingArtwork.location;
+      const currentMedium = (existingArtwork as any).medium || null;
+      const currentDimensions = (existingArtwork as any).dimensions || null;
+      let autoFilledFields: string[] = [];
 
-      // If all images were invalidated, perform re-search and save fresh image
-      if (imagesRecords.length === 0) {
-        console.log(`[GuideAPI] No valid images for artwork ${existingArtwork.id}. Triggering re-search.`);
-        const searchQ = existingArtwork.search_query || `${existingArtwork.title} ${existingArtwork.artist}`;
-        const newImgUrl = await fetchArtworkImage(searchQ);
-        if (newImgUrl) {
-          const newImgId = await addArtworkImage(existingArtwork.id, newImgUrl, true);
-          if (newImgId) {
-            imagesRecords = [{
-              id: newImgId,
-              artwork_id: existingArtwork.id,
-              url: newImgUrl,
-              is_primary: 1,
-              is_valid: 1
-            }];
-          }
-        }
+      if (existingArtwork.autoFilled) {
+        try {
+          autoFilledFields = typeof existingArtwork.autoFilled === 'string'
+            ? JSON.parse(existingArtwork.autoFilled)
+            : existingArtwork.autoFilled;
+        } catch {}
+      }
+
+      // Check for missing gaps
+      const gaps = detectGaps({
+        title: existingArtwork.title,
+        artist: existingArtwork.artist,
+        year: currentYear,
+        location: currentLocation,
+        medium: currentMedium,
+        dimensions: currentDimensions,
+        imageUrl: primaryImgUrl,
+      });
+
+      let pendingCompletion = false;
+      // Trigger non-blocking background completion if gaps are detected
+      if (gaps.fields.length > 0 && autoFillEnabled) {
+        pendingCompletion = true;
+        console.log(`[GuideAPI] Non-blocking background completion triggered for artwork ID ${existingArtwork.id}:`, gaps.fields);
+        triggerAutoCompleteAsync(existingArtwork.id, existingArtwork.title, existingArtwork.artist, gaps.fields);
       }
 
       let parsedRecs: RecommendationItem[] = [];
       if (existingArtwork.recommendations) {
         try {
           parsedRecs = JSON.parse(existingArtwork.recommendations);
-        } catch (e) {
-          console.warn('[GuideAPI] Failed to parse recommendations JSON:', e);
-        }
+        } catch (e) {}
       }
 
       const images: ImageItem[] = imagesRecords.map(img => ({
@@ -102,14 +117,23 @@ export async function GET(req: Request) {
         id: existingArtwork.id,
         title: existingArtwork.title,
         artist: existingArtwork.artist,
-        location: existingArtwork.location,
-        year: existingArtwork.year,
+        location: currentLocation,
+        year: currentYear,
+        medium: currentMedium,
+        dimensions: currentDimensions,
+        imageUrl: primaryImgUrl,
+        autoFilled: autoFilledFields.length > 0 ? autoFilledFields : undefined,
+        updated_by: (existingArtwork as any).updated_by || (autoFilledFields.length > 0 ? 'auto_completion' : undefined),
+        pendingCompletion,
         short: existingArtwork.guide_short,
-        standard: existingArtwork.guide_standard,
+        standard: pendingCompletion
+          ? `${existingArtwork.guide_standard}\n\n*※現在作品の詳細情報をバックグラウンドで補完中です。*`
+          : existingArtwork.guide_standard,
         deep: existingArtwork.guide_deep,
         searchQuery: existingArtwork.search_query,
         images,
         recommendations: parsedRecs,
+        gaps,
         artist_slug: existingArtwork.artist_slug,
         artwork_slug: existingArtwork.artwork_slug,
         view_count: (existingArtwork.view_count || 0) + 1,
@@ -119,8 +143,8 @@ export async function GET(req: Request) {
       return NextResponse.json(responseData);
     }
 
-    // 2. Cache MISS -> Generate via AI
-    console.log(`[GuideAPI] Cache MISS for work="${work}" artist="${artist}". Generating via LLM...`);
+    // 2. Cache MISS / forceRefresh -> Fast AI Generation
+    console.log(`[GuideAPI] Cache MISS/Refresh for work="${work}" artist="${artist}". Generating via LLM...`);
     const promptInput = artist ? `作品名: ${work}\n作者: ${artist}` : `作品名: ${work}`;
 
     const messages: Message[] = [
@@ -143,45 +167,77 @@ export async function GET(req: Request) {
     const aiData = JSON.parse(cleanText);
     const searchQuery = aiData.searchQuery || `${work} ${artist}`.trim();
 
-    // Fetch primary image
-    const imageUrl = await fetchArtworkImage(searchQuery);
+    // Fast primary image fetch (2000ms max timeout)
+    const fetchedImageUrl = await Promise.race([
+      fetchArtworkImage(searchQuery, work, artist),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+    ]).catch(() => null);
+
+    const year = aiData.year || null;
+    const location = aiData.location || null;
+    const medium = aiData.medium || null;
+    const dimensions = aiData.dimensions || null;
 
     // Save to DB
     const saved = await saveArtwork({
       title: work || aiData.title || 'Unknown Artwork',
       artist: artist || aiData.artist || 'Unknown Artist',
-      location: aiData.location || null,
-      year: aiData.year || null,
+      location,
+      year,
       guide_short: aiData.short || '',
       guide_standard: aiData.standard || '',
       guide_deep: aiData.deep || '',
       search_query: searchQuery,
       recommendations: aiData.recommendations || [],
-      imageUrl: imageUrl
+      imageUrl: fetchedImageUrl
     });
 
     const responseImages: ImageItem[] = [];
-    if (saved.imageId && imageUrl) {
+    if (saved.imageId && fetchedImageUrl) {
       responseImages.push({
         id: saved.imageId,
-        url: imageUrl,
+        url: fetchedImageUrl,
         is_primary: true,
         is_valid: true
       });
+    }
+
+    const gaps = detectGaps({
+      title: work || aiData.title,
+      artist: artist || aiData.artist,
+      year,
+      location,
+      medium,
+      dimensions,
+      imageUrl: fetchedImageUrl,
+    });
+
+    let pendingCompletion = false;
+    if (gaps.fields.length > 0 && autoFillEnabled && saved.artworkId) {
+      pendingCompletion = true;
+      console.log(`[GuideAPI] Non-blocking background completion triggered for new artwork ID ${saved.artworkId}:`, gaps.fields);
+      triggerAutoCompleteAsync(saved.artworkId, work || aiData.title, artist || aiData.artist, gaps.fields);
     }
 
     const responseData: GuideResponse = {
       id: saved.artworkId,
       title: work,
       artist: artist,
-      location: aiData.location || null,
-      year: aiData.year || null,
+      location,
+      year,
+      medium,
+      dimensions,
+      imageUrl: fetchedImageUrl,
+      pendingCompletion,
       short: aiData.short,
-      standard: aiData.standard,
+      standard: pendingCompletion
+        ? `${aiData.standard}\n\n*※現在作品の詳細情報をバックグラウンドで補完中です。*`
+        : aiData.standard,
       deep: aiData.deep,
       searchQuery: searchQuery,
       images: responseImages,
       recommendations: aiData.recommendations || [],
+      gaps,
       from_cache: false
     };
 

@@ -19,16 +19,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       const artwork = await findArtworkBySlug(artistSlug, artworkSlug);
       if (artwork) {
         const images = await getArtworkImages(artwork.id, true);
-        const imageUrl = images.length > 0 ? images[0].url : defaultImage;
+        const imageUrl = (artwork as any).imageUrl || (images.length > 0 ? images[0].url : defaultImage);
 
         const pageTitle = artwork.artist
-          ? `${artwork.title} by ${artwork.artist} - 音声ガイド | ArtFreeGuide`
-          : `${artwork.title} - 音声ガイド | ArtFreeGuide`;
+          ? `${artwork.title} | ${artwork.artist} - ArtFreeGuide`
+          : `${artwork.title} - ArtFreeGuide`;
 
         const shortClean = (artwork.guide_short || '').replace(/\s+/g, ' ').trim();
-        const pageDesc = shortClean
-          ? `【無料音声ガイド】${artwork.artist ? `${artwork.artist}『${artwork.title}』` : `『${artwork.title}』`}の魅力や歴史的背景、知られざる見どころを専属キュレーターが解説。${shortClean}`
-          : `${artwork.title}${artwork.artist ? ` (${artwork.artist})` : ''}の歴史的背景、技法、知られざる見どころをわかりやすく解説する無料専属音声ガイド。`;
+        const pageDesc = shortClean || `【無料音声ガイド】${artwork.artist ? `${artwork.artist}『${artwork.title}』` : `『${artwork.title}』`}の歴史的背景、技法、見どころを詳しく解説する専属音声ガイド。`;
 
         const canonicalUrl = `${siteUrl}/art/${artwork.artist_slug || artistSlug}/${artwork.artwork_slug || artworkSlug}`;
 
@@ -90,7 +88,8 @@ export default async function ArtworkSlugPage({ params }: Props) {
         });
 
         const images = await getArtworkImages(artwork.id, true);
-        const imageUrl = images.length > 0 ? images[0].url : null;
+        const imageUrl = (artwork as any).imageUrl || (images.length > 0 ? images[0].url : null);
+        const shortClean = (artwork.guide_short || '').replace(/\s+/g, ' ').trim();
 
         let parsedRecs: RecommendationItem[] = [];
         if (artwork.recommendations) {
@@ -120,10 +119,17 @@ export default async function ArtworkSlugPage({ params }: Props) {
           '@type': 'VisualArtwork',
           name: artwork.title,
           ...(artwork.artist ? { creator: { '@type': 'Person', name: artwork.artist } } : {}),
-          description: artwork.guide_short || `${artwork.title}の専属音声ガイド解説。`,
+          description: shortClean || `${artwork.title}の専属音声ガイド解説。`,
           ...(imageUrl ? { image: imageUrl } : {}),
           ...(artwork.location ? { locationCreated: { '@type': 'Place', name: artwork.location } } : {}),
           ...(artwork.year ? { dateCreated: artwork.year } : {}),
+          associatedMedia: {
+            '@type': 'AudioObject',
+            name: `${artwork.title} 音声ガイド`,
+            description: shortClean || `${artwork.title}の専属キュレーター音声ガイド解説。`,
+            encodingFormat: 'audio/mpeg',
+            inLanguage: 'ja',
+          },
         };
       }
     } catch (e) {
