@@ -527,7 +527,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
 
   // Stateful Knowledge Base IDs
   const [currentArtworkId, setCurrentArtworkId] = useState<number | undefined>(initialItem?.id);
-  const [currentImageId, setCurrentImageId] = useState<number | undefined>(undefined);
+  const [currentImageId, setCurrentImageId] = useState<number | undefined>(undefined); // FROZEN
 
   // Client-side cache for fetched guides
   const [guideCache, setGuideCache] = useState<Record<string, GuideCacheEntry>>({});
@@ -598,8 +598,8 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
 
   // Input management for AI Chat (Phase 1)
   const [inputValue, setInputValue] = useState('');
-  const [conversationLog, setConversationLog] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
-  const [chatLoading, setChatLoading] = useState(false);
+  const [conversationLog, setConversationLog] = useState<{ role: 'user' | 'assistant', content: string }[]>([]); // FROZEN (Read-only for backward compatibility)
+  const [chatLoading, setChatLoading] = useState(false); // FROZEN
 
   // AI-generated improvement suggestions (dynamic)
   const [improvementSuggestions, setImprovementSuggestions] = useState<{ type: string, icon: string, message: string, action: string }[]>([]);
@@ -643,7 +643,7 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
   const [speechSupported, setSpeechSupported] = useState(false);
 
   // Deep Dive & Interactive Feedback States
-  const [deepDiveLoading, setDeepDiveLoading] = useState(false);
+  const [deepDiveLoading, setDeepDiveLoading] = useState(false); // FROZEN
   const [isListening, setIsListening] = useState(false);
   const [voiceText, setVoiceText] = useState('');
   const [recognition, setRecognition] = useState<any>(null);
@@ -676,18 +676,22 @@ export default function ArtFreeGuideClient({ initialGuide, initialPlaylist }: Ar
   const speakableSegmentsRef = useRef<string[]>([]);
 
   useEffect(() => {
+    // FROZEN: Ref usage for async speech callbacks
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
 
   useEffect(() => {
+    // FROZEN: Ref usage for async speech callbacks
     speedRef.current = playbackSpeed;
   }, [playbackSpeed]);
 
   useEffect(() => {
+    // FROZEN: Ref usage for async speech callbacks
     activeIndexRef.current = activeSegmentIndex;
   }, [activeSegmentIndex]);
 
   useEffect(() => {
+    // FROZEN: Ref usage for async speech callbacks
     speakableSegmentsRef.current = speakableSegments;
   }, [speakableSegments]);
 
