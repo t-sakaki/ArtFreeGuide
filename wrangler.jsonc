@@ -12,7 +12,8 @@
 		"binding": "ASSETS"
 	},
 	"vars": {
-		"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4",
+		// GEMINI_API_KEY is a secret: set it with `wrangler secret put GEMINI_API_KEY`
+		// (locally, put it in .dev.vars or .env.local instead of committing it here).
 		"LLM_PROVIDER": "gemini"
 	},
 	"services": [
