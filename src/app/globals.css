@@ -1,5 +1,39 @@
 @import "tailwindcss";
 
+/*
+ * Scroll bars are browser chrome, not part of the exhibition. Windows and Linux
+ * draw them permanently, which breaks the immersion, so hide them everywhere and
+ * let touch / trackpad / wheel do the scrolling.
+ */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Inner panels should not drag the page along once they hit their end. */
+.scroll-area {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Bottom gradient standing in for the hidden scroll bar's "there is more" hint. */
+.scroll-hint {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3rem;
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+  background: linear-gradient(to top, rgb(2 6 23 / 0.9), transparent);
+}
+
 @keyframes slideUp {
   from {
     transform: translateY(100%);
