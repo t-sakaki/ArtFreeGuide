@@ -5,4 +5,8 @@ const nextConfig = {
 
 module.exports = nextConfig;
 
-import('@opennextjs/cloudflare').then(m => m.initOpenNextCloudflareForDev());
+// Only in `next dev`: the Workers AI binding is proxied to the real service,
+// which needs Cloudflare credentials (`wrangler login`) — builds must not require them.
+if (process.env.NODE_ENV === 'development') {
+  import('@opennextjs/cloudflare').then(m => m.initOpenNextCloudflareForDev());
+}

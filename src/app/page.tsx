@@ -284,6 +284,28 @@ export default function ArtFreeGuide() {
     speakableSegmentsRef.current = speakableSegments;
   }, [speakableSegments]);
 
+  // Detect browser speech capabilities and prepare recognition instance
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if ('speechSynthesis' in window) {
+      setSpeechSupported(true);
+      // Populate the voice list early so the first utterance is not dropped
+      window.speechSynthesis.getVoices();
+    }
+
+    const SpeechRecognitionClass =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognitionClass) {
+      const instance = new SpeechRecognitionClass();
+      instance.lang = 'ja-JP';
+      instance.interimResults = false;
+      instance.continuous = false;
+      instance.maxAlternatives = 1;
+      setRecognition(instance);
+    }
+  }, []);
+
   // Toast trigger helper
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -1983,6 +2005,7 @@ export default function ArtFreeGuide() {
                         key={sp}
                         onClick={() => {
                           setPlaybackSpeed(sp);
+                          localStorage.setItem('art_free_guide_playback_speed', String(sp));
                           setShowSpeedMenu(false);
                         }}
                         className={`py-2 text-[11px] font-mono font-bold rounded-lg transition-all text-center active:scale-95 ${
