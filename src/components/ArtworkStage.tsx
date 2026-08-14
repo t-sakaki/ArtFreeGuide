@@ -69,8 +69,12 @@ export default function ArtworkStage({
 
   const active = hotspots.find(h => h.id === activeHotspotId) ?? null;
   const zoom = active ? active.zoom : 1;
+  // Centring a point near the edge would pull the picture off the frame, so the
+  // pan is clamped to whatever still keeps the image covering the stage.
+  const limit = 0.5 - 0.5 / zoom;
+  const pan = (offset: number) => Math.max(-limit, Math.min(limit, offset)) * 100;
   const stageTransform = active
-    ? `scale(${zoom}) translate(${(0.5 - active.x) * 100}%, ${(0.5 - active.y) * 100}%)`
+    ? `scale(${zoom}) translate(${pan(0.5 - active.x)}%, ${pan(0.5 - active.y)}%)`
     : 'none';
 
   return (
@@ -111,20 +115,21 @@ export default function ArtworkStage({
                   event.stopPropagation();
                   onSelect(isActive ? null : hotspot.id);
                 }}
-                className="absolute w-7 h-7 -ml-3.5 -mt-3.5 rounded-full flex items-center justify-center"
+                className="absolute w-7 h-7 -ml-3.5 -mt-3.5 rounded-full flex items-center justify-center drop-shadow-[0_1px_3px_rgba(2,6,23,0.9)]"
                 style={{
                   left: `${hotspot.x * 100}%`,
                   top: `${hotspot.y * 100}%`,
                   transform: `scale(${1 / zoom})`,
                 }}
               >
+                <span className="absolute inset-0 rounded-full ring-2 ring-slate-950/70" />
                 <span
                   className={`absolute inset-0 rounded-full border-2 transition-all ${
-                    isActive ? 'border-teal-300 bg-teal-400/25' : 'border-white/70 bg-slate-950/25 hover:border-teal-300'
+                    isActive ? 'border-teal-300 bg-teal-400/30' : 'border-white bg-slate-950/45 hover:border-teal-300'
                   }`}
                 />
-                {!isActive && <span className="absolute inset-0 rounded-full border-2 border-teal-300/70 animate-hotspot-ping" />}
-                <span className="relative w-1.5 h-1.5 rounded-full bg-white shadow" />
+                {!isActive && <span className="absolute inset-0 rounded-full border-2 border-teal-300 animate-hotspot-ping" />}
+                <span className="relative w-2 h-2 rounded-full bg-white ring-1 ring-slate-950/60" />
               </button>
             );
           })}
