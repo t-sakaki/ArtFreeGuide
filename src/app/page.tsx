@@ -334,6 +334,9 @@ export default function ArtFreeGuide() {
   // Scroll bars are hidden, so a gradient tells the visitor there is more text below.
   const guideBoxRef = useRef<HTMLDivElement | null>(null);
   const [showScrollHint, setShowScrollHint] = useState(false);
+  // Grab-and-drag scrolling, so a mouse can scroll the guide the way a finger does.
+  const [isDraggingGuide, setIsDraggingGuide] = useState(false);
+  const guideDragRef = useRef<{ pointerId: number; startY: number; startTop: number; active: boolean } | null>(null);
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Artwork the tour expects next; anything else means the visitor left the tour. */
   const tourTargetRef = useRef<string | null>(null);
@@ -768,6 +771,42 @@ export default function ArtFreeGuide() {
     const el = guideBoxRef.current;
     if (!el) return;
     setShowScrollHint(el.scrollHeight - el.scrollTop - el.clientHeight > 24);
+  };
+
+  const handleGuidePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Touch and pens already scroll natively; only the mouse needs help.
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    const el = guideBoxRef.current;
+    if (!el || el.scrollHeight <= el.clientHeight) return;
+    guideDragRef.current = { pointerId: e.pointerId, startY: e.clientY, startTop: el.scrollTop, active: false };
+  };
+
+  const handleGuidePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = guideDragRef.current;
+    const el = guideBoxRef.current;
+    if (!drag || !el || e.pointerId !== drag.pointerId) return;
+
+    const dy = e.clientY - drag.startY;
+    if (!drag.active) {
+      // Below the threshold the gesture is still a click or a text selection.
+      if (Math.abs(dy) < 6) return;
+      drag.active = true;
+      el.setPointerCapture(drag.pointerId);
+      setIsDraggingGuide(true);
+    }
+    window.getSelection()?.removeAllRanges();
+    el.scrollTop = drag.startTop - dy;
+  };
+
+  const endGuideDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = guideDragRef.current;
+    const el = guideBoxRef.current;
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    if (drag.active && el?.hasPointerCapture(drag.pointerId)) {
+      el.releasePointerCapture(drag.pointerId);
+    }
+    guideDragRef.current = null;
+    setIsDraggingGuide(false);
   };
 
   const speakSegment = (index: number) => {
@@ -2123,7 +2162,13 @@ export default function ArtFreeGuide() {
             <div
               ref={guideBoxRef}
               onScroll={updateScrollHint}
-              className="bg-slate-900/20 border border-slate-900 rounded-2xl p-4 md:p-6 max-h-[380px] overflow-y-auto scroll-area space-y-3 font-serif leading-relaxed text-base selection:bg-teal-500/20 shadow-inner"
+              onPointerDown={handleGuidePointerDown}
+              onPointerMove={handleGuidePointerMove}
+              onPointerUp={endGuideDrag}
+              onPointerCancel={endGuideDrag}
+              className={`bg-slate-900/20 border border-slate-900 rounded-2xl p-4 md:p-6 max-h-[380px] overflow-y-auto scroll-area space-y-3 font-serif leading-relaxed text-base selection:bg-teal-500/20 shadow-inner ${
+                isDraggingGuide ? 'cursor-grabbing select-none' : 'cursor-grab'
+              }`}
             >
               {segments.length > 0 ? (
                 segments.map((seg, index) => {
