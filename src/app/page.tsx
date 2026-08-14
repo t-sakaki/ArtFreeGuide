@@ -11,6 +11,7 @@ import {
   normalizeMusicSpec,
   specFromLegacyMood,
 } from '@/lib/ambient';
+import { PLAYLISTS, Playlist } from '@/lib/playlists';
 import ReactMarkdown from 'react-markdown';
 
 interface ArtworkSuggestion {
@@ -325,6 +326,14 @@ export default function ArtFreeGuide() {
 
   // Rotating curator status text while the guide is being generated
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+
+  // Curated tour (playlist) state
+  const [activePlaylist, setActivePlaylist] = useState<Playlist | null>(null);
+  const [playlistIndex, setPlaylistIndex] = useState(0);
+  const [nextUpCue, setNextUpCue] = useState<string | null>(null);
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Artwork the tour expects next; anything else means the visitor left the tour. */
+  const tourTargetRef = useRef<string | null>(null);
 
   const narrationProgress =
     speakableSegments.length > 0
@@ -695,8 +704,58 @@ export default function ArtFreeGuide() {
       setActiveSegmentIndex(-1);
       stopAmbientSound();
       recordListening(true);
+      scheduleTourAdvance();
     }
   }, [activeSegmentIndex, isPlaying]);
+
+  // A tour keeps going on its own: once narration ends, walk to the next artwork.
+  const scheduleTourAdvance = () => {
+    const tour = activePlaylist;
+    if (!tour) return;
+
+    const next = tour.items[playlistIndex + 1];
+    if (!next) {
+      setNextUpCue(null);
+      triggerToast(`「${tour.title}」はこれで終わりです。お疲れさまでした`);
+      return;
+    }
+
+    setNextUpCue(`次は「${next.title}」— ${next.cue}`);
+    if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+    advanceTimerRef.current = setTimeout(() => {
+      setNextUpCue(null);
+      setPlaylistIndex(playlistIndex + 1);
+      tourTargetRef.current = `${next.title}::${next.artist}`;
+      generateGuide(next.title, next.artist);
+    }, 4000);
+  };
+
+  const cancelTourAdvance = () => {
+    if (advanceTimerRef.current) {
+      clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = null;
+    }
+    setNextUpCue(null);
+  };
+
+  const startTour = (tour: Playlist, index = 0) => {
+    cancelTourAdvance();
+    const item = tour.items[index];
+    if (!item) return;
+    setActivePlaylist(tour);
+    setPlaylistIndex(index);
+    tourTargetRef.current = `${item.title}::${item.artist}`;
+    generateGuide(item.title, item.artist);
+  };
+
+  const exitTour = () => {
+    cancelTourAdvance();
+    tourTargetRef.current = null;
+    setActivePlaylist(null);
+    setPlaylistIndex(0);
+  };
+
+  useEffect(() => cancelTourAdvance, []);
 
   const speakSegment = (index: number) => {
     if (!speechSupported || index < 0 || index >= speakableSegments.length) {
@@ -1089,6 +1148,13 @@ export default function ArtFreeGuide() {
     const targetArtist = customArtist ?? artist;
 
     if (!targetArtwork.trim()) return;
+
+    // Any artwork the tour did not ask for means the visitor stepped off the tour.
+    if (tourTargetRef.current && tourTargetRef.current !== `${targetArtwork}::${targetArtist}`) {
+      exitTour();
+    } else {
+      cancelTourAdvance();
+    }
 
     if (customArtwork) {
       setArtwork(customArtwork);
@@ -1895,6 +1961,33 @@ export default function ArtFreeGuide() {
                 ))}
               </div>
             </div>
+
+            {/* Curated tours: several artworks in a row, told as one story */}
+            <div className="w-full space-y-3 select-none">
+              <p className="text-xs font-bold text-slate-500 tracking-wider uppercase font-sans text-center">
+                テーマで巡るツアー
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {PLAYLISTS.map(tour => (
+                  <button
+                    key={tour.id}
+                    onClick={() => startTour(tour)}
+                    className="bg-slate-900/40 border border-slate-800 hover:border-teal-500/40 hover:bg-slate-900/70 rounded-2xl px-4 py-3 text-left active:scale-95 transition-all shadow-md font-sans group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl shrink-0">{tour.emoji}</span>
+                      <div className="min-w-0">
+                        <span className="block text-sm font-bold text-slate-100 truncate group-hover:text-teal-400 transition-colors">
+                          {tour.title}
+                        </span>
+                        <span className="block text-[11px] text-slate-500 truncate">{tour.subtitle}</span>
+                        <span className="block text-[10px] text-teal-500/80 mt-1">全{tour.items.length}作品・自動で次へ</span>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1922,6 +2015,70 @@ export default function ArtFreeGuide() {
         {/* Guide content */}
         {responseShort && (
           <div className="space-y-6 w-full animate-fade-in">
+            {/* Tour header: where we are in the story */}
+            {activePlaylist && (
+              <div className="bg-slate-900/50 border border-teal-900/60 rounded-2xl p-3 space-y-2 select-none font-sans">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-teal-400 truncate">
+                    {activePlaylist.emoji} {activePlaylist.title}
+                    <span className="text-slate-500 font-mono ml-2">
+                      {playlistIndex + 1}/{activePlaylist.items.length}
+                    </span>
+                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => startTour(activePlaylist, playlistIndex - 1)}
+                      disabled={playlistIndex === 0 || loading}
+                      className="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-300 hover:text-teal-400 disabled:opacity-30 active:scale-95 transition-all"
+                    >
+                      前へ
+                    </button>
+                    <button
+                      onClick={() => startTour(activePlaylist, playlistIndex + 1)}
+                      disabled={playlistIndex >= activePlaylist.items.length - 1 || loading}
+                      className="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-300 hover:text-teal-400 disabled:opacity-30 active:scale-95 transition-all"
+                    >
+                      次へ
+                    </button>
+                    <button
+                      onClick={exitTour}
+                      className="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-500 hover:text-rose-400 active:scale-95 transition-all"
+                    >
+                      終了
+                    </button>
+                  </div>
+                </div>
+                <div className="flex gap-1">
+                  {activePlaylist.items.map((item, i) => (
+                    <button
+                      key={`${item.title}-${i}`}
+                      onClick={() => startTour(activePlaylist, i)}
+                      title={item.title}
+                      aria-label={`${i + 1}. ${item.title}`}
+                      className={`h-1.5 flex-1 rounded-full transition-colors ${
+                        i === playlistIndex
+                          ? 'bg-teal-400'
+                          : i < playlistIndex
+                            ? 'bg-teal-800'
+                            : 'bg-slate-800 hover:bg-slate-700'
+                      }`}
+                    />
+                  ))}
+                </div>
+                {nextUpCue && (
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <span className="text-[11px] text-slate-400 truncate animate-pulse">{nextUpCue}</span>
+                    <button
+                      onClick={cancelTourAdvance}
+                      className="text-[10px] font-bold text-slate-500 hover:text-rose-400 shrink-0"
+                    >
+                      自動再生を止める
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Subtitle banner */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-900/60 select-none">
               <span className="text-xs text-slate-400 font-semibold truncate pr-2 font-sans">
