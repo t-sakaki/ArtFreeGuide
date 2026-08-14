@@ -90,9 +90,27 @@
   animation: equalizerBar 0.9s ease-in-out infinite;
 }
 
+/* Halo that draws the eye to an unvisited viewing point */
+@keyframes hotspotPing {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.9;
+  }
+  70%,
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+.animate-hotspot-ping {
+  animation: hotspotPing 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-ken-burns,
-  .animate-equalizer {
+  .animate-equalizer,
+  .animate-hotspot-ping {
     animation: none;
   }
 }
