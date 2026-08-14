@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ensureAnonymousUser } from '@/lib/user';
 import { useRecommendations } from '@/hooks/useRecommendations';
+import { AmbientMood, AmbientPlayer, guessMoodFromText, isAmbientMood } from '@/lib/ambient';
 import ReactMarkdown from 'react-markdown';
 
 interface ArtworkSuggestion {
@@ -27,6 +28,7 @@ interface GuideCacheEntry {
   imageError: boolean;
   searchQuery: string;
   recommendations: Recommendation[];
+  mood?: AmbientMood;
 }
 
 interface HistoryEntry {
@@ -40,6 +42,7 @@ interface HistoryEntry {
   searchQuery: string;
   recommendations: Recommendation[];
   timestamp: string;
+  mood?: AmbientMood;
 }
 
 const PRESET_ARTWORKS: ArtworkSuggestion[] = [
@@ -296,6 +299,8 @@ export default function ArtFreeGuide() {
 
   // Ambient Sound States
   const [ambientName, setAmbientName] = useState<string | null>(null);
+  const ambientPlayerRef = useRef<AmbientPlayer | null>(null);
+  const ambientMoodRef = useRef<AmbientMood | null>(null);
 
   // Rotating curator status text while the guide is being generated
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
@@ -353,6 +358,17 @@ export default function ArtFreeGuide() {
 
   useEffect(() => {
     ensureAnonymousUser().then(setUserId);
+  }, []);
+
+  // Keep the ambient pad under the narration while speech is playing
+  useEffect(() => {
+    ambientPlayerRef.current?.setDucked(isPlaying);
+  }, [isPlaying]);
+
+  useEffect(() => {
+    return () => {
+      ambientPlayerRef.current?.stop();
+    };
   }, []);
 
   useEffect(() => {
@@ -524,6 +540,7 @@ export default function ArtFreeGuide() {
               setResponseShort(sanitizeGuideText(entry.short || ''));
               setResponseStandard(sanitizeGuideText(entry.standard || ''));
               setResponseDeep(sanitizeGuideText(entry.deep || ''));
+              ambientMoodRef.current = entry.mood ?? guessMoodFromText(`${entry.title} ${entry.artist}`);
               setExplanationMode('short');
               setImageUrl(entry.imageUrl);
               setImageError(entry.imageError);
@@ -578,6 +595,7 @@ export default function ArtFreeGuide() {
     setResponseShort(sanitizeGuideText(entry.short || ''));
     setResponseStandard(sanitizeGuideText(entry.standard || ''));
     setResponseDeep(sanitizeGuideText(entry.deep || ''));
+    ambientMoodRef.current = entry.mood ?? guessMoodFromText(`${entry.title} ${entry.artist}`);
     setExplanationMode('short');
     setImageUrl(entry.imageUrl);
     setImageError(entry.imageError);
@@ -705,57 +723,23 @@ export default function ArtFreeGuide() {
     );
   };
 
-  // Start Ambient Soundscape using Web Audio API
-  const startAmbientSound = (artworkTitle: string) => {
+  // Start the ambient pad that matches the artwork's mood
+  const startAmbientSound = (artworkTitle: string, mood?: AmbientMood | null) => {
     try {
-      stopAmbientSound(); // Reset previous ambient context
+      const resolvedMood =
+        mood ?? ambientMoodRef.current ?? guessMoodFromText(`${artworkTitle} ${artist}`);
 
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) return;
-
-      const ctx = new AudioContextClass();
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.0, ctx.currentTime);
-
-      // Frequencies for a warm, relaxing ambient drone
-      let frequencies = [110, 165, 220]; // A2, E3, A3
-      if (artworkTitle.includes('睡蓮') || artworkTitle.includes('水') || artworkTitle.includes('モネ')) {
-        frequencies = [130.81, 196.00, 261.63]; // C3, G3, C4
-      } else if (artworkTitle.includes('叫び') || artworkTitle.includes('ゲルニカ') || artworkTitle.includes('ピカソ')) {
-        frequencies = [98.00, 146.83, 196.00]; // G2, D3, G3
+      if (!ambientPlayerRef.current) {
+        ambientPlayerRef.current = new AmbientPlayer();
       }
 
-      const oscs = frequencies.map(freq => {
-        const osc = ctx.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        osc.detune.setValueAtTime((Math.random() - 0.5) * 12, ctx.currentTime);
-        osc.connect(gain);
-        osc.start();
-        return osc;
-      });
+      const preset = ambientPlayerRef.current.start(resolvedMood);
+      if (!preset) return;
 
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(350, ctx.currentTime);
-
-      gain.connect(filter);
-      filter.connect(ctx.destination);
-
-      // Fade in ambient hum gently to volume 5%
-      gain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 3.0);
-
-      (window as any)._ambientGain = gain;
-      (window as any)._ambientCtx = ctx;
-      (window as any)._ambientOscs = oscs;
-
-      setAmbientName(
-        artworkTitle.includes('睡蓮') || artworkTitle.includes('モネ')
-          ? '水面の揺らぎと森の風（432Hz調和音響）'
-          : artworkTitle.includes('叫び') || artworkTitle.includes('ゲルニカ')
-          ? '深層の心理ドローン（緊張と静寂）'
-          : '夜のカフェテラスと温かい灯火（心地よい低音ドローン）'
-      );
+      ambientMoodRef.current = resolvedMood;
+      setAmbientName(preset.label);
+      // The pad can start while narration is already speaking
+      ambientPlayerRef.current.setDucked(isPlayingRef.current);
     } catch (err) {
       console.warn('Web Audio Ambient error:', err);
     }
@@ -763,24 +747,7 @@ export default function ArtFreeGuide() {
 
   // Stop Ambient Soundscape
   const stopAmbientSound = () => {
-    const gain = (window as any)._ambientGain;
-    const ctx = (window as any)._ambientCtx;
-    const oscs = (window as any)._ambientOscs;
-
-    if (gain && ctx) {
-      try {
-        gain.gain.linearRampToValueAtTime(0.0, ctx.currentTime + 1.0);
-        setTimeout(() => {
-          if (oscs) oscs.forEach((o: any) => o.stop());
-          ctx.close();
-        }, 1000);
-      } catch (e) {
-        console.warn(e);
-      }
-      (window as any)._ambientGain = null;
-      (window as any)._ambientCtx = null;
-      (window as any)._ambientOscs = null;
-    }
+    ambientPlayerRef.current?.stop();
     setAmbientName(null);
   };
 
@@ -1167,11 +1134,14 @@ export default function ArtFreeGuide() {
       setImageError(cached.imageError);
       setSearchQuery(cached.searchQuery);
       setRecommendations(cached.recommendations);
-      
+
+      const cachedMood = cached.mood ?? guessMoodFromText(`${targetArtwork} ${targetArtist}`);
+      ambientMoodRef.current = cachedMood;
+
       // Auto play on cached guide load
       setActiveSegmentIndex(0);
       setIsPlaying(true);
-      startAmbientSound(targetArtwork);
+      startAmbientSound(targetArtwork, cachedMood);
 
       // Synced Navigation State in History
       const idx = history.findIndex(
@@ -1231,6 +1201,7 @@ export default function ArtFreeGuide() {
         let shortText = '';
         let standardText = '';
         let deepText = '';
+        let mood: AmbientMood | null = null;
 
         try {
           let jsonString = data.text.trim();
@@ -1245,6 +1216,9 @@ export default function ArtFreeGuide() {
           deepText = parsed.deep || '';
           if (parsed.searchQuery) {
             queryForImage = parsed.searchQuery;
+          }
+          if (isAmbientMood(parsed.mood)) {
+            mood = parsed.mood;
           }
           if (parsed.recommendations && Array.isArray(parsed.recommendations)) {
             recs = parsed.recommendations.map((r: any) => ({
@@ -1284,6 +1258,9 @@ export default function ArtFreeGuide() {
         standardText = sanitizeGuideText(standardText);
         deepText = sanitizeGuideText(deepText);
 
+        const resolvedMood = mood ?? guessMoodFromText(`${targetArtwork} ${targetArtist}`);
+        ambientMoodRef.current = resolvedMood;
+
         setResponseShort(shortText);
         setResponseStandard(standardText);
         setResponseDeep(deepText);
@@ -1297,7 +1274,8 @@ export default function ArtFreeGuide() {
           imageUrl: null,
           imageError: false,
           searchQuery: queryForImage,
-          recommendations: recs
+          recommendations: recs,
+          mood: resolvedMood
         };
         
         setGuideCache(prev => ({ ...prev, [cacheKey]: newEntry }));
@@ -1313,7 +1291,8 @@ export default function ArtFreeGuide() {
           imageError: false,
           searchQuery: queryForImage,
           recommendations: recs,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          mood: resolvedMood
         };
 
         const existingIndex = history.findIndex(
@@ -1342,7 +1321,7 @@ export default function ArtFreeGuide() {
 
         // Start progressive loading
         fetchImage(queryForImage, cacheKey);
-        startAmbientSound(targetArtwork);
+        startAmbientSound(targetArtwork, resolvedMood);
 
         if (recs.length > 0) {
           setRecommendations(recs);

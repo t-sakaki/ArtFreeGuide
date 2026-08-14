@@ -25,6 +25,7 @@ const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富�
   "standard": "（作品の魅力や構図、色彩、画家の想いを美しく解説した、中程度の長さの標準的な解説テキスト。見出しや太字を交えてマークダウンで装飾してください）",
   "deep": "（技法、歴史的背景、知られざるエピソードや詳細な裏話を交えた、長文の詳細な解説テキスト。見出しや太字を交えてマークダウンで装飾してください）",
   "searchQuery": "（Wikimedia Commonsでこの作品の画像を検索するための英語のキーワード。例：'Vincent van Gogh Sunflowers'、'Mona Lisa'）",
+  "mood": "（この作品を鑑賞するときに流すBGMの雰囲気を、次の5つから1つだけ選んで英単語のまま出力：serene（静謐・穏やか）/ dramatic（緊張・劇的）/ melancholic（陰り・沈思）/ playful（明るい・軽やか）/ sacred（荘厳・神聖））",
   "recommendations": [
     {
       "title": "（関連する作品名。3〜5件）",
