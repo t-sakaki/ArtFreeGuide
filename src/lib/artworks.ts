@@ -1,0 +1,70 @@
+import { SupabaseClient } from '@supabase/supabase-js';
+import { buildArtworkEmbeddingText, embedText } from '@/lib/embeddings';
+
+export interface ArtworkRecord {
+  id: string;
+  title: string;
+  artist: string;
+  tags: string[] | null;
+  embedding: number[] | string | null;
+}
+
+const SELECT_COLUMNS = 'id, title, artist, tags, embedding';
+
+export function parseEmbedding(embedding: ArtworkRecord['embedding']): number[] | null {
+  if (!embedding) return null;
+  // PostgREST serialises `vector` columns as a JSON string.
+  const parsed = typeof embedding === 'string' ? JSON.parse(embedding) : embedding;
+  return Array.isArray(parsed) ? parsed : null;
+}
+
+export async function findArtwork(
+  supabase: SupabaseClient,
+  title: string,
+  artist?: string
+): Promise<ArtworkRecord | null> {
+  let query = supabase.from('artworks').select(SELECT_COLUMNS).eq('title', title).limit(1);
+  if (artist) {
+    query = query.eq('artist', artist);
+  }
+
+  const { data } = await query;
+  return (data?.[0] as ArtworkRecord | undefined) ?? null;
+}
+
+/**
+ * Returns the catalogue row for an artwork, adding it (with a freshly generated
+ * embedding) when the visitor asked for something not yet in the catalogue.
+ */
+export async function findOrCreateArtwork(
+  supabase: SupabaseClient,
+  input: { title: string; artist: string; description?: string | null; imageUrl?: string | null }
+): Promise<ArtworkRecord | null> {
+  const existing = await findArtwork(supabase, input.title, input.artist);
+  if (existing) return existing;
+
+  const embedding = await embedText(buildArtworkEmbeddingText(input));
+
+  const { data, error } = await supabase
+    .from('artworks')
+    .upsert(
+      {
+        title: input.title,
+        artist: input.artist,
+        description: input.description ?? null,
+        image_url: input.imageUrl ?? null,
+        search_query: `${input.title} ${input.artist}`.trim(),
+        embedding
+      },
+      { onConflict: 'title,artist' }
+    )
+    .select(SELECT_COLUMNS)
+    .single();
+
+  if (error) {
+    console.error('Failed to add artwork to the catalogue:', error.message);
+    return null;
+  }
+
+  return data as ArtworkRecord;
+}

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { ensureAnonymousUser } from '@/lib/user';
+import { useRecommendations } from '@/hooks/useRecommendations';
 import ReactMarkdown from 'react-markdown';
 
 interface ArtworkSuggestion {
@@ -262,6 +264,10 @@ export default function ArtFreeGuide() {
   // Ambient Sound States
   const [ambientName, setAmbientName] = useState<string | null>(null);
 
+  // Anonymous user + catalogue-based recommendations
+  const [userId, setUserId] = useState<string | null>(null);
+  const { similarArtworks } = useRecommendations(artwork, artist, userId);
+
   // Refs for tracking properties in async speech callbacks
   const isPlayingRef = useRef(false);
   const speedRef = useRef(1.5);
@@ -283,6 +289,50 @@ export default function ArtFreeGuide() {
   useEffect(() => {
     speakableSegmentsRef.current = speakableSegments;
   }, [speakableSegments]);
+
+  // How long the visitor actually listened, used to weight preference learning
+  const listenStartRef = useRef<number | null>(null);
+  const listenedSecondsRef = useRef(0);
+
+  useEffect(() => {
+    if (isPlaying) {
+      listenStartRef.current = Date.now();
+      return;
+    }
+    if (listenStartRef.current !== null) {
+      listenedSecondsRef.current += (Date.now() - listenStartRef.current) / 1000;
+      listenStartRef.current = null;
+    }
+  }, [isPlaying]);
+
+  useEffect(() => {
+    listenedSecondsRef.current = 0;
+    listenStartRef.current = null;
+  }, [artwork, artist]);
+
+  useEffect(() => {
+    ensureAnonymousUser().then(setUserId);
+  }, []);
+
+  const recordListening = (completed: boolean) => {
+    const listenedSeconds = listenedSecondsRef.current;
+    if (!userId || !artwork.trim() || listenedSeconds < 1) return;
+
+    fetch('/api/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        title: artwork,
+        artist,
+        description: responseShort || responseStandard || null,
+        imageUrl,
+        depth: explanationMode,
+        listenedSeconds,
+        completed
+      })
+    }).catch(error => console.error('Failed to save viewing history:', error));
+  };
 
   // Detect browser speech capabilities and prepare recognition instance
   useEffect(() => {
@@ -553,6 +603,7 @@ export default function ArtFreeGuide() {
       setIsPlaying(false);
       setActiveSegmentIndex(-1);
       stopAmbientSound();
+      recordListening(true);
     }
   }, [activeSegmentIndex, isPlaying]);
 
@@ -1969,6 +2020,40 @@ export default function ArtFreeGuide() {
                         </div>
                         <p className="text-[10px] text-slate-400 line-clamp-1 italic">{rec.reason}</p>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Catalogue similarity recommendations (Supabase pgvector) */}
+            {similarArtworks.length > 0 && (
+              <div className="pt-4 space-y-4 select-none">
+                <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase font-sans">
+                  🎨 似ている作品
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {similarArtworks.map(item => (
+                    <div
+                      key={item.id}
+                      onClick={() => generateGuide(item.title, item.artist)}
+                      className="bg-slate-900/30 border border-slate-900 hover:border-teal-500/40 hover:bg-slate-900/50 rounded-2xl p-3 cursor-pointer transition-all duration-300 group shadow-md font-sans"
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <h4 className="font-semibold text-slate-200 text-xs truncate group-hover:text-teal-400 transition-colors">
+                          {item.title}
+                        </h4>
+                        <span className="text-[10px] text-teal-500/80 font-mono shrink-0">
+                          {Math.round(item.similarity * 100)}%
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 truncate">
+                        {item.artist}
+                        {item.year ? ` ・ ${item.year}` : ''}
+                      </p>
+                      {item.description && (
+                        <p className="text-[10px] text-slate-400 line-clamp-2 mt-1">{item.description}</p>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase';
+import { parseEmbedding } from '@/lib/artworks';
 
 const MATCH_THRESHOLD = 0.5;
 const MATCH_COUNT = 6;
@@ -11,13 +12,6 @@ interface ArtworkRow {
   title: string;
   artist: string;
   embedding: number[] | string | null;
-}
-
-function parseEmbedding(embedding: ArtworkRow['embedding']): number[] | null {
-  if (!embedding) return null;
-  // PostgREST returns `vector` columns as a JSON-encoded string.
-  const parsed = typeof embedding === 'string' ? JSON.parse(embedding) : embedding;
-  return Array.isArray(parsed) ? parsed : null;
 }
 
 export async function POST(req: Request) {
