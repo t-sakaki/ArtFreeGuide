@@ -1331,6 +1331,9 @@ export default function ArtFreeGuide() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // title / artist let the server reuse a guide generated for an earlier visitor.
+          title: targetArtwork,
+          artist: targetArtist,
           messages: [
             {
               role: 'user',

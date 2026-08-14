@@ -14,8 +14,20 @@
 	"vars": {
 		// Set to "gemini" to use the Gemini API instead; that needs a GEMINI_API_KEY secret
 		// (`wrangler secret put GEMINI_API_KEY`, or .dev.vars / .env.local locally).
-		"LLM_PROVIDER": "workers-ai"
+		"LLM_PROVIDER": "workers-ai",
+		// Where generated guides are archived: "d1" | "supabase" | "memory"
+		"GUIDE_STORE": "d1"
 	},
+	"d1_databases": [
+		{
+			// Guide archive, reusing the database the earlier D1 version filled:
+			// npx wrangler d1 migrations apply artfreeguide_db_trial --remote
+			"binding": "DB",
+			"database_name": "artfreeguide_db_trial",
+			"database_id": "1028e2d0-e5d5-47e7-b828-bacea0c934d0",
+			"migrations_dir": "d1/migrations"
+		}
+	],
 	"ai": {
 		// Workers AI: inference runs on Cloudflare, no API key needed
 		// see https://developers.cloudflare.com/workers-ai/

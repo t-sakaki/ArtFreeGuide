@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getGuideStore } from '@/lib/guideStore';
 import { getLLMProvider, Message } from '@/lib/llm';
 
 const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富な音声ガイド・キュレーターです。
@@ -48,10 +49,26 @@ const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富�
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const { messages, title, artist } = await req.json();
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: 'Messages are required' }, { status: 400 });
+    }
+
+    // Only first-turn requests name an artwork; follow-up turns are not cacheable.
+    const store = typeof title === 'string' && title.trim() ? getGuideStore() : null;
+    const artistName = typeof artist === 'string' ? artist : '';
+
+    if (store) {
+      try {
+        const cached = await store.get(title, artistName);
+        if (cached) {
+          return NextResponse.json({ text: cached.payload, cached: true, store: store.name });
+        }
+      } catch (error) {
+        // A cold or misconfigured cache must never block the guide itself.
+        console.warn('Guide cache read failed:', error);
+      }
     }
 
     // Modify the first user message to prepend the curator system prompt
@@ -80,7 +97,15 @@ export async function POST(req: Request) {
       cleanText = cleanText.substring(firstBrace, lastBrace + 1);
     }
 
-    return NextResponse.json({ text: cleanText });
+    if (store) {
+      try {
+        await store.put(title, artistName, cleanText);
+      } catch (error) {
+        console.warn('Guide cache write failed:', error);
+      }
+    }
+
+    return NextResponse.json({ text: cleanText, cached: false, store: store?.name ?? null });
   } catch (error: any) {
     console.error('API Route Error:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
