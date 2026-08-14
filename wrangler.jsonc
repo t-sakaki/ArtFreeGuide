@@ -12,8 +12,14 @@
 		"binding": "ASSETS"
 	},
 	"vars": {
-		"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4",
-		"LLM_PROVIDER": "gemini"
+		// Set to "gemini" to use the Gemini API instead; that needs a GEMINI_API_KEY secret
+		// (`wrangler secret put GEMINI_API_KEY`, or .dev.vars / .env.local locally).
+		"LLM_PROVIDER": "workers-ai"
+	},
+	"ai": {
+		// Workers AI: inference runs on Cloudflare, no API key needed
+		// see https://developers.cloudflare.com/workers-ai/
+		"binding": "AI"
 	},
 	"services": [
 		{
