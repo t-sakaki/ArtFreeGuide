@@ -33,5 +33,17 @@ values
    'Nonomura Ninsei tea jar wisteria', array['工芸', '陶芸', '国宝', '日本']),
   ('無限の網', 'Infinity Nets', '草間彌生', 'Yayoi Kusama', '1959', '油彩・カンヴァス', '現代美術', '個人蔵ほか', '日本',
    '網目状の筆触を画面いっぱいに反復させた連作。草間が幼少期から見ていた幻覚を、増殖するパターンとして定着させた。',
-   'Yayoi Kusama Infinity Nets', array['現代美術', '抽象', '日本'])
+   'Yayoi Kusama Infinity Nets', array['現代美術', '抽象', '日本']),
+  ('薔薇', 'Roses', 'フィンセント・ファン・ゴッホ', 'Vincent van Gogh', '1890', '油彩・カンヴァス', 'ポスト印象派', 'ワシントン・ナショナル・ギャラリー', 'アメリカ',
+   'サン＝レミ退院直前に描かれた白い薔薇の静物。厚塗りの筆致に、回復への穏やかな期待がにじむ。',
+   'Vincent van Gogh Roses 1890', array['ポスト印象派', '静物', '花']),
+  ('ムーラン・ド・ラ・ギャレットの舞踏会', 'Bal du moulin de la Galette', 'ピエール＝オーギュスト・ルノワール', 'Pierre-Auguste Renoir', '1876', '油彩・カンヴァス', '印象派', 'オルセー美術館', 'フランス',
+   'モンマルトルの野外舞踏場に集う人々を描いた大作。木漏れ日が服や顔に落とす斑の光が画面全体を揺らす。',
+   'Renoir Bal du moulin de la Galette', array['印象派', '人物', '風俗', 'フランス']),
+  ('リンゴとオレンジ', 'Apples and Oranges', 'ポール・セザンヌ', 'Paul Cézanne', '1899', '油彩・カンヴァス', 'ポスト印象派', 'オルセー美術館', 'フランス',
+   '複数の視点を一枚に同居させた静物画。傾いた皿と布のうねりが、後のキュビスムへの道を開いた。',
+   'Paul Cezanne Apples and Oranges', array['ポスト印象派', '静物', 'フランス']),
+  ('考える人', 'The Thinker', 'オーギュスト・ロダン', 'Auguste Rodin', '1902', 'ブロンズ', '近代彫刻', 'ロダン美術館ほか', 'フランス',
+   '『地獄の門』の一部として構想された像。全身の筋肉を緊張させながら思索する姿が、内省そのものを形にしている。',
+   'Auguste Rodin The Thinker', array['彫刻', '近代', 'フランス'])
 on conflict (title, artist) do nothing;
