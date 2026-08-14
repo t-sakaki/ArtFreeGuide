@@ -335,8 +335,15 @@ export default function ArtFreeGuide() {
   const guideBoxRef = useRef<HTMLDivElement | null>(null);
   const [showScrollHint, setShowScrollHint] = useState(false);
   // Grab-and-drag scrolling, so a mouse can scroll the guide the way a finger does.
+  // A gesture becomes either a scroll or a text selection depending on its direction.
   const [isDraggingGuide, setIsDraggingGuide] = useState(false);
-  const guideDragRef = useRef<{ pointerId: number; startY: number; startTop: number; active: boolean } | null>(null);
+  const guideDragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startTop: number;
+    mode: 'undecided' | 'scroll' | 'select';
+  } | null>(null);
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Artwork the tour expects next; anything else means the visitor left the tour. */
   const tourTargetRef = useRef<string | null>(null);
@@ -778,7 +785,13 @@ export default function ArtFreeGuide() {
     if (e.pointerType !== 'mouse' || e.button !== 0) return;
     const el = guideBoxRef.current;
     if (!el || el.scrollHeight <= el.clientHeight) return;
-    guideDragRef.current = { pointerId: e.pointerId, startY: e.clientY, startTop: el.scrollTop, active: false };
+    guideDragRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startTop: el.scrollTop,
+      mode: 'undecided',
+    };
   };
 
   const handleGuidePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -786,14 +799,22 @@ export default function ArtFreeGuide() {
     const el = guideBoxRef.current;
     if (!drag || !el || e.pointerId !== drag.pointerId) return;
 
+    const dx = e.clientX - drag.startX;
     const dy = e.clientY - drag.startY;
-    if (!drag.active) {
-      // Below the threshold the gesture is still a click or a text selection.
-      if (Math.abs(dy) < 6) return;
-      drag.active = true;
-      el.setPointerCapture(drag.pointerId);
-      setIsDraggingGuide(true);
+
+    if (drag.mode === 'undecided') {
+      // Below the threshold the gesture is still a plain click.
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+      // Vertical drags scroll; sideways drags are left to the browser as a selection.
+      drag.mode = Math.abs(dy) > Math.abs(dx) ? 'scroll' : 'select';
+      if (drag.mode === 'scroll') {
+        el.setPointerCapture(drag.pointerId);
+        setIsDraggingGuide(true);
+      }
     }
+
+    if (drag.mode !== 'scroll') return;
+
     window.getSelection()?.removeAllRanges();
     el.scrollTop = drag.startTop - dy;
   };
@@ -802,7 +823,7 @@ export default function ArtFreeGuide() {
     const drag = guideDragRef.current;
     const el = guideBoxRef.current;
     if (!drag || e.pointerId !== drag.pointerId) return;
-    if (drag.active && el?.hasPointerCapture(drag.pointerId)) {
+    if (drag.mode === 'scroll' && el?.hasPointerCapture(drag.pointerId)) {
       el.releasePointerCapture(drag.pointerId);
     }
     guideDragRef.current = null;
@@ -2167,7 +2188,7 @@ export default function ArtFreeGuide() {
               onPointerUp={endGuideDrag}
               onPointerCancel={endGuideDrag}
               className={`bg-slate-900/20 border border-slate-900 rounded-2xl p-4 md:p-6 max-h-[380px] overflow-y-auto scroll-area space-y-3 font-serif leading-relaxed text-base selection:bg-teal-500/20 shadow-inner ${
-                isDraggingGuide ? 'cursor-grabbing select-none' : 'cursor-grab'
+                isDraggingGuide ? 'cursor-grabbing select-none' : ''
               }`}
             >
               {segments.length > 0 ? (
