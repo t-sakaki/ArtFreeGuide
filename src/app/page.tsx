@@ -331,6 +331,9 @@ export default function ArtFreeGuide() {
   const [activePlaylist, setActivePlaylist] = useState<Playlist | null>(null);
   const [playlistIndex, setPlaylistIndex] = useState(0);
   const [nextUpCue, setNextUpCue] = useState<string | null>(null);
+  // Scroll bars are hidden, so a gradient tells the visitor there is more text below.
+  const guideBoxRef = useRef<HTMLDivElement | null>(null);
+  const [showScrollHint, setShowScrollHint] = useState(false);
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Artwork the tour expects next; anything else means the visitor left the tour. */
   const tourTargetRef = useRef<string | null>(null);
@@ -756,6 +759,16 @@ export default function ArtFreeGuide() {
   };
 
   useEffect(() => cancelTourAdvance, []);
+
+  useEffect(() => {
+    updateScrollHint();
+  }, [segments, activeSegmentIndex, explanationMode]);
+
+  const updateScrollHint = () => {
+    const el = guideBoxRef.current;
+    if (!el) return;
+    setShowScrollHint(el.scrollHeight - el.scrollTop - el.clientHeight > 24);
+  };
 
   const speakSegment = (index: number) => {
     if (!speechSupported || index < 0 || index >= speakableSegments.length) {
@@ -1726,7 +1739,7 @@ export default function ArtFreeGuide() {
               autoComplete="off"
             />
             {showArtworkSuggestions && artworkSuggestions.length > 0 && (
-              <ul className="absolute z-50 w-full mt-1 bg-slate-950/95 border border-slate-850 rounded-xl overflow-hidden shadow-2xl backdrop-blur-xl max-h-48 overflow-y-auto divide-y divide-slate-800/40">
+              <ul className="absolute z-50 w-full mt-1 bg-slate-950/95 border border-slate-850 rounded-xl overflow-hidden shadow-2xl backdrop-blur-xl max-h-48 overflow-y-auto scroll-area divide-y divide-slate-800/40">
                 {artworkSuggestions.map((suggestion, index) => (
                   <li
                     key={index}
@@ -1779,7 +1792,7 @@ export default function ArtFreeGuide() {
               autoComplete="off"
             />
             {showArtistSuggestions && artistSuggestions.length > 0 && (
-              <ul className="absolute z-50 w-full mt-1 bg-slate-950/95 border border-slate-850 rounded-xl overflow-hidden shadow-2xl backdrop-blur-xl max-h-40 overflow-y-auto divide-y divide-slate-800/40">
+              <ul className="absolute z-50 w-full mt-1 bg-slate-950/95 border border-slate-850 rounded-xl overflow-hidden shadow-2xl backdrop-blur-xl max-h-40 overflow-y-auto scroll-area divide-y divide-slate-800/40">
                 {artistSuggestions.map((name, index) => (
                   <li
                     key={index}
@@ -2106,7 +2119,12 @@ export default function ArtFreeGuide() {
             )}
 
             {/* Highlights Segment Box */}
-            <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-4 md:p-6 max-h-[380px] overflow-y-auto space-y-3 font-serif leading-relaxed text-base selection:bg-teal-500/20 shadow-inner">
+            <div className="relative">
+            <div
+              ref={guideBoxRef}
+              onScroll={updateScrollHint}
+              className="bg-slate-900/20 border border-slate-900 rounded-2xl p-4 md:p-6 max-h-[380px] overflow-y-auto scroll-area space-y-3 font-serif leading-relaxed text-base selection:bg-teal-500/20 shadow-inner"
+            >
               {segments.length > 0 ? (
                 segments.map((seg, index) => {
                   const isSpeakable = speakableSegments.includes(seg);
@@ -2165,6 +2183,8 @@ export default function ArtFreeGuide() {
                   </button>
                 </div>
               )}
+            </div>
+            {showScrollHint && <div className="scroll-hint rounded-b-2xl" aria-hidden="true" />}
             </div>
 
             {/* Shared and speech interaction action buttons */}
@@ -2447,7 +2467,7 @@ export default function ArtFreeGuide() {
           ></div>
 
           {/* Drawer content */}
-          <div className="relative w-full max-w-xl bg-slate-950 border-t border-slate-900 rounded-t-3xl shadow-2xl p-6 md:p-8 animate-slide-up z-10 max-h-[90vh] overflow-y-auto">
+          <div className="relative w-full max-w-xl bg-slate-950 border-t border-slate-900 rounded-t-3xl shadow-2xl p-6 md:p-8 animate-slide-up z-10 max-h-[90vh] overflow-y-auto scroll-area">
             
             {/* Handle bar */}
             <div className="w-12 h-1 bg-slate-800 rounded-full mx-auto mb-5"></div>
@@ -2479,7 +2499,7 @@ export default function ArtFreeGuide() {
           ></div>
 
           {/* Drawer content */}
-          <div className="relative w-full max-w-xs bg-slate-950 border-l border-slate-900 h-full flex flex-col shadow-2xl p-6 overflow-y-auto z-50">
+          <div className="relative w-full max-w-xs bg-slate-950 border-l border-slate-900 h-full flex flex-col shadow-2xl p-6 overflow-y-auto scroll-area z-50">
             <div className="flex items-center justify-between border-b border-slate-900 pb-4 mb-4 font-sans">
               <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
                 <span>📜</span> 閲覧履歴
@@ -2493,7 +2513,7 @@ export default function ArtFreeGuide() {
             </div>
 
             {/* History List */}
-            <div className="flex-1 space-y-2 overflow-y-auto pr-1 scrollbar-thin font-sans">
+            <div className="flex-1 space-y-2 overflow-y-auto scroll-area pr-1 font-sans">
               {history.length === 0 ? (
                 <div className="text-slate-650 text-xs py-8 text-center leading-relaxed">
                   履歴はありません。<br />ガイドを生成するとここに保存されます。
