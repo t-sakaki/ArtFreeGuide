@@ -59,6 +59,24 @@ const PRESET_ARTWORKS: ArtworkSuggestion[] = [
   { title: '南瓜', artist: '草間彌生' },
 ];
 
+// Shown on the landing screen so a visitor (or a demo) can start with one tap.
+const QUICK_START_ARTWORKS: { title: string; artist: string; emoji: string }[] = [
+  { title: '睡蓮', artist: 'クロード・モネ', emoji: '🪷' },
+  { title: '星月夜', artist: 'フィンセント・ファン・ゴッホ', emoji: '🌌' },
+  { title: 'モナ・リザ', artist: 'レオナルド・ダ・ヴィンチ', emoji: '🖼️' },
+  { title: '真珠の耳飾りの少女', artist: 'ヨハネス・フェルメール', emoji: '💧' },
+  { title: '叫び', artist: 'エドヴァルド・ムンク', emoji: '😱' },
+  { title: '富嶽三十六景 神奈川沖浪裏', artist: '葛飾北斎', emoji: '🌊' },
+];
+
+const CURATOR_LOADING_MESSAGES = [
+  '作品の資料を探しています...',
+  '時代背景を読み解いています...',
+  '画家の人生をたどっています...',
+  '見どころを整理しています...',
+  '音声ガイドの原稿を書いています...',
+];
+
 const PRESET_ARTISTS = [
   'フィンセント・ファン・ゴッホ',
   'レオナルド・ダ・ヴィンチ',
@@ -264,6 +282,14 @@ export default function ArtFreeGuide() {
   // Ambient Sound States
   const [ambientName, setAmbientName] = useState<string | null>(null);
 
+  // Rotating curator status text while the guide is being generated
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+
+  const narrationProgress =
+    speakableSegments.length > 0
+      ? Math.min(Math.max(activeSegmentIndex + 1, 0) / speakableSegments.length, 1)
+      : 0;
+
   // Anonymous user + catalogue-based recommendations
   const [userId, setUserId] = useState<string | null>(null);
   const { similarArtworks } = useRecommendations(artwork, artist, userId);
@@ -313,6 +339,17 @@ export default function ArtFreeGuide() {
   useEffect(() => {
     ensureAnonymousUser().then(setUserId);
   }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadingMessageIndex(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setLoadingMessageIndex(prev => (prev + 1) % CURATOR_LOADING_MESSAGES.length);
+    }, 2500);
+    return () => clearInterval(timer);
+  }, [loading]);
 
   const recordListening = (completed: boolean) => {
     const listenedSeconds = listenedSecondsRef.current;
@@ -1756,8 +1793,23 @@ export default function ArtFreeGuide() {
               <img
                 src={imageUrl}
                 alt={artwork}
-                className="w-full h-full object-contain transition-all duration-700 ease-out"
+                className={`w-full h-full object-contain transition-all duration-700 ease-out ${
+                  isPlaying ? 'animate-ken-burns' : ''
+                }`}
               />
+            )}
+
+            {/* Now-playing equaliser overlay */}
+            {isPlaying && (
+              <div className="absolute bottom-2 right-2 flex items-end gap-0.5 h-4 bg-slate-950/70 rounded-full px-2 py-1" aria-hidden="true">
+                {[0, 0.3, 0.6].map(delay => (
+                  <span
+                    key={delay}
+                    className="w-0.5 h-3 bg-teal-400 rounded-full animate-equalizer"
+                    style={{ animationDelay: `${delay}s` }}
+                  />
+                ))}
+              </div>
             )}
             {imageError && !imageUrl && !imageLoading && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 gap-1 p-2 text-center select-none bg-slate-900/20">
@@ -1799,6 +1851,32 @@ export default function ArtFreeGuide() {
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 via-emerald-500 to-blue-500 opacity-60"></div>
               {renderInputForm()}
             </div>
+
+            {/* One-tap start: no typing needed to hear a guide */}
+            <div className="w-full space-y-3 select-none">
+              <p className="text-xs font-bold text-slate-500 tracking-wider uppercase font-sans text-center">
+                まずはこの作品から
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {QUICK_START_ARTWORKS.map(item => (
+                  <button
+                    key={item.title}
+                    onClick={() => {
+                      setArtwork(item.title);
+                      setArtist(item.artist);
+                      generateGuide(item.title, item.artist);
+                    }}
+                    className="bg-slate-900/40 border border-slate-800 hover:border-teal-500/40 hover:bg-slate-900/70 rounded-2xl px-3 py-3 text-left active:scale-95 transition-all shadow-md font-sans group"
+                  >
+                    <span className="text-xl block mb-1">{item.emoji}</span>
+                    <span className="block text-xs font-bold text-slate-200 truncate group-hover:text-teal-400 transition-colors">
+                      {item.title}
+                    </span>
+                    <span className="block text-[10px] text-slate-500 truncate">{item.artist}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1817,6 +1895,9 @@ export default function ArtFreeGuide() {
               <div className="h-4 bg-slate-800 rounded w-[95%]"></div>
               <div className="h-4 bg-slate-800 rounded w-[90%]"></div>
             </div>
+            <p className="text-center text-xs text-slate-400 font-sans pt-2" aria-live="polite">
+              {CURATOR_LOADING_MESSAGES[loadingMessageIndex]}
+            </p>
           </div>
         )}
 
@@ -2066,7 +2147,28 @@ export default function ArtFreeGuide() {
 
       {/* Downward Fixed Controller Panel (Optimized Smartphone Thumb Reach) */}
       {responseShort && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 border-t border-slate-900 px-4 py-3 shadow-2xl flex items-center justify-between gap-1 select-none h-24 pb-5">
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 border-t border-slate-900 px-4 pt-2 pb-5 shadow-2xl flex flex-col justify-center gap-2 select-none h-28">
+          {/* Narration progress */}
+          <div className="w-full max-w-lg mx-auto px-1 font-sans">
+            <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono mb-1">
+              <span>{Math.max(activeSegmentIndex + 1, 0)} / {speakableSegments.length}</span>
+              <span>{Math.round(narrationProgress * 100)}%</span>
+            </div>
+            <div
+              className="h-1 w-full bg-slate-900 rounded-full overflow-hidden"
+              role="progressbar"
+              aria-valuenow={Math.round(narrationProgress * 100)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="音声ガイドの再生位置"
+            >
+              <div
+                className="h-full bg-gradient-to-r from-teal-500 to-blue-500 transition-all duration-500"
+                style={{ width: `${narrationProgress * 100}%` }}
+              />
+            </div>
+          </div>
+
           <div className="flex items-center justify-between w-full max-w-lg mx-auto px-1 font-sans">
             
             {/* Playback Speed Popover (Leftmost) */}
