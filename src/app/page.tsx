@@ -93,6 +93,21 @@ const PRESET_ARTISTS = [
   'ジャン＝ミシェル・バスキア',
 ];
 
+// LLM output occasionally leaks JSON escapes (literal \n, \") or wrapping quotes
+// into the guide body. Normalise it before it ever reaches the screen or the TTS.
+function sanitizeGuideText(text: string): string {
+  return text
+    .replace(/\\r\\n|\\r|\\n/g, '\n')
+    .replace(/\\t/g, ' ')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/^[\s"']+|[\s"']+$/g, '')
+    .trim();
+}
+
 class AudioController {
   private static speechTimeoutId: any = null;
   private static startTimeoutId: any = null;
@@ -506,9 +521,9 @@ export default function ArtFreeGuide() {
               if (!draftArtist) setArtist(entry.artist);
 
               // Restore output states
-              setResponseShort(entry.short || '');
-              setResponseStandard(entry.standard || '');
-              setResponseDeep(entry.deep || '');
+              setResponseShort(sanitizeGuideText(entry.short || ''));
+              setResponseStandard(sanitizeGuideText(entry.standard || ''));
+              setResponseDeep(sanitizeGuideText(entry.deep || ''));
               setExplanationMode('short');
               setImageUrl(entry.imageUrl);
               setImageError(entry.imageError);
@@ -560,9 +575,9 @@ export default function ArtFreeGuide() {
     localStorage.setItem('art_free_guide_draft_artwork', entry.title);
     localStorage.setItem('art_free_guide_draft_artist', entry.artist);
 
-    setResponseShort(entry.short || '');
-    setResponseStandard(entry.standard || '');
-    setResponseDeep(entry.deep || '');
+    setResponseShort(sanitizeGuideText(entry.short || ''));
+    setResponseStandard(sanitizeGuideText(entry.standard || ''));
+    setResponseDeep(sanitizeGuideText(entry.deep || ''));
     setExplanationMode('short');
     setImageUrl(entry.imageUrl);
     setImageError(entry.imageError);
@@ -1144,9 +1159,9 @@ export default function ArtFreeGuide() {
     // CHECK CLIENT-SIDE CACHE
     if (guideCache[cacheKey]) {
       const cached = guideCache[cacheKey];
-      setResponseShort(cached.short);
-      setResponseStandard(cached.standard);
-      setResponseDeep(cached.deep);
+      setResponseShort(sanitizeGuideText(cached.short));
+      setResponseStandard(sanitizeGuideText(cached.standard));
+      setResponseDeep(sanitizeGuideText(cached.deep));
       setExplanationMode(targetMode);
       setImageUrl(cached.imageUrl);
       setImageError(cached.imageError);
@@ -1264,6 +1279,10 @@ export default function ArtFreeGuide() {
             }
           }
         }
+
+        shortText = sanitizeGuideText(shortText);
+        standardText = sanitizeGuideText(standardText);
+        deepText = sanitizeGuideText(deepText);
 
         setResponseShort(shortText);
         setResponseStandard(standardText);
@@ -1930,29 +1949,6 @@ export default function ArtFreeGuide() {
               </div>
             )}
 
-            {/* Explanation mode selector tabs */}
-            <div className="flex bg-slate-950 border border-slate-900 p-1 rounded-xl select-none w-full max-w-sm mx-auto">
-              {(['short', 'standard', 'deep'] as const).map(mode => (
-                <button
-                  key={mode}
-                  onClick={() => {
-                    setExplanationMode(mode);
-                    // Reset active segment to start clean
-                    setActiveSegmentIndex(-1);
-                    setIsPlaying(false);
-                    if (speechSupported) window.speechSynthesis.cancel();
-                  }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all active:scale-95 font-sans ${
-                    explanationMode === mode
-                      ? 'bg-teal-500 text-slate-950 shadow-md font-black'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  {mode === 'short' ? '概要' : mode === 'standard' ? '標準' : '詳細'}
-                </button>
-              ))}
-            </div>
-
             {/* Highlights Segment Box */}
             <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-4 md:p-6 max-h-[380px] overflow-y-auto space-y-3 font-serif leading-relaxed text-base selection:bg-teal-500/20 shadow-inner">
               {segments.length > 0 ? (
@@ -2002,19 +1998,14 @@ export default function ArtFreeGuide() {
                 <div className="pt-4 border-t border-slate-900/60 flex justify-center select-none">
                   <button
                     onClick={() => {
-                      if (explanationMode === 'short') {
-                        setExplanationMode('standard');
-                      } else {
-                        setExplanationMode('deep');
-                      }
-                      setActiveSegmentIndex(-1);
-                      setIsPlaying(false);
-                      if (speechSupported) window.speechSynthesis.cancel();
+                      // The existing text is a prefix of the deeper text, so segment
+                      // indices stay valid and playback can continue uninterrupted.
+                      setExplanationMode(explanationMode === 'short' ? 'standard' : 'deep');
                     }}
                     className="px-6 py-2.5 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-400 hover:text-teal-300 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-sm font-sans"
                   >
                     <span>👇</span>
-                    <span>{explanationMode === 'short' ? 'さらに詳しく（標準解説を追記）' : 'さらに深く（詳細エピソードを追記）'}</span>
+                    <span>{explanationMode === 'short' ? 'もっと詳しく聞く' : 'さらに深く聞く（裏話・エピソード）'}</span>
                   </button>
                 </div>
               )}
