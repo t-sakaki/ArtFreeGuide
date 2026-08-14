@@ -25,7 +25,17 @@ const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富�
   "standard": "（作品の魅力や構図、色彩、画家の想いを美しく解説した、中程度の長さの標準的な解説テキスト。見出しや太字を交えてマークダウンで装飾してください）",
   "deep": "（技法、歴史的背景、知られざるエピソードや詳細な裏話を交えた、長文の詳細な解説テキスト。見出しや太字を交えてマークダウンで装飾してください）",
   "searchQuery": "（Wikimedia Commonsでこの作品の画像を検索するための英語のキーワード。例：'Vincent van Gogh Sunflowers'、'Mona Lisa'）",
-  "mood": "（この作品を鑑賞するときに流すBGMの雰囲気を、次の5つから1つだけ選んで英単語のまま出力：serene（静謐・穏やか）/ dramatic（緊張・劇的）/ melancholic（陰り・沈思）/ playful（明るい・軽やか）/ sacred（荘厳・神聖））",
+  "music": {
+    "tonic": "（主音。C, C#, D, D#, E, F, F#, G, G#, A, A#, B のいずれか）",
+    "scale": "（旋法。ionian（長調）/ aeolian（短調）/ dorian / lydian / phrygian / mixolydian / pentatonic / whole_tone / hirajoshi（平調子・和）/ insen（陰旋法・和）のいずれか。日本美術には和の旋法が合います）",
+    "tempoBpm": "（40〜100 の数値。画面の運動量に対応させる。静止した風景は遅く、荒れた海や群像は速く）",
+    "texture": "（音色。strings / choir / bell / pluck / glass / breath のいずれか。素材や時代感に合わせる）",
+    "brightness": "（0〜1 の数値。画面の明るさ・光の量）",
+    "warmth": "（0〜1 の数値。色調の温かさ。暖色や油彩は高く、冷たい色や版画は低く）",
+    "density": "（0〜1 の数値。描き込みの密度・情報量）",
+    "tension": "（0〜1 の数値。主題の緊張度。穏やかな静物は低く、戦争や審判は高く）",
+    "space": "（0〜1 の数値。描かれた空間の広がりと残響。大聖堂や大海原は高く、室内の肖像は低く）"
+  },
   "recommendations": [
     {
       "title": "（関連する作品名。3〜5件）",

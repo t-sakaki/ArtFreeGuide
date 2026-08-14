@@ -3,7 +3,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { ensureAnonymousUser } from '@/lib/user';
 import { useRecommendations } from '@/hooks/useRecommendations';
-import { AmbientMood, AmbientPlayer, guessMoodFromText, isAmbientMood } from '@/lib/ambient';
+import {
+  AmbientPlayer,
+  MusicSpec,
+  describeMusicSpec,
+  guessMusicSpec,
+  normalizeMusicSpec,
+  specFromLegacyMood,
+} from '@/lib/ambient';
 import ReactMarkdown from 'react-markdown';
 
 interface ArtworkSuggestion {
@@ -28,7 +35,9 @@ interface GuideCacheEntry {
   imageError: boolean;
   searchQuery: string;
   recommendations: Recommendation[];
-  mood?: AmbientMood;
+  music?: MusicSpec;
+  /** Guides cached before the music spec existed */
+  mood?: string;
 }
 
 interface HistoryEntry {
@@ -42,7 +51,19 @@ interface HistoryEntry {
   searchQuery: string;
   recommendations: Recommendation[];
   timestamp: string;
-  mood?: AmbientMood;
+  music?: MusicSpec;
+  /** History written before the music spec existed */
+  mood?: string;
+}
+
+// The model's spec wins; then a legacy mood word; then keyword heuristics.
+function resolveMusicSpec(
+  music: unknown,
+  legacyMood: unknown,
+  fallbackText: string
+): MusicSpec {
+  if (music && typeof music === 'object') return normalizeMusicSpec(music);
+  return specFromLegacyMood(legacyMood) ?? guessMusicSpec(fallbackText);
 }
 
 const PRESET_ARTWORKS: ArtworkSuggestion[] = [
@@ -300,7 +321,7 @@ export default function ArtFreeGuide() {
   // Ambient Sound States
   const [ambientName, setAmbientName] = useState<string | null>(null);
   const ambientPlayerRef = useRef<AmbientPlayer | null>(null);
-  const ambientMoodRef = useRef<AmbientMood | null>(null);
+  const musicSpecRef = useRef<MusicSpec | null>(null);
 
   // Rotating curator status text while the guide is being generated
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
@@ -540,7 +561,7 @@ export default function ArtFreeGuide() {
               setResponseShort(sanitizeGuideText(entry.short || ''));
               setResponseStandard(sanitizeGuideText(entry.standard || ''));
               setResponseDeep(sanitizeGuideText(entry.deep || ''));
-              ambientMoodRef.current = entry.mood ?? guessMoodFromText(`${entry.title} ${entry.artist}`);
+              musicSpecRef.current = resolveMusicSpec(entry.music, entry.mood, `${entry.title} ${entry.artist}`);
               setExplanationMode('short');
               setImageUrl(entry.imageUrl);
               setImageError(entry.imageError);
@@ -595,7 +616,7 @@ export default function ArtFreeGuide() {
     setResponseShort(sanitizeGuideText(entry.short || ''));
     setResponseStandard(sanitizeGuideText(entry.standard || ''));
     setResponseDeep(sanitizeGuideText(entry.deep || ''));
-    ambientMoodRef.current = entry.mood ?? guessMoodFromText(`${entry.title} ${entry.artist}`);
+    musicSpecRef.current = resolveMusicSpec(entry.music, entry.mood, `${entry.title} ${entry.artist}`);
     setExplanationMode('short');
     setImageUrl(entry.imageUrl);
     setImageError(entry.imageError);
@@ -723,21 +744,20 @@ export default function ArtFreeGuide() {
     );
   };
 
-  // Start the ambient pad that matches the artwork's mood
-  const startAmbientSound = (artworkTitle: string, mood?: AmbientMood | null) => {
+  // Start the generative score that matches the artwork
+  const startAmbientSound = (artworkTitle: string, spec?: MusicSpec | null) => {
     try {
-      const resolvedMood =
-        mood ?? ambientMoodRef.current ?? guessMoodFromText(`${artworkTitle} ${artist}`);
+      const resolvedSpec =
+        spec ?? musicSpecRef.current ?? guessMusicSpec(`${artworkTitle} ${artist}`);
 
       if (!ambientPlayerRef.current) {
         ambientPlayerRef.current = new AmbientPlayer();
       }
 
-      const preset = ambientPlayerRef.current.start(resolvedMood);
-      if (!preset) return;
+      if (!ambientPlayerRef.current.start(resolvedSpec)) return;
 
-      ambientMoodRef.current = resolvedMood;
-      setAmbientName(preset.label);
+      musicSpecRef.current = resolvedSpec;
+      setAmbientName(describeMusicSpec(resolvedSpec));
       // The pad can start while narration is already speaking
       ambientPlayerRef.current.setDucked(isPlayingRef.current);
     } catch (err) {
@@ -1135,13 +1155,13 @@ export default function ArtFreeGuide() {
       setSearchQuery(cached.searchQuery);
       setRecommendations(cached.recommendations);
 
-      const cachedMood = cached.mood ?? guessMoodFromText(`${targetArtwork} ${targetArtist}`);
-      ambientMoodRef.current = cachedMood;
+      const cachedSpec = resolveMusicSpec(cached.music, cached.mood, `${targetArtwork} ${targetArtist}`);
+      musicSpecRef.current = cachedSpec;
 
       // Auto play on cached guide load
       setActiveSegmentIndex(0);
       setIsPlaying(true);
-      startAmbientSound(targetArtwork, cachedMood);
+      startAmbientSound(targetArtwork, cachedSpec);
 
       // Synced Navigation State in History
       const idx = history.findIndex(
@@ -1201,7 +1221,7 @@ export default function ArtFreeGuide() {
         let shortText = '';
         let standardText = '';
         let deepText = '';
-        let mood: AmbientMood | null = null;
+        let music: unknown = null;
 
         try {
           let jsonString = data.text.trim();
@@ -1217,8 +1237,8 @@ export default function ArtFreeGuide() {
           if (parsed.searchQuery) {
             queryForImage = parsed.searchQuery;
           }
-          if (isAmbientMood(parsed.mood)) {
-            mood = parsed.mood;
+          if (parsed.music && typeof parsed.music === 'object') {
+            music = parsed.music;
           }
           if (parsed.recommendations && Array.isArray(parsed.recommendations)) {
             recs = parsed.recommendations.map((r: any) => ({
@@ -1258,8 +1278,8 @@ export default function ArtFreeGuide() {
         standardText = sanitizeGuideText(standardText);
         deepText = sanitizeGuideText(deepText);
 
-        const resolvedMood = mood ?? guessMoodFromText(`${targetArtwork} ${targetArtist}`);
-        ambientMoodRef.current = resolvedMood;
+        const resolvedSpec = resolveMusicSpec(music, null, `${targetArtwork} ${targetArtist}`);
+        musicSpecRef.current = resolvedSpec;
 
         setResponseShort(shortText);
         setResponseStandard(standardText);
@@ -1275,7 +1295,7 @@ export default function ArtFreeGuide() {
           imageError: false,
           searchQuery: queryForImage,
           recommendations: recs,
-          mood: resolvedMood
+          music: resolvedSpec
         };
         
         setGuideCache(prev => ({ ...prev, [cacheKey]: newEntry }));
@@ -1292,7 +1312,7 @@ export default function ArtFreeGuide() {
           searchQuery: queryForImage,
           recommendations: recs,
           timestamp: new Date().toISOString(),
-          mood: resolvedMood
+          music: resolvedSpec
         };
 
         const existingIndex = history.findIndex(
@@ -1321,7 +1341,7 @@ export default function ArtFreeGuide() {
 
         // Start progressive loading
         fetchImage(queryForImage, cacheKey);
-        startAmbientSound(targetArtwork, resolvedMood);
+        startAmbientSound(targetArtwork, resolvedSpec);
 
         if (recs.length > 0) {
           setRecommendations(recs);
