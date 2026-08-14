@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { ensureAnonymousUser } from '@/lib/user';
+import ArtworkStage from '@/components/ArtworkStage';
+import { findHotspotSet, hotspotImageUrl, matchHotspot } from '@/lib/hotspots';
 import { useRecommendations } from '@/hooks/useRecommendations';
 import {
   AmbientPlayer,
@@ -298,6 +300,10 @@ export default function ArtFreeGuide() {
 
   // Image State
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [activeHotspotId, setActiveHotspotId] = useState<string | null>(null);
+  // A tapped point stays focused until dismissed; narration must not steal it.
+  const [hotspotPinned, setHotspotPinned] = useState(false);
+  const [showArtworkViewer, setShowArtworkViewer] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -721,6 +727,32 @@ export default function ArtFreeGuide() {
     }
   }, [activeSegmentIndex, isPlaying]);
 
+  // Curated viewing points for the artwork on screen, if we have measured any.
+  const hotspotSet = useMemo(() => findHotspotSet(artwork, artist), [artwork, artist]);
+  const hotspots = hotspotSet?.hotspots ?? [];
+  // Coordinates were measured on one specific reproduction, so it wins over search results.
+  const displayImageUrl = hotspotSet ? hotspotImageUrl(hotspotSet.file) : imageUrl;
+  const activeHotspot = hotspots.find(h => h.id === activeHotspotId) ?? null;
+
+  useEffect(() => {
+    setActiveHotspotId(null);
+    setHotspotPinned(false);
+  }, [hotspotSet]);
+
+  // Follow the narration: zoom to whichever detail is being talked about.
+  useEffect(() => {
+    if (!hotspotSet || hotspotPinned) return;
+    if (!isPlaying || activeSegmentIndex < 0 || activeSegmentIndex >= speakableSegments.length) return;
+
+    const match = matchHotspot(hotspotSet, speakableSegments[activeSegmentIndex]);
+    if (match) setActiveHotspotId(match.id);
+  }, [hotspotSet, hotspotPinned, isPlaying, activeSegmentIndex, speakableSegments]);
+
+  const selectHotspot = (id: string | null) => {
+    setActiveHotspotId(id);
+    setHotspotPinned(id !== null);
+  };
+
   // A tour keeps going on its own: once narration ends, walk to the next artwork.
   const scheduleTourAdvance = () => {
     const tour = activePlaylist;
@@ -1088,7 +1120,8 @@ export default function ArtFreeGuide() {
     setFocusedArtistIndex(-1);
   };
 
-  const fetchImage = async (query: string, cacheKey?: string) => {
+  /** `pinnedUrl` is used for artworks with curated hotspots, whose coordinates only fit one specific reproduction. */
+  const fetchImage = async (query: string, cacheKey?: string, pinnedUrl?: string | null) => {
     setImageLoading(true);
     setImageError(false);
     setImageUrl(null);
@@ -1096,11 +1129,10 @@ export default function ArtFreeGuide() {
 
     try {
       const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrnamespace=6&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json&origin=*`;
-      const res = await fetch(url);
-      const data = await res.json();
+      const data = pinnedUrl ? null : await (await fetch(url)).json();
 
-      let thumbUrl: string | null = null;
-      if (data.query && data.query.pages) {
+      let thumbUrl: string | null = pinnedUrl ?? null;
+      if (!thumbUrl && data?.query?.pages) {
         const pages = data.query.pages;
         const pageKeys = Object.keys(pages);
         if (pageKeys.length > 0) {
@@ -1281,6 +1313,7 @@ export default function ArtFreeGuide() {
     }
 
     const cacheKey = `${targetArtwork.trim().toLowerCase()}::${targetArtist.trim().toLowerCase()}`;
+    const hotspotFile = findHotspotSet(targetArtwork, targetArtist)?.file ?? null;
 
     // CHECK CLIENT-SIDE CACHE
     if (guideCache[cacheKey]) {
@@ -1482,7 +1515,11 @@ export default function ArtFreeGuide() {
         }
 
         // Start progressive loading
-        fetchImage(queryForImage, cacheKey);
+        fetchImage(
+          queryForImage,
+          cacheKey,
+          hotspotFile ? hotspotImageUrl(hotspotFile) : null
+        );
         startAmbientSound(targetArtwork, resolvedSpec);
 
         if (recs.length > 0) {
@@ -1949,14 +1986,34 @@ export default function ArtFreeGuide() {
                 <span className="text-slate-500 text-[10px] font-sans">画像を読み込み中...</span>
               </div>
             )}
-            {imageUrl && (
-              <img
-                src={imageUrl}
-                alt={artwork}
-                className={`w-full h-full object-contain transition-all duration-700 ease-out ${
-                  isPlaying ? 'animate-ken-burns' : ''
-                }`}
-              />
+            {displayImageUrl && (
+              hotspots.length > 0 ? (
+                <ArtworkStage
+                  imageUrl={displayImageUrl}
+                  alt={artwork}
+                  hotspots={hotspots}
+                  activeHotspotId={activeHotspotId}
+                  onSelect={selectHotspot}
+                  kenBurns={isPlaying}
+                />
+              ) : (
+                <img
+                  src={displayImageUrl}
+                  alt={artwork}
+                  className={`w-full h-full object-contain transition-all duration-700 ease-out ${
+                    isPlaying ? 'animate-ken-burns' : ''
+                  }`}
+                />
+              )
+            )}
+
+            {displayImageUrl && (
+              <button
+                onClick={() => setShowArtworkViewer(true)}
+                className="absolute top-2 right-2 bg-slate-950/70 hover:bg-slate-950 border border-slate-700 hover:border-teal-500/60 text-slate-300 hover:text-teal-400 rounded-lg px-2 py-1 text-[10px] font-bold font-sans transition-colors"
+              >
+                {hotspots.length > 0 ? '🔍 見どころを拡大' : '🔍 拡大'}
+              </button>
             )}
 
             {/* Now-playing equaliser overlay */}
@@ -1971,13 +2028,71 @@ export default function ArtFreeGuide() {
                 ))}
               </div>
             )}
-            {imageError && !imageUrl && !imageLoading && (
+            {imageError && !displayImageUrl && !imageLoading && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 gap-1 p-2 text-center select-none bg-slate-900/20">
                 <span className="text-2xl">🖼️</span>
                 <p className="text-[11px] font-semibold text-slate-500 font-sans">作品画像を取得できませんでした</p>
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Full-screen viewer: the artwork large enough to actually look at */}
+      {showArtworkViewer && displayImageUrl && (
+        <div className="fixed inset-0 z-[60] bg-slate-950/95 backdrop-blur-sm flex flex-col animate-fade-in">
+          <div className="flex items-center justify-between px-4 py-3 shrink-0">
+            <span className="text-xs font-bold text-slate-300 font-sans truncate pr-3">
+              {artwork} {artist ? `／ ${artist}` : ''}
+            </span>
+            <button
+              onClick={() => setShowArtworkViewer(false)}
+              className="text-slate-400 hover:text-teal-400 bg-slate-900/70 border border-slate-800 rounded-lg px-3 py-1.5 text-xs font-bold font-sans"
+            >
+              閉じる ✕
+            </button>
+          </div>
+
+          <div className="relative flex-1 mx-4 mb-3 rounded-2xl overflow-hidden bg-slate-900/40 border border-slate-800">
+            {hotspots.length > 0 ? (
+              <ArtworkStage
+                imageUrl={displayImageUrl}
+                alt={artwork}
+                hotspots={hotspots}
+                activeHotspotId={activeHotspotId}
+                onSelect={selectHotspot}
+              />
+            ) : (
+              <img src={displayImageUrl} alt={artwork} className="absolute inset-0 w-full h-full object-contain" />
+            )}
+          </div>
+
+          {hotspots.length > 0 ? (
+            <div className="px-4 pb-6 space-y-3 shrink-0 max-w-2xl w-full mx-auto">
+              <div className="flex flex-wrap gap-2">
+                {hotspots.map(hotspot => (
+                  <button
+                    key={hotspot.id}
+                    onClick={() => selectHotspot(activeHotspotId === hotspot.id ? null : hotspot.id)}
+                    className={`px-3 py-1.5 rounded-full text-[11px] font-bold font-sans border transition-colors ${
+                      activeHotspotId === hotspot.id
+                        ? 'bg-teal-500 text-slate-950 border-teal-400'
+                        : 'bg-slate-900/60 text-slate-300 border-slate-800 hover:border-teal-500/50'
+                    }`}
+                  >
+                    {hotspot.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-sm text-slate-300 font-serif leading-relaxed min-h-[3.5rem]">
+                {activeHotspot ? activeHotspot.detail : '見どころをタップすると、その部分を拡大して解説します。'}
+              </p>
+            </div>
+          ) : (
+            <p className="px-4 pb-6 text-xs text-slate-500 font-sans text-center">
+              この作品にはまだ見どころの登録がありません。
+            </p>
+          )}
         </div>
       )}
 
