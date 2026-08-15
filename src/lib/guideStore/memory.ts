@@ -1,4 +1,4 @@
-import { GuideStore, StoredGuide, guideKey } from './provider';
+import { ArchivedGuide, GuideStore, StoredGuide, guideKey } from './provider';
 
 /**
  * Per-isolate fallback used when no database is configured. It disappears with
@@ -17,5 +17,18 @@ export class MemoryGuideStore implements GuideStore {
       payload,
       updatedAt: new Date().toISOString()
     });
+  }
+
+  async search(query: string, limit: number): Promise<ArchivedGuide[]> {
+    const needle = query.trim().toLowerCase();
+    const matches: ArchivedGuide[] = [];
+
+    for (const key of MemoryGuideStore.entries.keys()) {
+      const [title, artist] = key.split('::');
+      if (key.includes(needle)) matches.push({ title, artist: artist ?? '' });
+      if (matches.length >= limit) break;
+    }
+
+    return matches;
   }
 }

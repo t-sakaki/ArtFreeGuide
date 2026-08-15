@@ -23,6 +23,8 @@ interface ArtworkSuggestion {
   title: string;
   artist: string;
   isAi?: boolean;
+  /** The archive already holds this guide, so it starts without generation. */
+  isInstant?: boolean;
 }
 
 interface Recommendation {
@@ -1027,7 +1029,7 @@ export default function ArtFreeGuide() {
     setAmbientName(null);
   };
 
-  const fetchAiSuggestions = async (query: string, artistName: string): Promise<ArtworkSuggestion[]> => {
+  const fetchServerSuggestions = async (query: string, artistName: string): Promise<ArtworkSuggestion[]> => {
     try {
       const res = await fetch('/api/suggest', {
         method: 'POST',
@@ -1036,10 +1038,11 @@ export default function ArtFreeGuide() {
       });
       const data = await res.json();
       if (data.suggestions && Array.isArray(data.suggestions)) {
-        return data.suggestions.map((title: string) => ({
-          title,
-          artist: artistName || '',
-          isAi: true
+        return data.suggestions.map((item: { title: string; artist?: string; source?: string }) => ({
+          title: item.title,
+          artist: item.artist || artistName || '',
+          isAi: item.source === 'ai',
+          isInstant: item.source === 'guide'
         }));
       }
     } catch (e) {
@@ -1082,22 +1085,22 @@ export default function ArtFreeGuide() {
         console.error('Artwork suggest error:', error);
       }
 
-      // AI Suggestions (もしかして) if input query has length
-      let aiSuggestions: ArtworkSuggestion[] = [];
+      // Archive hits, then the Supabase catalogue, then invented titles
+      let serverSuggestions: ArtworkSuggestion[] = [];
       if (artwork.trim().length >= 1) {
-        aiSuggestions = await fetchAiSuggestions(artwork, artist);
+        serverSuggestions = await fetchServerSuggestions(artwork, artist);
       }
 
-      // Merge results: AI suggestions at the top, then presets, then Wikipedia
-      const merged = [...aiSuggestions, ...localMatches, ...apiSuggestions];
+      const merged = [...serverSuggestions, ...localMatches, ...apiSuggestions];
 
-      // De-duplicate based on title
+      // De-duplicate based on title, keeping the most trustworthy entry
       const uniqueMap = new Map<string, ArtworkSuggestion>();
       merged.forEach(item => {
         const key = item.title.trim().toLowerCase();
-        if (!uniqueMap.has(key)) {
+        const kept = uniqueMap.get(key);
+        if (!kept) {
           uniqueMap.set(key, item);
-        } else if (item.isAi) {
+        } else if (item.isInstant && !kept.isInstant) {
           uniqueMap.set(key, item);
         }
       });
@@ -2144,6 +2147,11 @@ export default function ArtFreeGuide() {
                     }`}
                   >
                     <div className="text-left flex items-center gap-2">
+                      {suggestion.isInstant && (
+                        <span className="text-[9px] bg-teal-500/10 border border-teal-500/20 text-teal-400 px-1.5 py-0.5 rounded font-black shrink-0 uppercase tracking-wider">
+                          すぐ聴ける
+                        </span>
+                      )}
                       {suggestion.isAi && (
                         <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-black shrink-0 uppercase tracking-wider">
                           もしかして
