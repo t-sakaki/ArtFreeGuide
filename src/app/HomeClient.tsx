@@ -793,7 +793,7 @@ export default function HomeClient({
               setResponseStandard(sanitizeGuideText(entry.standard || ''));
               setResponseDeep(sanitizeGuideText(entry.deep || ''));
               musicSpecRef.current = resolveMusicSpec(entry.music, entry.mood, `${entry.title} ${entry.artist}`);
-              setExplanationMode('short');
+              setExplanationMode('standard');
               setImageUrl(entry.imageUrl);
               setImageError(entry.imageError);
               setSearchQuery(entry.searchQuery);
@@ -848,7 +848,7 @@ export default function HomeClient({
     setResponseStandard(sanitizeGuideText(entry.standard || ''));
     setResponseDeep(sanitizeGuideText(entry.deep || ''));
     musicSpecRef.current = resolveMusicSpec(entry.music, entry.mood, `${entry.title} ${entry.artist}`);
-    setExplanationMode('short');
+    setExplanationMode('standard');
     setImageUrl(entry.imageUrl);
     setImageError(entry.imageError);
     setSearchQuery(entry.searchQuery);
@@ -2080,7 +2080,7 @@ export default function HomeClient({
     setShowReportForm(false);
     triggerToast(t.feedback.regenerateToast);
     try {
-      await generateGuide(canonicalArtwork, canonicalArtist, 'short', true);
+      await generateGuide(canonicalArtwork, canonicalArtist, 'standard', true);
     } finally {
       setRegenerating(false);
     }

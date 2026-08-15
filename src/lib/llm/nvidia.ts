@@ -12,7 +12,9 @@ const DEFAULT_MODELS = [
   'meta/llama-3.1-70b-instruct'
 ];
 
-const MAX_TOKENS = 4096;
+// A full guide (three tiers, music spec, recommendations) runs past 4k tokens
+// in Japanese, and the overflow arrives as a truncated, unparsable JSON object.
+const MAX_TOKENS = 8192;
 
 interface ChatCompletion {
   choices?: { message?: { content?: string } }[];
