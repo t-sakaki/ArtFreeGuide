@@ -186,6 +186,78 @@ async function fromWikidata(titles: string[], artist: string, width: number): Pr
   return null;
 }
 
+/** Two-character slices, the only way two Japanese titles can be compared. */
+function bigrams(value: string): Set<string> {
+  const text = value.replace(/[\s・･,.'’\-—–()（）「」『』]/g, '');
+  const result = new Set<string>();
+  for (let index = 0; index < text.length - 1; index += 1) {
+    result.add(text.slice(index, index + 2));
+  }
+  return result;
+}
+
+function titlesOverlap(candidate: string, wanted: string): boolean {
+  const wantedGrams = bigrams(wanted);
+  for (const gram of bigrams(candidate)) {
+    if (wantedGrams.has(gram)) return true;
+  }
+  return false;
+}
+
+async function wikipediaItemIds(query: string): Promise<string[]> {
+  const url =
+    'https://ja.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrlimit=5' +
+    `&gsrsearch=${encodeURIComponent(query)}&prop=pageprops&ppprop=wikibase_item`;
+  const data = await fetchJson(url);
+  const pages = (
+    data?.query as { pages?: Record<string, { pageprops?: { wikibase_item?: string } }> } | undefined
+  )?.pages;
+  return Object.values(pages ?? {})
+    .map(page => page.pageprops?.wikibase_item)
+    .filter((id): id is string => Boolean(id));
+}
+
+/**
+ * The guide names works the way a curator speaks — 「牛乳注ぎ」 for the painting
+ * catalogued as 「牛乳を注ぐ女」 — and neither the dictionary nor a langlink
+ * knows that name. A full-text search of the Japanese Wikipedia does, so the
+ * pages it returns are checked as candidates: the creator has to be the right
+ * artist, and the item's own name has to share two characters with the title,
+ * which is what stops 「レースの少女」 from becoming 「デルフト眺望」.
+ */
+async function fromJapaneseSearch(
+  title: string,
+  artist: string,
+  width: number
+): Promise<ResolvedImage | null> {
+  if (!artist.trim() || hasLatinLetters(title)) return null;
+
+  const ids = await wikipediaItemIds(`${title} ${artist}`);
+  if (ids.length === 0) return null;
+
+  const entities = await wikidataEntities(ids.slice(0, 5));
+  const candidates: WikidataCandidate[] = [];
+  for (const [id, entity] of Object.entries(entities)) {
+    const claims = ((entity as { claims?: Claims }).claims ?? {}) as Claims;
+    const file = claimString(claims, 'P18');
+    const creatorId = claimEntityId(claims, 'P170');
+    if (!file || !creatorId) continue;
+    if (!entityLabels(entity).some(label => titlesOverlap(label, title))) continue;
+    candidates.push({ id, file, creatorId });
+  }
+  if (candidates.length === 0) return null;
+
+  const creators = await wikidataEntities(
+    Array.from(new Set(candidates.map(candidate => candidate.creatorId as string))).slice(0, 5)
+  );
+  for (const candidate of candidates) {
+    if (namesOverlap(entityLabels(creators[candidate.creatorId as string]), artist)) {
+      return { url: fileUrl(candidate.file, width), source: 'wikidata' };
+    }
+  }
+  return null;
+}
+
 async function commonsSearch(search: string): Promise<string[]> {
   const url =
     'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search' +
@@ -347,9 +419,11 @@ export async function resolveArtworkImage(input: ResolveInput): Promise<Resolved
   }
 
   const freeText = [searchTitle, artistEn].filter(Boolean).join(' ').trim();
-  if (!freeText) return null;
+  if (freeText) {
+    const files = await commonsSearch(freeText);
+    const best = await bestCommonsMatch(files, searchTitle, artistEn);
+    if (best) return { url: fileUrl(best, width), source: 'commons-search' };
+  }
 
-  const files = await commonsSearch(freeText);
-  const best = await bestCommonsMatch(files, searchTitle, artistEn);
-  return best ? { url: fileUrl(best, width), source: 'commons-search' } : null;
+  return fromJapaneseSearch(title, artist, width);
 }

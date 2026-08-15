@@ -30,18 +30,25 @@ export default function AccountPanel({ onUserId }: Props) {
   const linkedFor = useRef<string | null>(null);
 
   useEffect(() => {
-    const supabase = browserClient();
+    let unsubscribe = () => {};
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setReady(true);
-    });
+    browserClient()
+      .then(async supabase => {
+        const { data } = await supabase.auth.getSession();
+        setSession(data.session);
+        setReady(true);
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
-      setSession(next);
-    });
+        const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
+          setSession(next);
+        });
+        unsubscribe = () => listener.subscription.unsubscribe();
+      })
+      .catch(err => {
+        setError(err.message || 'ログイン機能を初期化できませんでした');
+        setReady(true);
+      });
 
-    return () => listener.subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   // Resolve the profile once per signed-in user, not on every token refresh.
@@ -87,18 +94,24 @@ export default function AccountPanel({ onUserId }: Props) {
     setError('');
     setNotice('');
 
-    const { error: authError } = await browserClient().auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.href }
-    });
+    try {
+      const supabase = await browserClient();
+      const { error: authError } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: window.location.href }
+      });
 
-    if (authError) setError(authError.message);
-    else setNotice(`${email} にログインリンクを送りました。メールのリンクを開いてください。`);
+      if (authError) setError(authError.message);
+      else setNotice(`${email} にログインリンクを送りました。メールのリンクを開いてください。`);
+    } catch (err: any) {
+      setError(err.message || 'ログインリンクを送れませんでした');
+    }
   }
 
   async function signOut() {
     setBusy(true);
-    await browserClient().auth.signOut();
+    const supabase = await browserClient();
+    await supabase.auth.signOut();
     linkedFor.current = null;
     clearStoredUserId();
     onUserId(await ensureAnonymousUser());

@@ -90,21 +90,19 @@
   animation: equalizerBar 0.9s ease-in-out infinite;
 }
 
-/* Halo that draws the eye to an unvisited viewing point */
-@keyframes hotspotPing {
-  0% {
-    transform: scale(0.9);
-    opacity: 0.9;
-  }
-  70%,
+/* Only the point being talked about moves; the others stay transparent */
+@keyframes hotspotBlink {
+  0%,
   100% {
-    transform: scale(1.9);
-    opacity: 0;
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
-.animate-hotspot-ping {
-  animation: hotspotPing 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+.animate-hotspot-blink {
+  animation: hotspotBlink 1.8s ease-in-out infinite;
 }
 
 /* Hearts drifting up from the like button, as on a live stream */
@@ -166,10 +164,15 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-ken-burns,
   .animate-equalizer,
-  .animate-hotspot-ping,
   .animate-chip-nudge,
   .animate-play-pulse {
     animation: none;
+  }
+
+  /* Held bright rather than blinking, so the point is still identifiable. */
+  .animate-hotspot-blink {
+    animation: none;
+    opacity: 0.9;
   }
 
   /* The hearts still need to disappear, so fade rather than freeze them. */

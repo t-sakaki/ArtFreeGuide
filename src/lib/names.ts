@@ -30,6 +30,9 @@ export const NAMES: Record<string, Translations> = {
   '野々村仁清': { en: 'Nonomura Ninsei', fr: 'Nonomura Ninsei', zh: '野野村仁清', es: 'Nonomura Ninsei' },
   'フランシスコ・デ・ゴヤ': { en: 'Francisco de Goya', fr: 'Francisco de Goya', zh: '弗朗西斯科·戈雅', es: 'Francisco de Goya' },
   'サンドロ・ボッティチェッリ': { en: 'Sandro Botticelli', fr: 'Sandro Botticelli', zh: '桑德罗·波提切利', es: 'Sandro Botticelli' },
+  'レンブラント・ファン・レイン': { en: 'Rembrandt van Rijn', fr: 'Rembrandt van Rijn', zh: '伦勃朗·凡·莱因', es: 'Rembrandt van Rijn' },
+  'ラファエロ・サンティ': { en: 'Raphael', fr: 'Raphaël', zh: '拉斐尔', es: 'Rafael Sanzio' },
+  'グスタフ・クリムト': { en: 'Gustav Klimt', fr: 'Gustav Klimt', zh: '古斯塔夫·克里姆特', es: 'Gustav Klimt' },
 
   // Artworks
   'ひまわり': { en: 'Sunflowers', fr: 'Les Tournesols', zh: '向日葵', es: 'Los girasoles' },
@@ -52,6 +55,9 @@ export const NAMES: Record<string, Translations> = {
   '凱風快晴': { en: 'Fine Wind, Clear Morning', fr: 'Vent frais par matin clair', zh: '凯风快晴', es: 'Viento fresco, mañana clara' },
   '東海道五十三次': { en: 'The Fifty-three Stations of the Tōkaidō', fr: 'Les Cinquante-trois Stations du Tōkaidō', zh: '东海道五十三次', es: 'Las cincuenta y tres estaciones del Tōkaidō' },
   '色絵藤花文茶壺': { en: 'Tea Jar with Wisteria Design', fr: 'Jarre à thé au décor de glycines', zh: '色绘藤花纹茶壶', es: 'Tarro de té con decoración de glicinas' },
+  '夜警': { en: 'The Night Watch', fr: 'La Ronde de nuit', zh: '夜巡', es: 'La ronda de noche' },
+  'アテナイの学堂': { en: 'The School of Athens', fr: 'L’École d’Athènes', zh: '雅典学院', es: 'La escuela de Atenas' },
+  '接吻': { en: 'The Kiss', fr: 'Le Baiser', zh: '吻', es: 'El beso' },
   '我が子を食らうサトゥルヌス': { en: 'Saturn Devouring His Son', fr: 'Saturne dévorant un de ses fils', zh: '农神吞噬其子', es: 'Saturno devorando a su hijo' },
   'ヴィーナスの誕生': { en: 'The Birth of Venus', fr: 'La Naissance de Vénus', zh: '维纳斯的诞生', es: 'El nacimiento de Venus' },
   'ダビデ像': { en: 'David', fr: 'Le David', zh: '大卫像', es: 'David' },
@@ -59,6 +65,23 @@ export const NAMES: Record<string, Translations> = {
   'ジャガイモを食べる人々': { en: 'The Potato Eaters', fr: 'Les Mangeurs de pommes de terre', zh: '吃土豆的人', es: 'Los comedores de patatas' },
   '夜のカフェテラス': { en: 'Café Terrace at Night', fr: 'Terrasse du café le soir', zh: '夜间露天咖啡座', es: 'Terraza de café por la noche' },
   'カラスのいる麦畑': { en: 'Wheatfield with Crows', fr: 'Champ de blé aux corbeaux', zh: '麦田群鸦', es: 'Trigal con cuervos' },
+  // Catalogue rows whose Japanese title is not the one the sources use, which
+  // is the whole reason their picture could not be found.
+  'アトリエの中の画家': { en: 'The Art of Painting', fr: 'L’Art de la peinture', zh: '绘画艺术', es: 'El arte de la pintura' },
+  '薔薇': { en: 'Roses', fr: 'Roses', zh: '玫瑰', es: 'Rosas' },
+  '水浴': { en: 'The Large Bathers', fr: 'Les Grandes Baigneuses', zh: '大浴女', es: 'Las grandes bañistas' },
+  'リンゴとオレンジ': { en: 'Apples and Oranges', fr: 'Pommes et oranges', zh: '苹果与橙子', es: 'Manzanas y naranjas' },
+  '病める少女': { en: 'The Sick Child', fr: 'L’Enfant malade', zh: '病中的孩子', es: 'La niña enferma' },
+  '黒い正方形': { en: 'Black Square', fr: 'Carré noir', zh: '黑方块', es: 'Cuadrado negro' },
+  '鮭': { en: 'Salmon', fr: 'Saumon', zh: '鲑鱼', es: 'Salmón' },
+  // Titles the guide itself likes to use for two Vermeers, which the catalogue
+  // and Wikipedia write differently — without these their pictures never load.
+  // The catalogue's own spelling comes last of each pair: a translated name
+  // resolves back to it, not to the variant the guide made up.
+  '牛乳注ぎ': { en: 'The Milkmaid', fr: 'La Laitière', zh: '倒牛奶的女仆', es: 'La lechera' },
+  '牛乳を注ぐ女': { en: 'The Milkmaid', fr: 'La Laitière', zh: '倒牛奶的女仆', es: 'La lechera' },
+  'レースの少女': { en: 'The Lacemaker', fr: 'La Dentellière', zh: '花边女工', es: 'La encajera' },
+  'レースを編む女': { en: 'The Lacemaker', fr: 'La Dentellière', zh: '花边女工', es: 'La encajera' },
 };
 
 /** The name as the visitor's language writes it, or the original if unknown. */
