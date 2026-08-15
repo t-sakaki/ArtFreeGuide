@@ -122,6 +122,183 @@ export const PLAYLISTS: Playlist[] = [
       { title: 'アビニヨンの娘たち', artist: 'パブロ・ピカソ', cue: '調和は崩れ、視点は多角的に。近代美術の扉が開きます' },
     ],
   },
+  {
+    id: 'light-and-shadow',
+    title: '光と影のドラマ',
+    subtitle: 'バロックから近代へ、光の描き方をたどる',
+    emoji: '🌓',
+    items: [
+      { title: '夜警', artist: 'レンブラント・ファン・レイン', cue: '闇の中から人物が浮かび上がる、群像劇から始めます' },
+      { title: '真珠の耳飾りの少女', artist: 'ヨハネス・フェルメール', cue: '今度は静かな光が、少女の瞳と真珠に宿ります' },
+      { title: '我が子を食らうサトゥルヌス', artist: 'フランシスコ・デ・ゴヤ', cue: '光は失われ、闇そのものが主役になります' },
+      { title: '星月夜', artist: 'フィンセント・ファン・ゴッホ', cue: '夜空の光が、渦を巻いて動きはじめます' },
+      { title: '記憶の固執', artist: 'サルバドール・ダリ', cue: '最後は、光も時間も溶け出す夢の風景へ' },
+    ],
+    i18n: {
+      en: {
+        title: 'The drama of light and shadow',
+        subtitle: 'How painters handled light, from the Baroque to the modern age',
+        cues: [
+          'We start with figures emerging out of the darkness',
+          'Now a quieter light, on a girl’s eyes and her pearl',
+          'The light is gone; darkness itself takes the lead',
+          'The light of the night sky begins to swirl',
+          'We close with a dream where light and time melt',
+        ],
+      },
+      fr: {
+        title: 'Le drame de la lumière et de l’ombre',
+        subtitle: 'La lumière des peintres, du baroque à l’époque moderne',
+        cues: [
+          'Commençons par des personnages surgissant de l’obscurité',
+          'Une lumière plus calme, sur un regard et une perle',
+          'La lumière disparaît : l’obscurité devient le sujet',
+          'La lumière du ciel nocturne se met à tourbillonner',
+          'Terminons par un rêve où la lumière et le temps fondent',
+        ],
+      },
+      zh: {
+        title: '光与影的戏剧',
+        subtitle: '从巴洛克到近代，画家如何描绘光',
+        cues: [
+          '从黑暗中浮现的群像开始',
+          '这次是静谧的光，落在少女的眼眸与珍珠上',
+          '光消失了，黑暗本身成为主角',
+          '夜空的光开始旋转流动',
+          '最后走进光与时间一同融化的梦境',
+        ],
+      },
+      es: {
+        title: 'El drama de la luz y la sombra',
+        subtitle: 'Cómo pintaron la luz, del barroco a la edad moderna',
+        cues: [
+          'Empezamos con figuras que emergen de la oscuridad',
+          'Ahora una luz más serena, en unos ojos y una perla',
+          'La luz desaparece: la oscuridad se vuelve protagonista',
+          'La luz del cielo nocturno empieza a girar',
+          'Cerramos en un sueño donde la luz y el tiempo se derriten',
+        ],
+      },
+    },
+  },
+  {
+    id: 'passion-colors',
+    title: '情熱の色彩',
+    subtitle: '黄金と赤、そして静けさへ',
+    emoji: '🎨',
+    items: [
+      { title: 'ひまわり', artist: 'フィンセント・ファン・ゴッホ', cue: '黄色があふれ出す、情熱の始まりです' },
+      { title: '接吻', artist: 'グスタフ・クリムト', cue: '金箔の輝きが、永遠の愛を包みます' },
+      { title: 'ゲルニカ', artist: 'パブロ・ピカソ', cue: '色が消え、白と黒の叫びだけが残ります' },
+      { title: '叫び', artist: 'エドヴァルド・ムンク', cue: '渦巻く赤い空の下、不安が響きます' },
+      { title: '睡蓮', artist: 'クロード・モネ', cue: '最後は穏やかな色のなかで、心を静めましょう' },
+    ],
+    i18n: {
+      en: {
+        title: 'Colours of passion',
+        subtitle: 'Gold and red, and then quiet',
+        cues: [
+          'Passion begins where the yellow overflows',
+          'Gold leaf wraps itself around an eternal embrace',
+          'Colour disappears; only a black and white scream is left',
+          'Anxiety echoes under a swirling red sky',
+          'We end in calm colours, letting the mind settle',
+        ],
+      },
+      fr: {
+        title: 'Les couleurs de la passion',
+        subtitle: 'L’or et le rouge, puis le calme',
+        cues: [
+          'La passion commence là où le jaune déborde',
+          'La feuille d’or enveloppe une étreinte éternelle',
+          'La couleur disparaît : il ne reste qu’un cri en noir et blanc',
+          'L’angoisse résonne sous un ciel rouge tourbillonnant',
+          'Finissons dans des couleurs apaisées',
+        ],
+      },
+      zh: {
+        title: '热情的色彩',
+        subtitle: '金与红，然后归于宁静',
+        cues: [
+          '热情从满溢的黄色开始',
+          '金箔的光辉包裹着永恒的爱',
+          '色彩消失，只剩下黑白的呐喊',
+          '在旋转的红色天空下，不安回响',
+          '最后在沉静的色彩中平复心绪',
+        ],
+      },
+      es: {
+        title: 'Los colores de la pasión',
+        subtitle: 'Oro y rojo, y después la calma',
+        cues: [
+          'La pasión empieza donde el amarillo se desborda',
+          'El pan de oro envuelve un abrazo eterno',
+          'El color desaparece: solo queda un grito en blanco y negro',
+          'La angustia resuena bajo un cielo rojo en remolino',
+          'Terminamos en colores serenos, para calmar la mirada',
+        ],
+      },
+    },
+  },
+  {
+    id: 'renaissance-ideal',
+    title: 'ルネサンスの理想美',
+    subtitle: '調和と均衡、そしてその崩壊',
+    emoji: '🏛️',
+    items: [
+      { title: 'アテナイの学堂', artist: 'ラファエロ・サンティ', cue: '知性と調和が支配する空間から始めます' },
+      { title: 'ヴィーナスの誕生', artist: 'サンドロ・ボッティチェッリ', cue: '流れる曲線が描く、理想の女性像へ' },
+      { title: 'ダビデ像', artist: 'ミケランジェロ・ブオナローティ', cue: '絵画から彫刻へ、大理石に宿る理想の肉体' },
+      { title: 'モナ・リザ', artist: 'レオナルド・ダ・ヴィンチ', cue: '謎めいた微笑みが、見る者を引き込みます' },
+      { title: 'アビニヨンの娘たち', artist: 'パブロ・ピカソ', cue: 'そして調和は崩れ、近代美術の扉が開きます' },
+    ],
+    i18n: {
+      en: {
+        title: 'The Renaissance ideal',
+        subtitle: 'Harmony and balance — and how they broke',
+        cues: [
+          'We begin in a space ruled by reason and harmony',
+          'Flowing curves draw the ideal female figure',
+          'From painting to sculpture: the ideal body in marble',
+          'An enigmatic smile draws the viewer in',
+          'And then harmony breaks, opening the door to modern art',
+        ],
+      },
+      fr: {
+        title: 'L’idéal de la Renaissance',
+        subtitle: 'Harmonie et équilibre — puis leur rupture',
+        cues: [
+          'Commençons dans un espace régi par la raison et l’harmonie',
+          'Des courbes fluides dessinent la figure féminine idéale',
+          'De la peinture à la sculpture : le corps idéal dans le marbre',
+          'Un sourire énigmatique attire le regard',
+          'Puis l’harmonie se brise et l’art moderne commence',
+        ],
+      },
+      zh: {
+        title: '文艺复兴的理想之美',
+        subtitle: '和谐与均衡，以及它们的崩塌',
+        cues: [
+          '从理性与和谐主宰的空间开始',
+          '流动的曲线勾勒出理想的女性形象',
+          '从绘画走向雕塑：大理石中的理想肉体',
+          '神秘的微笑将观者深深吸引',
+          '接着和谐崩塌，近代美术的大门打开',
+        ],
+      },
+      es: {
+        title: 'El ideal del Renacimiento',
+        subtitle: 'Armonía y equilibrio, y su ruptura',
+        cues: [
+          'Empezamos en un espacio regido por la razón y la armonía',
+          'Curvas fluidas dibujan la figura femenina ideal',
+          'De la pintura a la escultura: el cuerpo ideal en mármol',
+          'Una sonrisa enigmática atrae la mirada',
+          'Y entonces la armonía se rompe y nace el arte moderno',
+        ],
+      },
+    },
+  },
 ];
 
 export function findPlaylist(id: string | null | undefined): Playlist | null {

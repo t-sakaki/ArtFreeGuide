@@ -30,6 +30,9 @@ export const NAMES: Record<string, Translations> = {
   '野々村仁清': { en: 'Nonomura Ninsei', fr: 'Nonomura Ninsei', zh: '野野村仁清', es: 'Nonomura Ninsei' },
   'フランシスコ・デ・ゴヤ': { en: 'Francisco de Goya', fr: 'Francisco de Goya', zh: '弗朗西斯科·戈雅', es: 'Francisco de Goya' },
   'サンドロ・ボッティチェッリ': { en: 'Sandro Botticelli', fr: 'Sandro Botticelli', zh: '桑德罗·波提切利', es: 'Sandro Botticelli' },
+  'レンブラント・ファン・レイン': { en: 'Rembrandt van Rijn', fr: 'Rembrandt van Rijn', zh: '伦勃朗·凡·莱因', es: 'Rembrandt van Rijn' },
+  'ラファエロ・サンティ': { en: 'Raphael', fr: 'Raphaël', zh: '拉斐尔', es: 'Rafael Sanzio' },
+  'グスタフ・クリムト': { en: 'Gustav Klimt', fr: 'Gustav Klimt', zh: '古斯塔夫·克里姆特', es: 'Gustav Klimt' },
 
   // Artworks
   'ひまわり': { en: 'Sunflowers', fr: 'Les Tournesols', zh: '向日葵', es: 'Los girasoles' },
@@ -52,6 +55,9 @@ export const NAMES: Record<string, Translations> = {
   '凱風快晴': { en: 'Fine Wind, Clear Morning', fr: 'Vent frais par matin clair', zh: '凯风快晴', es: 'Viento fresco, mañana clara' },
   '東海道五十三次': { en: 'The Fifty-three Stations of the Tōkaidō', fr: 'Les Cinquante-trois Stations du Tōkaidō', zh: '东海道五十三次', es: 'Las cincuenta y tres estaciones del Tōkaidō' },
   '色絵藤花文茶壺': { en: 'Tea Jar with Wisteria Design', fr: 'Jarre à thé au décor de glycines', zh: '色绘藤花纹茶壶', es: 'Tarro de té con decoración de glicinas' },
+  '夜警': { en: 'The Night Watch', fr: 'La Ronde de nuit', zh: '夜巡', es: 'La ronda de noche' },
+  'アテナイの学堂': { en: 'The School of Athens', fr: 'L’École d’Athènes', zh: '雅典学院', es: 'La escuela de Atenas' },
+  '接吻': { en: 'The Kiss', fr: 'Le Baiser', zh: '吻', es: 'El beso' },
   '我が子を食らうサトゥルヌス': { en: 'Saturn Devouring His Son', fr: 'Saturne dévorant un de ses fils', zh: '农神吞噬其子', es: 'Saturno devorando a su hijo' },
   'ヴィーナスの誕生': { en: 'The Birth of Venus', fr: 'La Naissance de Vénus', zh: '维纳斯的诞生', es: 'El nacimiento de Venus' },
   'ダビデ像': { en: 'David', fr: 'Le David', zh: '大卫像', es: 'David' },
