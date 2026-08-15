@@ -12,9 +12,17 @@
 		"binding": "ASSETS"
 	},
 	"vars": {
-		// Set to "gemini" to use the Gemini API instead; that needs a GEMINI_API_KEY secret
-		// (`wrangler secret put GEMINI_API_KEY`, or .dev.vars / .env.local locally).
-		"LLM_PROVIDER": "workers-ai",
+		// "nvidia" (NVIDIA NIM, needs an NVIDIA_API_KEY secret), "workers-ai"
+		// (Cloudflare, no key but only 10,000 free neurons/day) or "gemini"
+		// (needs GEMINI_API_KEY). Set secrets with `wrangler secret put <NAME>`,
+		// or .dev.vars / .env.local locally.
+		"LLM_PROVIDER": "nvidia",
+		// Per-task overrides: LLM_<GUIDE|ASK|SUGGEST>_PROVIDER / _MODEL.
+		// Models are a comma separated priority list (fallback chain).
+		// Guides tolerate ~45s; answers and search chips must feel instant.
+		"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
+		"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
+		"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,meta/llama-3.1-8b-instruct",
 		// Where generated guides are archived: "d1" | "supabase" | "memory"
 		"GUIDE_STORE": "d1"
 	},

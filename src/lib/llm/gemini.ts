@@ -1,8 +1,9 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { LLMProvider, Message } from './provider';
+import { parseModelList } from './models';
 
 // Fallback models in case the primary one is overloaded (503) or unavailable
-const FALLBACK_MODELS = [
+const DEFAULT_MODELS = [
   'gemini-2.5-flash',
   'gemini-2.0-flash',
   'gemini-3.5-flash',
@@ -11,8 +12,12 @@ const FALLBACK_MODELS = [
 
 export class GeminiProvider implements LLMProvider {
   private genAI: GoogleGenerativeAI;
+  private readonly models: string[];
 
-  constructor() {
+  constructor(models: string[] = []) {
+    const configured = models.length ? models : parseModelList(process.env.GEMINI_MODEL);
+    this.models = configured.length ? configured : DEFAULT_MODELS;
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY environment variable is not set. Please check your .env.local configuration.');
@@ -28,7 +33,7 @@ export class GeminiProvider implements LLMProvider {
 
     let lastError: any = null;
 
-    for (const modelName of FALLBACK_MODELS) {
+    for (const modelName of this.models) {
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           const model = this.genAI.getGenerativeModel({
