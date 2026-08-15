@@ -65,6 +65,15 @@ export const NAMES: Record<string, Translations> = {
   'ジャガイモを食べる人々': { en: 'The Potato Eaters', fr: 'Les Mangeurs de pommes de terre', zh: '吃土豆的人', es: 'Los comedores de patatas' },
   '夜のカフェテラス': { en: 'Café Terrace at Night', fr: 'Terrasse du café le soir', zh: '夜间露天咖啡座', es: 'Terraza de café por la noche' },
   'カラスのいる麦畑': { en: 'Wheatfield with Crows', fr: 'Champ de blé aux corbeaux', zh: '麦田群鸦', es: 'Trigal con cuervos' },
+  // Catalogue rows whose Japanese title is not the one the sources use, which
+  // is the whole reason their picture could not be found.
+  'アトリエの中の画家': { en: 'The Art of Painting', fr: 'L’Art de la peinture', zh: '绘画艺术', es: 'El arte de la pintura' },
+  '薔薇': { en: 'Roses', fr: 'Roses', zh: '玫瑰', es: 'Rosas' },
+  '水浴': { en: 'The Large Bathers', fr: 'Les Grandes Baigneuses', zh: '大浴女', es: 'Las grandes bañistas' },
+  'リンゴとオレンジ': { en: 'Apples and Oranges', fr: 'Pommes et oranges', zh: '苹果与橙子', es: 'Manzanas y naranjas' },
+  '病める少女': { en: 'The Sick Child', fr: 'L’Enfant malade', zh: '病中的孩子', es: 'La niña enferma' },
+  '黒い正方形': { en: 'Black Square', fr: 'Carré noir', zh: '黑方块', es: 'Cuadrado negro' },
+  '鮭': { en: 'Salmon', fr: 'Saumon', zh: '鲑鱼', es: 'Salmón' },
 };
 
 /** The name as the visitor's language writes it, or the original if unknown. */
