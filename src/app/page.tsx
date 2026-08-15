@@ -331,10 +331,15 @@ export default function ArtFreeGuide() {
   // Visitor questions and feedback on the guide
   const [questionInput, setQuestionInput] = useState('');
   const [askLoading, setAskLoading] = useState(false);
-  const [feedbackKind, setFeedbackKind] = useState<'good' | 'bad' | null>(null);
   const [showReportForm, setShowReportForm] = useState(false);
   const [reportComment, setReportComment] = useState('');
   const [regenerating, setRegenerating] = useState(false);
+  // Live-stream style hearts: each tap spawns one that drifts up and is then dropped.
+  const [hearts, setHearts] = useState<{ id: number; drift: number; scale: number }[]>([]);
+  const [heartCount, setHeartCount] = useState(0);
+  const heartIdRef = useRef(0);
+  const heartBurstRef = useRef(0);
+  const heartSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Ambient Sound States
   const [ambientName, setAmbientName] = useState<string | null>(null);
@@ -414,9 +419,9 @@ export default function ArtFreeGuide() {
   useEffect(() => {
     listenedSecondsRef.current = 0;
     listenStartRef.current = null;
-    setFeedbackKind(null);
     setShowReportForm(false);
     setReportComment('');
+    setHeartCount(0);
   }, [artwork, artist]);
 
   useEffect(() => {
@@ -1765,6 +1770,31 @@ export default function ArtFreeGuide() {
     }
   };
 
+  /**
+   * Tapping is meant to feel free, so each tap animates immediately and the
+   * taps are batched into a single request once the burst stops.
+   */
+  const sendHeart = () => {
+    const id = heartIdRef.current++;
+    setHearts(prev => [
+      ...prev,
+      { id, drift: Math.round((Math.random() - 0.5) * 60), scale: 0.9 + Math.random() * 0.6 }
+    ]);
+    setTimeout(() => setHearts(prev => prev.filter(h => h.id !== id)), 1700);
+
+    setHeartCount(prev => prev + 1);
+    heartBurstRef.current += 1;
+
+    if (heartSendTimerRef.current) {
+      clearTimeout(heartSendTimerRef.current);
+    }
+    heartSendTimerRef.current = setTimeout(() => {
+      const count = heartBurstRef.current;
+      heartBurstRef.current = 0;
+      sendFeedback('good', `hearts:${count}`);
+    }, 1200);
+  };
+
   const handleRegenerateGuide = async () => {
     if (regenerating) return;
     setRegenerating(true);
@@ -2555,38 +2585,42 @@ export default function ArtFreeGuide() {
               </div>
             )}
 
-            {/* Guide feedback: one tap, plus a report that can rebuild the guide */}
-            <div className="flex items-center justify-center gap-2 select-none font-sans text-[11px]">
-              <span className="text-slate-500">この解説はいかがでしたか？</span>
+            {/* Guide feedback: tap the heart as often as you like, report separately */}
+            <div className="flex items-center justify-center gap-3 select-none font-sans text-[11px]">
+              <div className="relative">
+                {/* Hearts rise out of the button without affecting the layout. */}
+                <div className="pointer-events-none absolute bottom-full left-1/2 h-40 w-24 -translate-x-1/2" aria-hidden="true">
+                  {hearts.map(heart => (
+                    <span
+                      key={heart.id}
+                      className="animate-heart-float absolute bottom-0 left-1/2 -translate-x-1/2 text-xl"
+                      style={
+                        {
+                          '--heart-drift': `${heart.drift}px`,
+                          '--heart-scale': heart.scale
+                        } as React.CSSProperties
+                      }
+                    >
+                      ❤️
+                    </span>
+                  ))}
+                </div>
+                <button
+                  onClick={sendHeart}
+                  aria-label="この解説にハートを送る"
+                  className="w-11 h-11 rounded-full bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-lg transition-colors active:scale-90"
+                >
+                  {heartCount > 0 ? '❤️' : '🤍'}
+                </button>
+              </div>
+              {heartCount > 0 && (
+                <span className="text-rose-300 font-bold tabular-nums">{heartCount}</span>
+              )}
               <button
-                onClick={() => {
-                  setFeedbackKind('good');
-                  setShowReportForm(false);
-                  sendFeedback('good');
-                  triggerToast('ありがとうございます！');
-                }}
-                aria-label="この解説が良かったと伝える"
-                className={`w-8 h-8 rounded-lg border transition-colors active:scale-95 ${
-                  feedbackKind === 'good'
-                    ? 'bg-teal-500/20 border-teal-500/40 text-teal-300'
-                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-teal-300'
-                }`}
+                onClick={() => setShowReportForm(prev => !prev)}
+                className="text-slate-500 hover:text-slate-300 underline underline-offset-2"
               >
-                👍
-              </button>
-              <button
-                onClick={() => {
-                  setFeedbackKind('bad');
-                  setShowReportForm(true);
-                }}
-                aria-label="気になる点を報告する"
-                className={`w-8 h-8 rounded-lg border transition-colors active:scale-95 ${
-                  feedbackKind === 'bad'
-                    ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
-                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-rose-300'
-                }`}
-              >
-                👎
+                気になる点を報告
               </button>
             </div>
 
