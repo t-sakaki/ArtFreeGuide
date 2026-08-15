@@ -28,7 +28,16 @@ description: How to run and end-to-end test the ArtFreeGuide Next.js app locally
   for a paid-plan token. Everything that does not need the LLM (images, hotspots, Supabase
   recommendations) still works while the quota is exhausted.
 - `GUIDE_STORE=d1`; the D1 cache read/write failures under `next dev` are caught and generation continues.
-- Production deployment: https://art-free-guide.taira-sakakibara.workers.dev
+- Production deployment: https://art-free-guide.taira-sakakibara.workers.dev (useful as a "before"
+  build when comparing a fix branch against `main`).
+- **Cached-guide testing without the LLM quota:** `next dev` has no D1 binding, so every guide is
+  regenerated (40-90s, and it fails outright once the neuron quota is gone). Use the OpenNext preview
+  with remote bindings instead — it returns D1-cached guides in ~1s and `/api/ask` in ~15s:
+  ```bash
+  export PATH="$HOME/.nvm/versions/node/v22.12.0/bin:$PATH"   # wrangler needs Node >= 22
+  npx opennextjs-cloudflare preview -- --port 8788 --remote
+  ```
+  Then open `http://localhost:8788/?fresh=1`.
 - Smoke-test the API without the UI (note the payload shape is `messages`, not `artwork`):
   ```bash
   curl -s -X POST localhost:3000/api/chat -H 'Content-Type: application/json' \
@@ -63,6 +72,27 @@ Prefer either:
   If speech init is broken, only `[AUDIO] Button Clicked` appears (handlePlayPause early-returns
   on `!speechSupported`). This is the discriminating signal.
 - `browser_console` only returns logs since the previous call — read it immediately after the action.
+- **Best way to prove speech actually happens: wrap `speechSynthesis.speak` before opening an artwork**
+  and render a visible overlay so the count shows up in the recording. Ignore empty utterances — the
+  app speaks `new SpeechSynthesisUtterance('')` as an audio-unlock dummy, so only count
+  `u.text.trim().length > 0`:
+  ```js
+  (() => { const orig = speechSynthesis.speak.bind(speechSynthesis); window.__spoken = [];
+    const box = document.createElement('div'); box.style.cssText='position:fixed;z-index:99999;top:8px;left:8px;max-width:380px;background:#000e;color:#0f8;font:13px monospace;padding:10px;border:2px solid #0f8;white-space:pre-wrap';
+    const render=()=>{box.textContent='[計測] speak(本文) 呼出: '+window.__spoken.length+' 件\n'+window.__spoken.map((t,i)=>`${i+1}. [${t.length}字] ${t.slice(0,24)}`).join('\n');};
+    speechSynthesis.speak = u => { if ((u.text||'').trim()) { window.__spoken.push(u.text); render(); } return orig(u); };
+    window.__resetSpoken=()=>{window.__spoken=[];render();};
+    window.__dupCount=()=>window.__spoken.filter((t,i)=>i>0&&t===window.__spoken[i-1]).length;
+    render(); document.body.appendChild(box); })();
+  ```
+  The hook survives SPA navigation (clicking cards); a full page load removes it — re-inject.
+- Because every utterance fails instantly, a whole guide is "spoken" in <1s, so you cannot click
+  ⏩/⏪ *while* playing. Instead drive the index from the stopped state (⏩ n times, then press play)
+  and assert which sentence the speak() log starts at.
+- Autoplay regression to watch for: the bottom button can show the pause icon (looks like playing)
+  while zero non-empty utterances were ever queued — the speech-trigger effect in `src/app/page.tsx`
+  must depend on `speakableSegments`, since autoplay sets `isPlaying` one render before the segments
+  exist. Never judge playback by the icon alone.
 
 ## Useful UI landmarks
 - There is one 「さがす」 hub (`renderBrowseHub`) shared by the landing page and the drawer opened from
