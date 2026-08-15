@@ -1,17 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { Session, SupabaseClient } from '@supabase/supabase-js';
-import { createClient } from '@/lib/supabase';
+import type { Session } from '@supabase/supabase-js';
+import { browserClient } from '@/lib/supabaseBrowser';
 import type { CorrectionRow } from '@/lib/readingCorrections';
-
-// Created on first use: the anon client reads env at call time, and the pages
-// embedding this panel are prerendered where those variables are not set.
-let client: SupabaseClient | null = null;
-function supabaseClient(): SupabaseClient {
-  if (!client) client = createClient();
-  return client;
-}
 
 /**
  * Moderation queue for reported misreadings. Sign in with a magic link; the
@@ -28,7 +20,7 @@ export default function ReadingApprovals() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
-    const supabase = supabaseClient();
+    const supabase = browserClient();
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -68,7 +60,7 @@ export default function ReadingApprovals() {
     setError('');
     setNotice('');
 
-    const { error: authError } = await supabaseClient().auth.signInWithOtp({
+    const { error: authError } = await browserClient().auth.signInWithOtp({
       email,
       options: { emailRedirectTo: window.location.href }
     });
@@ -143,7 +135,7 @@ export default function ReadingApprovals() {
                 再読み込み
               </button>
               <button
-                onClick={() => supabaseClient().auth.signOut()}
+                onClick={() => browserClient().auth.signOut()}
                 className="hover:underline"
               >
                 ログアウト
