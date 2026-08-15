@@ -13,6 +13,9 @@ const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富�
 4. **画家の想いや背景**: 画家がこの作品を制作した時の状況、心情、歴史的背景、芸術的意図など。
 5. **鑑賞のヒント**: 最後に「この部分を少し近くで見てみてください…」や「この絵の前に立ち、少し目を閉じて感じてみてください…」といった、深い鑑賞体験へ誘う言葉で締めくくります。
 
+【分量】
+short・standard・deep はいずれも指定の文字数を守ってください。数行で終わる解説は音声ガイドとして成立しません。
+
 【トーン＆マナー】
 - 丁寧語（「です」「ます」調）で、穏やかでありながら美術への情熱が伝わる語り口にします。
 - 音声ガイドとして耳で聞いて心地よい、リズム感のある平易で美しい日本語を使用してください。
@@ -26,8 +29,8 @@ const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富�
 【出力スキーマ】
 {
   "short": "（作品名、作者、制作年などの基本情報を交えた、100〜150文字程度の極めて簡潔な概要解説テキスト。マークダウン記号は含めないでください）",
-  "standard": "（作品の魅力や構図、色彩、画家の想いを美しく解説した、中程度の長さの標準的な解説テキスト。見出し（## 見出し）で区切ってください。太字・斜体は使わないでください）",
-  "deep": "（技法、歴史的背景、知られざるエピソードや詳細な裏話を交えた、長文の詳細な解説テキスト。見出し（## 見出し）で区切ってください。太字・斜体は使わないでください）",
+  "standard": "（構成案の 1〜5 をすべて含む、600〜900文字程度の標準的な解説テキスト。作品の魅力や構図、色彩、画家の想いを、耳で聴いて2〜3分になる分量で語ってください。見出し（## 見出し）で2〜4節に区切ってください。太字・斜体は使わないでください）",
+  "deep": "（技法、歴史的背景、知られざるエピソードや詳細な裏話を交えた、1000〜1500文字程度の詳細な解説テキスト。standard の繰り返しではなく、そこで触れなかった話題を掘り下げてください。見出し（## 見出し）で3節以上に区切ってください。太字・斜体は使わないでください）",
   "searchQuery": "（Wikimedia Commonsでこの作品の画像を検索するための英語のキーワード。例：'Vincent van Gogh Sunflowers'、'Mona Lisa'）",
   "music": {
     "tonic": "（主音。C, C#, D, D#, E, F, F#, G, G#, A, A#, B のいずれか）",
@@ -64,6 +67,38 @@ function curatorPrompt(locale: Locale): string {
 ${CURATOR_SYSTEM_PROMPT}
 【言語】${instruction} 作品名・作者名もその言語で一般的に使われる表記にしてください。
 searchQuery だけは従来どおり英語のキーワードにしてください。`;
+}
+
+/** The model wraps its JSON in prose or fences often enough to strip it here. */
+function extractJsonObject(text: string): string {
+  const trimmed = text.trim();
+  const first = trimmed.indexOf('{');
+  const last = trimmed.lastIndexOf('}');
+  return first !== -1 && last > first ? trimmed.substring(first, last + 1) : trimmed;
+}
+
+/** A guide the client can parse and actually read out: all three tiers present. */
+function isUsableGuide(payload: string): boolean {
+  return parseGuide(payload) !== null;
+}
+
+/**
+ * Worth archiving as an audio guide. Models sometimes answer with the schema's
+ * own outline ("## 見出し\n..."), which parses fine but reads as a few lines.
+ */
+function isFullLengthGuide(payload: string): boolean {
+  const parsed = parseGuide(payload);
+  return !!parsed && parsed.standard.length >= 300 && parsed.deep.length >= 400;
+}
+
+function parseGuide(payload: string): { standard: string; deep: string } | null {
+  try {
+    const parsed = JSON.parse(payload);
+    if (!parsed?.short || !parsed?.standard || !parsed?.deep) return null;
+    return { standard: String(parsed.standard), deep: String(parsed.deep) };
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(req: Request) {
@@ -109,17 +144,20 @@ export async function POST(req: Request) {
     });
 
     const provider = getLLMProvider('guide');
-    const text = await provider.generateResponse(modifiedMessages, { json: true });
 
-    // Bulletproof JSON block extractor
-    let cleanText = text.trim();
-    const firstBrace = cleanText.indexOf('{');
-    const lastBrace = cleanText.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    // The model truncates its JSON, or answers with an outline, often enough
+    // that a guide would otherwise fail outright; a second ask usually lands.
+    let cleanText = '';
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const text = await provider.generateResponse(modifiedMessages, { json: true });
+      cleanText = extractJsonObject(text);
+      if (isFullLengthGuide(cleanText)) break;
+      console.warn(`Guide unusable or too short on attempt ${attempt + 1} for "${title}"`);
     }
 
-    if (store) {
+    // A broken payload is still returned — the client salvages what it can —
+    // but archiving it would serve the same broken guide to everyone after.
+    if (store && isUsableGuide(cleanText)) {
       try {
         await store.put(title, artistName, cleanText, locale);
       } catch (error) {
