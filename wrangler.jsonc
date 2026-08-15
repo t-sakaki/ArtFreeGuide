@@ -23,6 +23,10 @@
 		"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
 		"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
 		"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,meta/llama-3.1-8b-instruct",
+		// Embedding space: "nvidia" (embedding_nv column, nvidia/llama-nemotron-embed-1b-v2)
+		// or "workers-ai" (embedding column, @cf/baai/bge-m3). Switching back is a
+		// one-word change: both column sets are kept populated side by side.
+		"EMBEDDING_PROVIDER": "nvidia",
 		// Where generated guides are archived: "d1" | "supabase" | "memory"
 		"GUIDE_STORE": "d1"
 	},
