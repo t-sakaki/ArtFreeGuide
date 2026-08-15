@@ -340,6 +340,9 @@ export default function ArtFreeGuide() {
   const heartIdRef = useRef(0);
   const heartBurstRef = useRef(0);
   const heartSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Once the narration is over the question chips take turns wobbling to invite a tap.
+  const [narrationDone, setNarrationDone] = useState(false);
+  const [nudgedChip, setNudgedChip] = useState(-1);
 
   // Ambient Sound States
   const [ambientName, setAmbientName] = useState<string | null>(null);
@@ -422,6 +425,7 @@ export default function ArtFreeGuide() {
     setShowReportForm(false);
     setReportComment('');
     setHeartCount(0);
+    setNarrationDone(false);
   }, [artwork, artist]);
 
   useEffect(() => {
@@ -759,9 +763,36 @@ export default function ArtFreeGuide() {
       setActiveSegmentIndex(-1);
       stopAmbientSound();
       recordListening(true);
+      setNarrationDone(true);
       scheduleTourAdvance();
     }
   }, [activeSegmentIndex, isPlaying]);
+
+  const questionChips = useMemo(() => suggestedQuestions(artwork, artist), [artwork, artist]);
+
+  // After the guide falls silent, nudge each chip in turn a couple of rounds and stop.
+  useEffect(() => {
+    // A tour is already moving on to the next artwork, so stay out of the way.
+    if (!narrationDone || isPlaying || askLoading || nextUpCue || questionChips.length === 0) {
+      setNudgedChip(-1);
+      return;
+    }
+    let step = 0;
+    const total = questionChips.length * 2;
+    const timer = setInterval(() => {
+      if (step >= total) {
+        setNudgedChip(-1);
+        clearInterval(timer);
+        return;
+      }
+      setNudgedChip(step % questionChips.length);
+      step += 1;
+    }, 900);
+    return () => {
+      clearInterval(timer);
+      setNudgedChip(-1);
+    };
+  }, [narrationDone, isPlaying, askLoading, nextUpCue, questionChips]);
 
   // Curated viewing points for the artwork on screen, if we have measured any.
   const hotspotSet = useMemo(() => findHotspotSet(artwork, artist), [artwork, artist]);
@@ -2511,12 +2542,16 @@ export default function ArtFreeGuide() {
             {/* Ask the curator: suggested questions, free text and voice */}
             <div className="space-y-2.5 select-none font-sans">
               <div className="flex flex-wrap gap-2">
-                {suggestedQuestions(artwork, artist).map(question => (
+                {questionChips.map((question, index) => (
                   <button
                     key={question}
                     onClick={() => askQuestion(question)}
                     disabled={askLoading}
-                    className="px-3 py-1.5 bg-slate-900/50 border border-slate-800 hover:border-teal-500/40 hover:text-teal-300 text-slate-300 rounded-full text-[11px] transition-colors active:scale-95 disabled:opacity-40"
+                    className={`px-3 py-1.5 bg-slate-900/50 border rounded-full text-[11px] transition-colors active:scale-95 disabled:opacity-40 ${
+                      nudgedChip === index
+                        ? 'animate-chip-nudge border-teal-500/50 text-teal-300'
+                        : 'border-slate-800 hover:border-teal-500/40 hover:text-teal-300 text-slate-300'
+                    }`}
                   >
                     {question}
                   </button>
@@ -2827,17 +2862,22 @@ export default function ArtFreeGuide() {
             </button>
             
             {/* Central Play/Pause button (Enlarged circle) */}
+            <div className="relative shrink-0 mx-2">
+              {/* Halo lives outside the button so it can grow past its edge. */}
+              {isPlaying && (
+                <span
+                  className="animate-play-pulse pointer-events-none absolute inset-0 rounded-full bg-teal-400/40"
+                  aria-hidden="true"
+                />
+              )}
             <button
               onClick={handlePlayPause}
-              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl active:scale-95 relative overflow-hidden shrink-0 mx-2 ${
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl active:scale-95 relative overflow-hidden ${
                 isPlaying
                   ? 'bg-teal-500 text-slate-950 hover:bg-teal-400 hover:shadow-teal-400/20'
                   : 'bg-slate-900 text-teal-400 border border-teal-500/30 hover:border-teal-500 hover:shadow-teal-500/10'
               }`}
             >
-              {isPlaying && (
-                <span className="absolute inset-0 rounded-full animate-ping bg-teal-500/20 opacity-75"></span>
-              )}
               {isPlaying ? (
                 <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                   <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
@@ -2848,6 +2888,7 @@ export default function ArtFreeGuide() {
                 </svg>
               )}
             </button>
+            </div>
 
             {/* Skip 1 segment forward */}
             <button
