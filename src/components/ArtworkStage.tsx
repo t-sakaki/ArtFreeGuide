@@ -28,9 +28,10 @@ interface ArtworkStageProps {
  * placed once the displayed rectangle is known — hence the measured frame
  * rather than positioning marks against the container.
  *
- * The marks stay deliberately quiet: a small translucent dot that breathes
- * rather than a ringed pin, since anything with a hard white edge reads as part
- * of the painting. Only the focused point is drawn as a ring.
+ * The marks stay deliberately quiet: an almost transparent dot at rest, since
+ * anything with a hard edge reads as part of the painting. Motion is reserved
+ * for the point currently being talked about, which is the only one that
+ * blinks; hover and focus lift a resting dot just enough to aim at.
  */
 export default function ArtworkStage({
   imageUrl,
@@ -127,9 +128,9 @@ export default function ArtworkStage({
                 }}
               >
                 {isActive ? (
-                  <span className="absolute inset-1 rounded-full border border-teal-200/80 bg-teal-300/10 shadow-[0_0_10px_rgba(45,212,191,0.35)]" />
+                  <span className="absolute inset-1 rounded-full border border-teal-200/70 animate-hotspot-blink" />
                 ) : (
-                  <span className="absolute inset-2.5 rounded-full bg-teal-200/70 transition-all animate-hotspot-breathe group-hover:animate-none group-hover:inset-1 group-hover:bg-transparent group-hover:border group-hover:border-teal-200/80 group-focus-visible:inset-1 group-focus-visible:bg-transparent group-focus-visible:border group-focus-visible:border-teal-200/80" />
+                  <span className="absolute inset-2.5 rounded-full bg-teal-100/25 transition-all group-hover:inset-1 group-hover:bg-transparent group-hover:border group-hover:border-teal-200/60 group-focus-visible:inset-1 group-focus-visible:bg-transparent group-focus-visible:border group-focus-visible:border-teal-200/60" />
                 )}
               </button>
             );
