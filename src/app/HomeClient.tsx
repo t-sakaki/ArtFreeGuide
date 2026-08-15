@@ -31,6 +31,7 @@ import {
 import { canonicalName, localizeName } from '@/lib/names';
 import ReadingApprovals from '@/components/ReadingApprovals';
 import GuideCorrections from '@/components/GuideCorrections';
+import AppMenu, { type MenuItem } from '@/components/AppMenu';
 import AccountPanel from '@/components/AccountPanel';
 import PhotoIdentify from '@/components/PhotoIdentify';
 import ReactMarkdown from 'react-markdown';
@@ -313,7 +314,6 @@ class AudioController {
 
 export default function HomeClient() {
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
-  const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   // The reading approval queue is a moderator tool, so it stays out of the way
   // until someone opens the app with ?admin=1 once on this device.
   const [adminMode, setAdminMode] = useState(false);
@@ -617,13 +617,9 @@ export default function HomeClient() {
    * it again rather than showing the previous one under new buttons.
    */
   const changeLocale = (next: Locale) => {
-    if (next === locale) {
-      setShowLanguageMenu(false);
-      return;
-    }
+    if (next === locale) return;
     localeRef.current = next;
     setLocale(next);
-    setShowLanguageMenu(false);
     localStorage.setItem('artfreeguide-locale', next);
     // Until the visitor picks a speed themselves, follow the language's default.
     if (!localStorage.getItem('art_free_guide_playback_speed')) {
@@ -2170,77 +2166,61 @@ export default function HomeClient() {
     );
   };
 
-  /** Optional sign-in, so history and taste can follow the visitor. */
-  const renderAccountButton = () => (
-    <button
-      onClick={() => setShowAccount(true)}
-      aria-label="アカウント"
-      title="アカウント"
-      className="text-slate-300 hover:text-teal-400 transition-colors text-sm bg-slate-900/60 border border-slate-800 hover:border-teal-500/40 h-8 px-2.5 rounded-lg flex items-center gap-1 active:scale-95 font-sans"
-    >
-      <span>👤</span>
-    </button>
+  /**
+   * Everything that is not the artwork, behind one corner button.
+   * @param inGuide adds the actions that only exist once a guide is on screen.
+   */
+  const renderMenu = (inGuide: boolean) => {
+    const items: MenuItem[] = [];
+
+    if (inGuide) {
+      items.push({ id: 'search', icon: '🔍', label: t.header.search, onSelect: () => setShowInputDrawer(true) });
+      items.push({ id: 'share', icon: '📤', label: t.header.share, onSelect: handleShare });
+    }
+
+    items.push({
+      id: 'history',
+      icon: '📜',
+      label: t.header.history,
+      badge: history.length,
+      onSelect: () => setShowHistorySidebar(true)
+    });
+    items.push({ id: 'account', icon: '👤', label: t.header.account, onSelect: () => setShowAccount(true) });
+
+    if (adminMode) {
+      items.push({
+        id: 'admin',
+        icon: '🗣️',
+        label: t.header.admin,
+        onSelect: () => setShowReadingApprovals(true)
+      });
+    }
+
+    return <AppMenu label={t.header.menu} items={items} footer={renderLanguageRow()} />;
+  };
+
+  /** The five languages as one row of flags, at the foot of the menu. */
+  const renderLanguageRow = () => (
+    <div role="group" aria-label={t.header.language} className="flex items-center justify-between gap-1">
+      {LOCALE_MENU.map(entry => (
+        <button
+          key={entry.locale}
+          onClick={() => changeLocale(entry.locale)}
+          aria-label={entry.label}
+          aria-current={entry.locale === locale}
+          title={entry.label}
+          className={`flex-1 py-1.5 rounded-lg text-sm transition-colors ${
+            entry.locale === locale
+              ? 'bg-teal-500/15 border border-teal-500/40'
+              : 'border border-transparent hover:bg-slate-900 opacity-60 hover:opacity-100'
+          }`}
+        >
+          {entry.flag}
+        </button>
+      ))}
+    </div>
   );
 
-  /** Opens the reading approval queue in place, without leaving the guide. */
-  const renderAdminButton = () =>
-    adminMode ? (
-      <button
-        onClick={() => setShowReadingApprovals(true)}
-        aria-label="読み替え辞書の承認"
-        title="読み替え辞書の承認"
-        className="text-slate-300 hover:text-teal-400 transition-colors text-sm bg-slate-900/60 border border-slate-800 hover:border-teal-500/40 h-8 px-2.5 rounded-lg flex items-center gap-1 active:scale-95 font-sans"
-      >
-        <span>🗣️</span>
-        <span className="text-[10px] font-bold uppercase">読み</span>
-      </button>
-    ) : null;
-
-  /** Four languages behind one flag, on the landing page and in the guide header. */
-  const renderLanguageSwitch = () => {
-    const current = LOCALE_MENU.find(entry => entry.locale === locale) ?? LOCALE_MENU[0];
-
-    return (
-      <div className="relative">
-        <button
-          onClick={() => setShowLanguageMenu(prev => !prev)}
-          aria-label={t.header.language}
-          title={t.header.language}
-          aria-haspopup="listbox"
-          aria-expanded={showLanguageMenu}
-          className="text-slate-300 hover:text-teal-400 transition-colors text-sm bg-slate-900/60 border border-slate-800 hover:border-teal-500/40 h-8 px-2.5 rounded-lg flex items-center gap-1 active:scale-95 font-sans"
-        >
-          <span>{current.flag}</span>
-          <span className="text-[10px] font-bold uppercase">{current.locale}</span>
-        </button>
-
-        {showLanguageMenu && (
-          <ul
-            role="listbox"
-            className="absolute right-0 top-10 z-50 bg-slate-950 border border-slate-850 rounded-2xl p-1.5 shadow-2xl min-w-[132px] animate-fade-in font-sans"
-          >
-            {LOCALE_MENU.map(entry => (
-              <li key={entry.locale}>
-                <button
-                  role="option"
-                  aria-selected={entry.locale === locale}
-                  onClick={() => changeLocale(entry.locale)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-left transition-colors ${
-                    entry.locale === locale
-                      ? 'bg-teal-500 text-slate-950'
-                      : 'text-slate-300 hover:bg-slate-900'
-                  }`}
-                >
-                  <span>{entry.flag}</span>
-                  <span>{entry.label}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    );
-  };
 
   /**
    * The one place to pick what to listen to next. The landing page and the
@@ -2529,43 +2509,11 @@ export default function HomeClient() {
         <div className="fixed top-0 left-0 right-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-900 px-4 py-3 flex flex-col items-center select-none shadow-md">
           {/* Top Row Navigation */}
           <div className="flex items-center justify-between w-full max-w-md mb-2">
-            <button
-              onClick={() => setShowInputDrawer(true)}
-              className="text-slate-400 hover:text-teal-400 transition-colors text-xs font-sans font-semibold flex items-center gap-1 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg"
-            >
-              <span>🔍</span> <span>{t.header.search}</span>
-            </button>
-            
             <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-500 bg-clip-text text-transparent font-sans">
               ArtFreeGuide
             </h1>
 
-            <div className="flex items-center gap-2">
-              {renderAccountButton()}
-              {renderAdminButton()}
-              {renderLanguageSwitch()}
-
-              <button
-                onClick={handleShare}
-                aria-label={t.header.share}
-                title={t.header.share}
-                className="text-slate-400 hover:text-teal-400 transition-colors text-sm bg-slate-900/60 border border-slate-800 hover:border-teal-500/40 w-8 h-8 rounded-lg flex items-center justify-center active:scale-95"
-              >
-                📤
-              </button>
-
-              <button
-                onClick={() => setShowHistorySidebar(true)}
-                className="text-slate-400 hover:text-teal-400 transition-colors text-xs font-sans font-semibold flex items-center gap-1 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg relative"
-              >
-                <span>📜</span> <span>{t.header.history}</span>
-                {history.length > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-teal-500 text-slate-950 font-bold font-mono rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
-                    {history.length}
-                  </span>
-                )}
-              </button>
-            </div>
+            {renderMenu(true)}
           </div>
 
           {/* Large Artwork Thumbnail (fixed) */}
@@ -2709,11 +2657,7 @@ export default function HomeClient() {
         {/* Empty state: Hero landing / initial search card */}
         {!responseShort && !loading && (
           <div className="w-full space-y-8 animate-fade-in flex flex-col items-center">
-            <div className="w-full flex justify-end gap-2">
-              {renderAccountButton()}
-              {renderAdminButton()}
-              {renderLanguageSwitch()}
-            </div>
+            <div className="w-full flex justify-end">{renderMenu(false)}</div>
 
             {/* Header Section */}
             <div className="text-center mb-4 space-y-3">

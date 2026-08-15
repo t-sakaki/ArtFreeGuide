@@ -99,6 +99,10 @@ export interface UIStrings {
     share: string;
     history: string;
     language: string;
+    /** The one corner button everything else now lives behind. */
+    menu: string;
+    account: string;
+    admin: string;
   };
   image: {
     loading: string;
@@ -228,6 +232,9 @@ const ja: UIStrings = {
     share: 'この解説を共有',
     history: '履歴',
     language: '言語を切り替える',
+    menu: 'メニュー',
+    account: 'アカウント',
+    admin: '承認キュー',
   },
   image: {
     loading: '画像を読み込み中...',
@@ -361,6 +368,9 @@ const en: UIStrings = {
     share: 'Share this guide',
     history: 'History',
     language: 'Change language',
+    menu: 'Menu',
+    account: 'Account',
+    admin: 'Approval queue',
   },
   image: {
     loading: 'Loading the image...',
@@ -494,6 +504,9 @@ const fr: UIStrings = {
     share: 'Partager ce guide',
     history: 'Historique',
     language: 'Changer de langue',
+    menu: 'Menu',
+    account: 'Compte',
+    admin: 'File de validation',
   },
   image: {
     loading: 'Chargement de l’image...',
@@ -628,6 +641,9 @@ const zh: UIStrings = {
     share: '分享这段导览',
     history: '记录',
     language: '切换语言',
+    menu: '菜单',
+    account: '账户',
+    admin: '审核队列',
   },
   image: {
     loading: '正在加载图片...',
@@ -762,6 +778,9 @@ const es: UIStrings = {
     share: 'Compartir esta guía',
     history: 'Historial',
     language: 'Cambiar de idioma',
+    menu: 'Menú',
+    account: 'Cuenta',
+    admin: 'Cola de aprobación',
   },
   image: {
     loading: 'Cargando la imagen...',
