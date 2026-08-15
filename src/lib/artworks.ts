@@ -33,6 +33,37 @@ export async function findArtwork(
 }
 
 /**
+ * Free-text lookup over the catalogue, used to suggest artworks that actually
+ * exist before falling back to whatever an LLM invents.
+ */
+export async function searchArtworks(
+  supabase: SupabaseClient,
+  query: string,
+  limit: number,
+  artist?: string
+): Promise<{ title: string; artist: string }[]> {
+  // PostgREST splits `or` filters on commas, and `%` is an ilike wildcard.
+  const term = query.trim().replace(/[%,]/g, ' ');
+  let request = supabase
+    .from('artworks')
+    .select('title, artist')
+    .or(`title.ilike.%${term}%,artist.ilike.%${term}%`)
+    .limit(limit);
+
+  if (artist && artist.trim()) {
+    request = request.ilike('artist', `%${artist.trim().replace(/[%,]/g, ' ')}%`);
+  }
+
+  const { data, error } = await request;
+  if (error) {
+    console.error('Artwork catalogue search failed:', error.message);
+    return [];
+  }
+
+  return (data ?? []) as { title: string; artist: string }[];
+}
+
+/**
  * Returns the catalogue row for an artwork, adding it (with a freshly generated
  * embedding) when the visitor asked for something not yet in the catalogue.
  */
