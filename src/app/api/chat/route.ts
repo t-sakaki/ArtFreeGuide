@@ -49,7 +49,7 @@ const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富�
 
 export async function POST(req: Request) {
   try {
-    const { messages, title, artist } = await req.json();
+    const { messages, title, artist, refresh } = await req.json();
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: 'Messages are required' }, { status: 400 });
@@ -59,7 +59,8 @@ export async function POST(req: Request) {
     const store = typeof title === 'string' && title.trim() ? getGuideStore() : null;
     const artistName = typeof artist === 'string' ? artist : '';
 
-    if (store) {
+    // A guide reported as wrong is regenerated and overwrites the archived one.
+    if (store && refresh !== true) {
       try {
         const cached = await store.get(title, artistName);
         if (cached) {
