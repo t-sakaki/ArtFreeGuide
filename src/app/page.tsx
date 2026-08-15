@@ -1961,7 +1961,114 @@ export default function ArtFreeGuide() {
     );
   };
 
-  const renderInputForm = () => {
+  /**
+   * The one place to pick what to listen to next. The landing page and the
+   * "さがす" drawer render the same hub, so a tour is always one tap away.
+   * @param onPick runs after a choice is made, so the drawer can close itself.
+   */
+  const renderBrowseHub = (onPick?: () => void) => {
+    const pick = (run: () => void) => () => {
+      run();
+      onPick?.();
+    };
+
+    return (
+      <div className="w-full space-y-8 select-none">
+        {activePlaylist && (
+          <div className="flex items-center justify-between gap-2 bg-slate-900/60 border border-teal-900/60 rounded-2xl px-4 py-2.5 font-sans">
+            <span className="text-xs font-bold text-teal-400 truncate">
+              ツアー中: {activePlaylist.emoji} {activePlaylist.title}
+              <span className="text-slate-500 font-mono ml-2">
+                {playlistIndex + 1}/{activePlaylist.items.length}
+              </span>
+            </span>
+            <button
+              onClick={pick(exitTour)}
+              className="shrink-0 text-[11px] text-slate-400 hover:text-rose-300 underline underline-offset-2"
+            >
+              終了する
+            </button>
+          </div>
+        )}
+
+        {/* Tours come first: the lowest-friction, most memorable way in */}
+        <div className="w-full space-y-3">
+          <p className="text-xs font-bold text-slate-500 tracking-wider uppercase font-sans text-center">
+            テーマで巡るツアー
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {PLAYLISTS.map(tour => (
+              <button
+                key={tour.id}
+                onClick={pick(() => startTour(tour))}
+                className="bg-slate-900/40 border border-slate-800 hover:border-teal-500/40 hover:bg-slate-900/70 rounded-2xl px-4 py-3 text-left active:scale-95 transition-all shadow-md font-sans group"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl shrink-0">{tour.emoji}</span>
+                  <div className="min-w-0">
+                    <span className="block text-sm font-bold text-slate-100 truncate group-hover:text-teal-400 transition-colors">
+                      {tour.title}
+                    </span>
+                    <span className="block text-[11px] text-slate-500 truncate">{tour.subtitle}</span>
+                    <span className="block text-[10px] text-teal-500/80 mt-1">全{tour.items.length}作品・自動で次へ</span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* One-tap start: no typing needed to hear a guide */}
+        <div className="w-full space-y-3">
+          <p className="text-xs font-bold text-slate-500 tracking-wider uppercase font-sans text-center">
+            1作品だけ聴く
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {QUICK_START_ARTWORKS.map(item => (
+              <button
+                key={item.title}
+                onClick={pick(() => {
+                  exitTour();
+                  setArtwork(item.title);
+                  setArtist(item.artist);
+                  generateGuide(item.title, item.artist);
+                })}
+                className="bg-slate-900/40 border border-slate-800 hover:border-teal-500/40 hover:bg-slate-900/70 rounded-2xl px-3 py-3 text-left active:scale-95 transition-all shadow-md font-sans group"
+              >
+                <span className="text-xl block mb-1">{item.emoji}</span>
+                <span className="block text-xs font-bold text-slate-200 truncate group-hover:text-teal-400 transition-colors">
+                  {item.title}
+                </span>
+                <span className="block text-[10px] text-slate-500 truncate">{item.artist}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="w-full space-y-3">
+          <p className="text-xs font-bold text-slate-500 tracking-wider uppercase font-sans text-center">
+            名前で探す
+          </p>
+          <div className="w-full bg-slate-900/40 border border-slate-800/80 rounded-3xl p-5 md:p-6 shadow-xl relative">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 via-emerald-500 to-blue-500 opacity-60 rounded-t-3xl"></div>
+            {renderInputForm(onPick)}
+          </div>
+        </div>
+
+        <div className="flex justify-center">
+          <button
+            onClick={pick(() => setShowHistorySidebar(true))}
+            className="bg-slate-900/60 border border-slate-800 hover:bg-slate-900 hover:border-teal-500/40 text-slate-350 hover:text-teal-400 px-4 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-md font-sans"
+          >
+            <span>📜</span>
+            <span>閲覧履歴を見る ({history.length})</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderInputForm = (onSubmitted?: () => void) => {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
@@ -2059,7 +2166,10 @@ export default function ArtFreeGuide() {
         </div>
 
         <button
-          onClick={() => generateGuide()}
+          onClick={() => {
+            generateGuide();
+            onSubmitted?.();
+          }}
           disabled={loading || !artwork.trim()}
           className="w-full bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-400 hover:to-blue-500 text-slate-950 font-bold py-3.5 px-6 rounded-xl shadow-lg shadow-teal-500/10 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 group text-sm font-sans"
         >
@@ -2101,7 +2211,7 @@ export default function ArtFreeGuide() {
               onClick={() => setShowInputDrawer(true)}
               className="text-slate-400 hover:text-teal-400 transition-colors text-xs font-sans font-semibold flex items-center gap-1 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg"
             >
-              <span>🎨</span> <span>作品変更</span>
+              <span>🔍</span> <span>さがす</span>
             </button>
             
             <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-500 bg-clip-text text-transparent font-sans">
@@ -2278,75 +2388,9 @@ export default function ArtFreeGuide() {
               <p className="text-slate-400 text-base md:text-lg font-medium max-w-xl mx-auto font-sans leading-relaxed">
                 AIキュレーターが贈る、あなたのための特別な音声ガイド。美術作品をもっと深く、もっと身近に。
               </p>
-              <div className="flex justify-center pt-2">
-                <button
-                  onClick={() => setShowHistorySidebar(true)}
-                  className="bg-slate-900/60 border border-slate-800 hover:bg-slate-900 hover:border-teal-500/40 text-slate-350 hover:text-teal-400 px-4 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-md font-sans"
-                >
-                  <span>📜</span>
-                  <span>閲覧履歴を見る ({history.length})</span>
-                </button>
-              </div>
             </div>
 
-            {/* Inline search block for initial page load */}
-            <div className="w-full bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 md:p-8 shadow-2xl relative">
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 via-emerald-500 to-blue-500 opacity-60"></div>
-              {renderInputForm()}
-            </div>
-
-            {/* One-tap start: no typing needed to hear a guide */}
-            <div className="w-full space-y-3 select-none">
-              <p className="text-xs font-bold text-slate-500 tracking-wider uppercase font-sans text-center">
-                まずはこの作品から
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {QUICK_START_ARTWORKS.map(item => (
-                  <button
-                    key={item.title}
-                    onClick={() => {
-                      setArtwork(item.title);
-                      setArtist(item.artist);
-                      generateGuide(item.title, item.artist);
-                    }}
-                    className="bg-slate-900/40 border border-slate-800 hover:border-teal-500/40 hover:bg-slate-900/70 rounded-2xl px-3 py-3 text-left active:scale-95 transition-all shadow-md font-sans group"
-                  >
-                    <span className="text-xl block mb-1">{item.emoji}</span>
-                    <span className="block text-xs font-bold text-slate-200 truncate group-hover:text-teal-400 transition-colors">
-                      {item.title}
-                    </span>
-                    <span className="block text-[10px] text-slate-500 truncate">{item.artist}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Curated tours: several artworks in a row, told as one story */}
-            <div className="w-full space-y-3 select-none">
-              <p className="text-xs font-bold text-slate-500 tracking-wider uppercase font-sans text-center">
-                テーマで巡るツアー
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {PLAYLISTS.map(tour => (
-                  <button
-                    key={tour.id}
-                    onClick={() => startTour(tour)}
-                    className="bg-slate-900/40 border border-slate-800 hover:border-teal-500/40 hover:bg-slate-900/70 rounded-2xl px-4 py-3 text-left active:scale-95 transition-all shadow-md font-sans group"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl shrink-0">{tour.emoji}</span>
-                      <div className="min-w-0">
-                        <span className="block text-sm font-bold text-slate-100 truncate group-hover:text-teal-400 transition-colors">
-                          {tour.title}
-                        </span>
-                        <span className="block text-[11px] text-slate-500 truncate">{tour.subtitle}</span>
-                        <span className="block text-[10px] text-teal-500/80 mt-1">全{tour.items.length}作品・自動で次へ</span>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
+            {renderBrowseHub()}
           </div>
         )}
 
@@ -2933,7 +2977,7 @@ export default function ArtFreeGuide() {
 
             <div className="flex items-center justify-between mb-6 font-sans">
               <h2 className="text-xl font-bold text-slate-200 flex items-center gap-2">
-                <span className="text-teal-400">✦</span> 音声ガイドの作品指定
+                <span className="text-teal-400">✦</span> つぎに聴くものをさがす
               </h2>
               <button
                 onClick={() => setShowInputDrawer(false)}
@@ -2943,7 +2987,7 @@ export default function ArtFreeGuide() {
               </button>
             </div>
 
-            {renderInputForm()}
+            {renderBrowseHub(() => setShowInputDrawer(false))}
           </div>
         </div>
       )}
