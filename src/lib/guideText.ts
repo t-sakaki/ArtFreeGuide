@@ -27,6 +27,21 @@ function protectRenderableEmphasis(text: string, kept: string[]): string {
   }, text);
 }
 
+// A model asked for prose sometimes answers with the guide JSON template, or
+// thinks out loud in English ("Let's count characters..."). Such text must
+// never reach the screen or the archive, so both the client and the archive
+// endpoint refuse it.
+const SCAFFOLDING_PATTERNS = [
+  /"(short|standard|deep|searchQuery|hotspots|music)"\s*:/,
+  /^\s*[{[]/,
+  /\b(Let's|Let us|We need to|Now we need|I need to|Let me)\b/i,
+  /<\/?think>/i
+];
+
+export function looksLikeModelScaffolding(text: string): boolean {
+  return SCAFFOLDING_PATTERNS.some(pattern => pattern.test(text));
+}
+
 /**
  * Makes a stored guide safe to display. Models leak JSON escapes (a literal
  * `\n`, sometimes double-escaped) and markdown the renderer cannot honour, and

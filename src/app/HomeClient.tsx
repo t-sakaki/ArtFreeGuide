@@ -16,7 +16,7 @@ import {
   specFromLegacyMood,
 } from '@/lib/ambient';
 import { PLAYLISTS, Playlist, localizePlaylist } from '@/lib/playlists';
-import { sanitizeGuideText } from '@/lib/guideText';
+import { looksLikeModelScaffolding, sanitizeGuideText } from '@/lib/guideText';
 import { suggestedQuestions } from '@/lib/questions';
 import { loadDynamicReadings, toSpokenText } from '@/lib/pronunciation';
 import {
@@ -1905,40 +1905,37 @@ export default function HomeClient({
     AudioController.clearQueue();
 
     try {
-      const res = await fetch('/api/chat', {
+      // The curator endpoint answers in prose. /api/chat is the guide generator:
+      // asked for an episode it replies with the guide JSON template and its own
+      // reasoning, which used to be appended verbatim and archived.
+      const res = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          locale,
-          messages: [
-            {
-              role: 'user',
-              content: `作品名: ${shownArtwork}について、ガイドブックにも載っていないような知られざる面白い裏話や、美術史における深掘りエピソードを音声ガイド用に語ってください。すでに述べた基本情報は繰り返さず、エピソードを2〜3つ、合わせて300〜500文字程度で語ってください。`
-            }
-          ]
+          title: shownArtwork,
+          artist: shownArtist,
+          mode: 'deep_dive',
+          question: `この作品について、ガイドブックにも載っていないような知られざる裏話や、美術史における深掘りエピソードを聞かせてください。`,
+          context: responseStandard || responseShort,
+          locale
         })
       });
       const data = await res.json();
-      
-      if (data.error) {
+
+      if (!res.ok || data.error) {
         console.warn('Deep dive rate limit/error:', data.error);
+        triggerToast(t.ask.failed);
         return;
       }
 
-      let rawText = data.text;
-      try {
-        let jsonString = data.text.trim();
-        const firstBrace = jsonString.indexOf('{');
-        const lastBrace = jsonString.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-          jsonString = jsonString.substring(firstBrace, lastBrace + 1);
-        }
-        const parsed = JSON.parse(jsonString);
-        rawText = parsed.explanation || data.text;
-      } catch (e) {}
+      const episode = sanitizeGuideText(data.answer || '');
+      if (!episode || looksLikeModelScaffolding(episode)) {
+        triggerToast(t.ask.failed);
+        return;
+      }
 
       const visualHeader = `\n> 🔍 **${t.guide.deepDiveHeader}**\n`;
-      const addition = `${visualHeader}\n\n${sanitizeGuideText(rawText)}`;
+      const addition = `${visualHeader}\n\n${episode}`;
       const updatedDeep = `${responseDeep}\n\n${addition}`;
 
       setResponseDeep(updatedDeep);
@@ -2026,7 +2023,7 @@ export default function HomeClient({
       }
 
       const answer = sanitizeGuideText(data.answer || '');
-      if (!answer) {
+      if (!answer || looksLikeModelScaffolding(answer)) {
         triggerToast(t.ask.failed);
         return;
       }
