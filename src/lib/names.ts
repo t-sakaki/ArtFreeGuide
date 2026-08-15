@@ -9,7 +9,7 @@ import { Locale } from './i18n';
  */
 type Translations = Record<Exclude<Locale, 'ja'>, string>;
 
-const NAMES: Record<string, Translations> = {
+export const NAMES: Record<string, Translations> = {
   // Artists
   'フィンセント・ファン・ゴッホ': { en: 'Vincent van Gogh', fr: 'Vincent van Gogh', zh: '文森特·梵高', es: 'Vincent van Gogh' },
   'レオナルド・ダ・ヴィンチ': { en: 'Leonardo da Vinci', fr: 'Léonard de Vinci', zh: '列奥纳多·达·芬奇', es: 'Leonardo da Vinci' },

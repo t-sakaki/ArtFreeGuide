@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { ensureAnonymousUser } from '@/lib/user';
 import ArtworkStage from '@/components/ArtworkStage';
+import ArtworkPlaque from '@/components/ArtworkPlaque';
 import { findHotspotSet, hotspotImageUrl, localizeHotspotSet, matchHotspot } from '@/lib/hotspots';
 import { useRecommendations, useTasteProfile } from '@/hooks/useRecommendations';
 import ForYouShelf from '@/components/ForYouShelf';
@@ -1310,28 +1311,33 @@ export default function ArtFreeGuide() {
     setFocusedArtistIndex(-1);
   };
 
-  /** `pinnedUrl` is used for artworks with curated hotspots, whose coordinates only fit one specific reproduction. */
-  const fetchImage = async (query: string, cacheKey?: string, pinnedUrl?: string | null) => {
+  /**
+   * `pinnedUrl` is used for artworks with curated hotspots, whose coordinates
+   * only fit one specific reproduction. Everything else goes through
+   * `/api/artwork-image`, which checks the catalogue, then Wikidata, then
+   * Commons, and refuses candidates that do not match the artist.
+   */
+  const fetchImage = async (
+    query: string,
+    cacheKey?: string,
+    pinnedUrl?: string | null,
+    lookup?: { title: string; artist: string }
+  ) => {
     setImageLoading(true);
     setImageError(false);
     setImageUrl(null);
     setSearchQuery(query);
 
     try {
-      const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrnamespace=6&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json&origin=*`;
-      const data = pinnedUrl ? null : await (await fetch(url)).json();
-
       let thumbUrl: string | null = pinnedUrl ?? null;
-      if (!thumbUrl && data?.query?.pages) {
-        const pages = data.query.pages;
-        const pageKeys = Object.keys(pages);
-        if (pageKeys.length > 0) {
-          const page = pages[pageKeys[0]];
-          if (page.imageinfo && page.imageinfo.length > 0) {
-            const imgInfo = page.imageinfo[0];
-            thumbUrl = imgInfo.thumburl || imgInfo.url;
-          }
-        }
+      if (!thumbUrl && lookup) {
+        const res = await fetch('/api/artwork-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: lookup.title, artist: lookup.artist, searchQuery: query })
+        });
+        const data = await res.json();
+        thumbUrl = typeof data?.url === 'string' ? data.url : null;
       }
 
       if (thumbUrl) {
@@ -1394,23 +1400,16 @@ export default function ArtFreeGuide() {
 
   const fetchRecommendationImages = async (recs: Recommendation[], targetArtwork: string, targetArtist: string) => {
     recs.forEach(async (rec, index) => {
-      const query = `${rec.title} ${rec.artist}`.trim();
       try {
-        const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrnamespace=6&prop=imageinfo&iiprop=url&iiurlwidth=300&format=json&origin=*`;
-        const res = await fetch(url);
+        const res = await fetch('/api/artwork-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // The model may have invented the recommendation, so it does not earn
+          // a catalogue row of its own — only an update if it already has one.
+          body: JSON.stringify({ title: rec.title, artist: rec.artist, create: false, width: 300 })
+        });
         const data = await res.json();
-
-        let imgUrl: string | null = null;
-        if (data.query && data.query.pages) {
-          const pages = data.query.pages;
-          const pageKeys = Object.keys(pages);
-          if (pageKeys.length > 0) {
-            const page = pages[pageKeys[0]];
-            if (page.imageinfo && page.imageinfo.length > 0) {
-              imgUrl = page.imageinfo[0].thumburl || page.imageinfo[0].url;
-            }
-          }
-        }
+        const imgUrl: string | null = typeof data?.url === 'string' ? data.url : null;
 
         setRecommendations(prev => {
           const copy = [...prev];
@@ -1717,7 +1716,8 @@ export default function ArtFreeGuide() {
         fetchImage(
           queryForImage,
           cacheKey,
-          hotspotFile ? hotspotImageUrl(hotspotFile) : null
+          hotspotFile ? hotspotImageUrl(hotspotFile) : null,
+          { title: targetArtwork, artist: targetArtist }
         );
         startAmbientSound(targetArtwork, resolvedSpec);
 
@@ -2498,10 +2498,13 @@ export default function ArtFreeGuide() {
               </div>
             )}
             {imageError && !displayImageUrl && !imageLoading && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 gap-1 p-2 text-center select-none bg-slate-900/20">
-                <span className="text-2xl">🖼️</span>
-                <p className="text-[11px] font-semibold text-slate-500 font-sans">{t.image.failed}</p>
-              </div>
+              <ArtworkPlaque
+                title={shownArtwork}
+                artist={shownArtist}
+                note={t.image.noImage}
+                searchLabel={t.image.searchCommons}
+                searchQuery={searchQuery || `${artwork} ${artist}`.trim()}
+              />
             )}
           </div>
         </div>
