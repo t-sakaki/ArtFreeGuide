@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { ensureAnonymousUser } from '@/lib/user';
 import ArtworkStage from '@/components/ArtworkStage';
 import { findHotspotSet, hotspotImageUrl, matchHotspot } from '@/lib/hotspots';
-import { useRecommendations } from '@/hooks/useRecommendations';
+import { useRecommendations, useTasteProfile } from '@/hooks/useRecommendations';
+import ForYouShelf from '@/components/ForYouShelf';
 import {
   AmbientPlayer,
   MusicSpec,
@@ -385,7 +386,15 @@ export default function ArtFreeGuide() {
 
   // Anonymous user + catalogue-based recommendations
   const [userId, setUserId] = useState<string | null>(null);
-  const { similarArtworks } = useRecommendations(artwork, artist, userId);
+  const { similarArtworks, basis: recommendationBasis, reload: reloadRecommendations } =
+    useRecommendations(artwork, artist, userId);
+  // Taste-only shelf for the browse hub, where no artwork is in context yet.
+  const {
+    similarArtworks: tasteRecommendations,
+    basis: tasteBasis,
+    reload: reloadTasteRecommendations
+  } = useRecommendations('', '', userId);
+  const { profile: tasteProfile, reload: reloadTasteProfile } = useTasteProfile(userId);
 
   // Refs for tracking properties in async speech callbacks
   const isPlayingRef = useRef(false);
@@ -477,7 +486,14 @@ export default function ArtFreeGuide() {
         listenedSeconds,
         completed
       })
-    }).catch(error => console.error('Failed to save viewing history:', error));
+    })
+      .then(() => {
+        // The listen just moved the taste vector; show the new ranking.
+        reloadTasteProfile();
+        reloadRecommendations();
+        reloadTasteRecommendations();
+      })
+      .catch(error => console.error('Failed to save viewing history:', error));
   };
 
   // Detect browser speech capabilities and prepare recognition instance
@@ -1980,6 +1996,11 @@ export default function ArtFreeGuide() {
       onPick?.();
     };
 
+    const pick2 = (run: (title: string, artist: string) => void) => (title: string, artist: string) => {
+      run(title, artist);
+      onPick?.();
+    };
+
     return (
       <div className="w-full space-y-8 select-none">
         {activePlaylist && (
@@ -1997,6 +2018,16 @@ export default function ArtFreeGuide() {
               終了する
             </button>
           </div>
+        )}
+
+        {tasteRecommendations.length > 0 && (
+          <ForYouShelf
+            items={tasteRecommendations}
+            basis={tasteBasis}
+            viewCount={tasteProfile?.viewCount ?? 0}
+            favoriteTags={tasteProfile?.favoriteTags ?? []}
+            onPick={pick2((title, artistName) => generateGuide(title, artistName))}
+          />
         )}
 
         {/* Tours come first: the lowest-friction, most memorable way in */}
@@ -2777,38 +2808,15 @@ export default function ArtFreeGuide() {
             )}
 
             {/* Catalogue similarity recommendations (Supabase pgvector) */}
-            {similarArtworks.length > 0 && (
-              <div className="pt-4 space-y-4 select-none">
-                <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase font-sans">
-                  🎨 似ている作品
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {similarArtworks.map(item => (
-                    <div
-                      key={item.id}
-                      onClick={() => generateGuide(item.title, item.artist)}
-                      className="bg-slate-900/30 border border-slate-900 hover:border-teal-500/40 hover:bg-slate-900/50 rounded-2xl p-3 cursor-pointer transition-all duration-300 group shadow-md font-sans"
-                    >
-                      <div className="flex items-baseline justify-between gap-2">
-                        <h4 className="font-semibold text-slate-200 text-xs truncate group-hover:text-teal-400 transition-colors">
-                          {item.title}
-                        </h4>
-                        <span className="text-[10px] text-teal-500/80 font-mono shrink-0">
-                          {Math.round(item.similarity * 100)}%
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-500 truncate">
-                        {item.artist}
-                        {item.year ? ` ・ ${item.year}` : ''}
-                      </p>
-                      {item.description && (
-                        <p className="text-[10px] text-slate-400 line-clamp-2 mt-1">{item.description}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="pt-4">
+              <ForYouShelf
+                items={similarArtworks}
+                basis={recommendationBasis}
+                viewCount={tasteProfile?.viewCount ?? 0}
+                favoriteTags={tasteProfile?.favoriteTags ?? []}
+                onPick={(title, artistName) => generateGuide(title, artistName)}
+              />
+            </div>
 
           </div>
         )}
