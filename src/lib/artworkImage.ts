@@ -199,30 +199,107 @@ async function commonsSearch(search: string): Promise<string[]> {
     .filter(title => /\.(jpe?g|png|tiff?|webp)$/i.test(title));
 }
 
-/**
- * A file only counts when its name says so. Commons ranks by full text, so the
- * first hit for "Ramon Casas Madeleine" is a Moulin de la Galette poster.
- */
-function bestCommonsMatch(
-  files: string[],
-  titleEn: string | null,
-  artistEn: string | null,
-  /** Inside the artist's category every file is his, so only the title decides. */
-  requireTitle = false
-): string | null {
-  const titleWords = titleEn ? nameTokens(titleEn) : [];
-  const artistWords = artistEn ? nameTokens(artistEn) : [];
+const GENERIC_WORDS = new Set([
+  'painting',
+  'paintings',
+  'picture',
+  'artwork',
+  'oil',
+  'canvas',
+  'the',
+  'and',
+  'with',
+  'from',
+  'for'
+]);
 
-  let best: { file: string; score: number } | null = null;
+/** Commons also holds photographs of the artist and machine-made pastiches. */
+const NOT_AN_ARTWORK = /\b(sd|stable diffusion|ai[- ]generated|midjourney|photo(graph)? of|exhibition|museum visitors?)\b/i;
+
+/**
+ * A file only counts when its name carries the title. Naming the artist is not
+ * enough: a search for Magritte's works returns photographs of Magritte, and a
+ * search for Gauguin's Tahitian women returns his self-portrait.
+ */
+function rankCommonsMatches(files: string[], titleEn: string | null, artistEn: string | null): string[] {
+  const artistWords = artistEn ? nameTokens(artistEn) : [];
+  // "Magritte" inside the title would let a portrait of him pass as his work,
+  // and "painting" matches half of Commons.
+  const titleWords = (titleEn ? nameTokens(titleEn) : []).filter(
+    word => !artistWords.includes(word) && !GENERIC_WORDS.has(word)
+  );
+  if (titleWords.length === 0) return [];
+
+  const scored: { file: string; score: number }[] = [];
   for (const file of files) {
+    if (NOT_AN_ARTWORK.test(file)) continue;
     const haystack = file.toLowerCase();
     const titleHits = titleWords.filter(word => haystack.includes(word)).length;
-    if (requireTitle && titleHits === 0) continue;
-    let score = titleHits;
-    if (artistWords.some(word => haystack.includes(word))) score += 2;
-    if (score >= 2 && (!best || score > best.score)) best = { file, score };
+    if (titleHits === 0) continue;
+    scored.push({
+      file,
+      score: titleHits + (artistWords.some(word => haystack.includes(word)) ? 2 : 0)
+    });
   }
-  return best?.file ?? null;
+  return scored.sort((a, b) => b.score - a.score).map(entry => entry.file);
+}
+
+/** Categories that say "this file reproduces a painting". */
+const ARTWORK_CATEGORY = /\b(paintings?|artworks?|drawings?|prints?|etchings?|watercolou?rs?|pd-art)\b/i;
+/**
+ * Categories that say the file only depicts the work: a photograph of the
+ * billboard quoting Magritte, a figurine of Dalí's clocks, a Wikidata query
+ * screenshot, a collage of three Monets.
+ */
+const DEPICTION_CATEGORY =
+  /\b(photographs?|photos|sculptures?|statues?|figurines?|screenshots?|collages?|montages?|signs?|billboards?|posters?|replicas?|models?|toys?|murals?|graffiti|diagrams?|charts?|stamps?|coins?|banknotes?|memorials?|exhibitions?)\b/i;
+
+async function commonsCategories(files: string[]): Promise<Record<string, string[]>> {
+  const url =
+    'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&prop=categories' +
+    `&cllimit=500&titles=${encodeURIComponent(files.join('|'))}`;
+  const data = await fetchJson(url);
+  const pages = (
+    data?.query as
+      | { pages?: Record<string, { title?: string; categories?: { title?: string }[] }> }
+      | undefined
+  )?.pages;
+  const result: Record<string, string[]> = {};
+  for (const page of Object.values(pages ?? {})) {
+    if (!page.title) continue;
+    result[page.title] = (page.categories ?? [])
+      .map(category => category.title ?? '')
+      .filter(Boolean);
+  }
+  return result;
+}
+
+/**
+ * The file name alone cannot tell a painting from a photograph of a road sign
+ * bearing the same title, so the shortlist is checked against the file's
+ * Commons categories: a reproduction is filed under paintings, a depiction is
+ * filed under photographs, sculptures or screenshots.
+ */
+async function firstReproduction(files: string[]): Promise<string | null> {
+  if (files.length === 0) return null;
+  const categories = await commonsCategories(files.slice(0, 5));
+  for (const file of files.slice(0, 5)) {
+    const names = categories[file];
+    if (!names || names.length === 0) continue;
+    const text = names.join(' | ');
+    if (DEPICTION_CATEGORY.test(text)) continue;
+    if (!ARTWORK_CATEGORY.test(text)) continue;
+    return file;
+  }
+  return null;
+}
+
+async function bestCommonsMatch(
+  files: string[],
+  titleEn: string | null,
+  artistEn: string | null
+): Promise<string | null> {
+  return firstReproduction(rankCommonsMatches(files, titleEn, artistEn));
 }
 
 export interface ResolveInput {
@@ -249,6 +326,11 @@ export async function resolveArtworkImage(input: ResolveInput): Promise<Resolved
   const titleEn = await latinName(title);
   const artistEn = await latinName(artist);
 
+  const suggested = input.searchQuery?.trim();
+  // The guide's own English keywords stand in for titles the dictionary and
+  // the Japanese Wikipedia don't know.
+  const searchTitle = titleEn ?? (hasLatinLetters(suggested ?? '') ? suggested ?? null : null);
+
   const searched = [title, titleEn].filter((value): value is string => Boolean(value));
   const fromItems = await fromWikidata(Array.from(new Set(searched)), artist, width);
   if (fromItems) return fromItems;
@@ -256,22 +338,18 @@ export async function resolveArtworkImage(input: ResolveInput): Promise<Resolved
   // The artist's own category is the smallest pond with the right fish in it.
   if (artistEn) {
     const scoped = await commonsSearch(
-      `incategory:"Paintings by ${artistEn}" ${titleEn ?? ''}`.trim()
+      `incategory:"Paintings by ${artistEn}" ${searchTitle ?? ''}`.trim()
     );
-    const match = titleEn
-      ? bestCommonsMatch(scoped, titleEn, artistEn, true)
-      : // Nothing to match the title against; one painting in the category is
-        // still a painting by the right artist.
-        (scoped.length === 1 ? scoped[0] : null);
+    // Without an English title there is nothing to match against, and any file
+    // from the category is a different work by the same artist.
+    const match = await bestCommonsMatch(scoped, searchTitle, artistEn);
     if (match) return { url: fileUrl(match, width), source: 'commons-category' };
   }
 
-  const query = [titleEn, artistEn].filter(Boolean).join(' ').trim();
-  const suggested = input.searchQuery?.trim();
-  const freeText = hasLatinLetters(suggested ?? '') ? `${suggested} ${artistEn ?? ''}`.trim() : query;
+  const freeText = [searchTitle, artistEn].filter(Boolean).join(' ').trim();
   if (!freeText) return null;
 
   const files = await commonsSearch(freeText);
-  const best = bestCommonsMatch(files, titleEn ?? suggested ?? null, artistEn);
+  const best = await bestCommonsMatch(files, searchTitle, artistEn);
   return best ? { url: fileUrl(best, width), source: 'commons-search' } : null;
 }
