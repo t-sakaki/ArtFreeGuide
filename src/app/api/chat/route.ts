@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getGuideStore } from '@/lib/guideStore';
+import { DEFAULT_LOCALE, Locale, OUTPUT_LANGUAGE_INSTRUCTION, isLocale } from '@/lib/i18n';
 import { getLLMProvider, Message } from '@/lib/llm';
 
 const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富な音声ガイド・キュレーターです。
@@ -47,9 +48,27 @@ const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富�
 }
 `;
 
+/**
+ * The schema instructions stay in Japanese — they are the same for everyone —
+ * while the language of the guide itself is stated separately, twice, because a
+ * single line at the top of a long prompt is easy for a model to drop.
+ */
+function curatorPrompt(locale: Locale): string {
+  if (locale === 'ja') return CURATOR_SYSTEM_PROMPT;
+
+  const instruction = OUTPUT_LANGUAGE_INSTRUCTION[locale];
+  return `${instruction}
+
+${CURATOR_SYSTEM_PROMPT}
+【言語】${instruction} 作品名・作者名もその言語で一般的に使われる表記にしてください。
+searchQuery だけは従来どおり英語のキーワードにしてください。`;
+}
+
 export async function POST(req: Request) {
   try {
-    const { messages, title, artist, refresh } = await req.json();
+    const { messages, title, artist, refresh, locale: rawLocale } = await req.json();
+    const locale: Locale =
+      typeof rawLocale === 'string' && isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: 'Messages are required' }, { status: 400 });
@@ -62,7 +81,7 @@ export async function POST(req: Request) {
     // A guide reported as wrong is regenerated and overwrites the archived one.
     if (store && refresh !== true) {
       try {
-        const cached = await store.get(title, artistName);
+        const cached = await store.get(title, artistName, locale);
         if (cached) {
           return NextResponse.json({ text: cached.payload, cached: true, store: store.name });
         }
@@ -78,7 +97,7 @@ export async function POST(req: Request) {
       if (isFirstUserMessage && msg.role === 'user') {
         return {
           role: 'user',
-          content: `${CURATOR_SYSTEM_PROMPT}\n\n対象の美術作品情報：\n${msg.content}`
+          content: `${curatorPrompt(locale)}\n\n対象の美術作品情報：\n${msg.content}`
         };
       }
       return {
@@ -100,7 +119,7 @@ export async function POST(req: Request) {
 
     if (store) {
       try {
-        await store.put(title, artistName, cleanText);
+        await store.put(title, artistName, cleanText, locale);
       } catch (error) {
         console.warn('Guide cache write failed:', error);
       }

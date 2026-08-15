@@ -1,3 +1,4 @@
+import { Locale } from '../i18n';
 import { ArchivedGuide, GuideStore, StoredGuide, guideKey } from './provider';
 
 /**
@@ -8,12 +9,12 @@ export class MemoryGuideStore implements GuideStore {
   readonly name = 'memory';
   private static entries = new Map<string, StoredGuide>();
 
-  async get(title: string, artist: string): Promise<StoredGuide | null> {
-    return MemoryGuideStore.entries.get(guideKey(title, artist)) ?? null;
+  async get(title: string, artist: string, locale: Locale = 'ja'): Promise<StoredGuide | null> {
+    return MemoryGuideStore.entries.get(guideKey(title, artist, locale)) ?? null;
   }
 
-  async put(title: string, artist: string, payload: string): Promise<void> {
-    MemoryGuideStore.entries.set(guideKey(title, artist), {
+  async put(title: string, artist: string, payload: string, locale: Locale = 'ja'): Promise<void> {
+    MemoryGuideStore.entries.set(guideKey(title, artist, locale), {
       payload,
       updatedAt: new Date().toISOString()
     });
