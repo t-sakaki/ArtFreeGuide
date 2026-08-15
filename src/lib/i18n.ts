@@ -95,6 +95,8 @@ export interface UIStrings {
     tooLarge: string;
   };
   header: {
+    /** The banner doubles as the way back to the entrance hall. */
+    home: string;
     search: string;
     share: string;
     history: string;
@@ -228,6 +230,7 @@ const ja: UIStrings = {
     tooLarge: '画像が大きすぎます。別の写真でお試しください。',
   },
   header: {
+    home: 'トップにもどる',
     search: 'さがす',
     share: 'この解説を共有',
     history: '履歴',
@@ -364,6 +367,7 @@ const en: UIStrings = {
     tooLarge: 'That image is too large. Please try another photo.',
   },
   header: {
+    home: 'Back to the top page',
     search: 'Browse',
     share: 'Share this guide',
     history: 'History',
@@ -500,6 +504,7 @@ const fr: UIStrings = {
     tooLarge: 'Cette image est trop lourde. Essayez une autre photo.',
   },
   header: {
+    home: 'Retour à l’accueil',
     search: 'Explorer',
     share: 'Partager ce guide',
     history: 'Historique',
@@ -637,6 +642,7 @@ const zh: UIStrings = {
     tooLarge: '图片过大，请换一张照片。',
   },
   header: {
+    home: '返回首页',
     search: '浏览',
     share: '分享这段导览',
     history: '记录',
@@ -774,6 +780,7 @@ const es: UIStrings = {
     tooLarge: 'La imagen es demasiado grande. Prueba con otra foto.',
   },
   header: {
+    home: 'Volver al inicio',
     search: 'Explorar',
     share: 'Compartir esta guía',
     history: 'Historial',
