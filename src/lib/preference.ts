@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { ArtworkRecord, parseEmbedding } from '@/lib/artworks';
+import { PROFILE_EMBEDDING_COLUMN } from '@/lib/embeddings';
 
 const MAX_FAVORITE_TAGS = 20;
 // A single listen should nudge the taste vector, never overwrite it.
@@ -34,7 +35,7 @@ export async function updatePreference(
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('preference_embedding, favorite_tags, view_count')
+    .select(`preference_embedding:${PROFILE_EMBEDDING_COLUMN}, favorite_tags, view_count`)
     .eq('id', userId)
     .maybeSingle<ProfileRow>();
 
@@ -55,7 +56,7 @@ export async function updatePreference(
   const { error } = await supabase
     .from('user_profiles')
     .update({
-      preference_embedding: preference,
+      [PROFILE_EMBEDDING_COLUMN]: preference,
       favorite_tags: favoriteTags,
       view_count: (profile.view_count ?? 0) + 1
     })
