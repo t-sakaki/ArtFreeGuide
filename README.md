@@ -32,6 +32,48 @@
   <img src="docs/images/ogp.png" alt="ArtFreeGuide の共有カード" width="600">
 </p>
 
+## すぐ聴けるツアー
+
+インストールもログインも不要です。リンクを開くと、その場でツアーが始まります（1 ツアー 4〜5 作品、所要 10〜15 分）。
+
+### 🌅 [光をつかまえた画家たち](https://art-free-guide.taira-sakakibara.workers.dev/impressionism) — 印象派が「見えたまま」を描くまで
+
+[印象・日の出](https://art-free-guide.taira-sakakibara.workers.dev/impression-sunrise) → [睡蓮](https://art-free-guide.taira-sakakibara.workers.dev/water-lilies) → [ムーラン・ド・ラ・ギャレットの舞踏会](https://art-free-guide.taira-sakakibara.workers.dev/bal-du-moulin-de-la-galette) → [踊りの稽古場にて](https://art-free-guide.taira-sakakibara.workers.dev/the-dance-class) → [星月夜](https://art-free-guide.taira-sakakibara.workers.dev/the-starry-night)
+
+### 🌊 [北斎と日本の美](https://art-free-guide.taira-sakakibara.workers.dev/hokusai) — 波、風神雷神、そして琳派へ
+
+[神奈川沖浪裏](https://art-free-guide.taira-sakakibara.workers.dev/the-great-wave-off-kanagawa) → [凱風快晴](https://art-free-guide.taira-sakakibara.workers.dev/fine-wind-clear-morning) → [東海道五十三次](https://art-free-guide.taira-sakakibara.workers.dev/the-fifty-three-stations-of-the-tokaido) → [風神雷神図屏風](https://art-free-guide.taira-sakakibara.workers.dev/wind-god-and-thunder-god-screens) → [色絵藤花文茶壺](https://art-free-guide.taira-sakakibara.workers.dev/tea-jar-with-wisteria-design)
+
+### 😱 [不安のかたち](https://art-free-guide.taira-sakakibara.workers.dev/anxiety) — 近代が抱えた叫びと悪夢
+
+[叫び](https://art-free-guide.taira-sakakibara.workers.dev/the-scream) → [我が子を食らうサトゥルヌス](https://art-free-guide.taira-sakakibara.workers.dev/saturn-devouring-his-son) → [記憶の固執](https://art-free-guide.taira-sakakibara.workers.dev/the-persistence-of-memory) → [ゲルニカ](https://art-free-guide.taira-sakakibara.workers.dev/guernica)
+
+### 🏛️ [ルネサンスの巨匠たち](https://art-free-guide.taira-sakakibara.workers.dev/renaissance) — 人間を主役にした時代
+
+[ヴィーナスの誕生](https://art-free-guide.taira-sakakibara.workers.dev/the-birth-of-venus) → [モナ・リザ](https://art-free-guide.taira-sakakibara.workers.dev/mona-lisa) → [最後の晩餐](https://art-free-guide.taira-sakakibara.workers.dev/the-last-supper) → [ダビデ像](https://art-free-guide.taira-sakakibara.workers.dev/david) → [最後の審判](https://art-free-guide.taira-sakakibara.workers.dev/the-last-judgment)
+
+### 🌻 [ゴッホ、10 年の物語](https://art-free-guide.taira-sakakibara.workers.dev/vangogh) — 一人の画家の人生をたどる
+
+[ジャガイモを食べる人々](https://art-free-guide.taira-sakakibara.workers.dev/the-potato-eaters) → [ひまわり](https://art-free-guide.taira-sakakibara.workers.dev/sunflowers) → [夜のカフェテラス](https://art-free-guide.taira-sakakibara.workers.dev/cafe-terrace-at-night) → [星月夜](https://art-free-guide.taira-sakakibara.workers.dev/the-starry-night) → [カラスのいる麦畑](https://art-free-guide.taira-sakakibara.workers.dev/wheatfield-with-crows)
+
+### 🌓 [光と影のドラマ](https://art-free-guide.taira-sakakibara.workers.dev/light-and-shadow) — バロックから近代へ、光の描き方をたどる
+
+[夜警](https://art-free-guide.taira-sakakibara.workers.dev/the-night-watch) → [真珠の耳飾りの少女](https://art-free-guide.taira-sakakibara.workers.dev/girl-with-a-pearl-earring) → [我が子を食らうサトゥルヌス](https://art-free-guide.taira-sakakibara.workers.dev/saturn-devouring-his-son) → [星月夜](https://art-free-guide.taira-sakakibara.workers.dev/the-starry-night) → [記憶の固執](https://art-free-guide.taira-sakakibara.workers.dev/the-persistence-of-memory)
+
+### 🎨 [情熱の色彩](https://art-free-guide.taira-sakakibara.workers.dev/passion-colors) — 黄金と赤、そして静けさへ
+
+[ひまわり](https://art-free-guide.taira-sakakibara.workers.dev/sunflowers) → [接吻](https://art-free-guide.taira-sakakibara.workers.dev/the-kiss) → [ゲルニカ](https://art-free-guide.taira-sakakibara.workers.dev/guernica) → [叫び](https://art-free-guide.taira-sakakibara.workers.dev/the-scream) → [睡蓮](https://art-free-guide.taira-sakakibara.workers.dev/water-lilies)
+
+### 🏛️ [ルネサンスの理想美](https://art-free-guide.taira-sakakibara.workers.dev/renaissance-ideal) — 調和と均衡、そしてその崩壊
+
+[アテナイの学堂](https://art-free-guide.taira-sakakibara.workers.dev/the-school-of-athens) → [ヴィーナスの誕生](https://art-free-guide.taira-sakakibara.workers.dev/the-birth-of-venus) → [ダビデ像](https://art-free-guide.taira-sakakibara.workers.dev/david) → [モナ・リザ](https://art-free-guide.taira-sakakibara.workers.dev/mona-lisa) → [アビニヨンの娘たち](https://art-free-guide.taira-sakakibara.workers.dev/les-demoiselles-davignon)
+
+### 1 枚だけ聴くなら
+
+[睡蓮](https://art-free-guide.taira-sakakibara.workers.dev/water-lilies)（見どころポインターが分かりやすい） / [真珠の耳飾りの少女](https://art-free-guide.taira-sakakibara.workers.dev/girl-with-a-pearl-earring) / [牛乳を注ぐ女](https://art-free-guide.taira-sakakibara.workers.dev/the-milkmaid) / [レースを編む女](https://art-free-guide.taira-sakakibara.workers.dev/the-lacemaker) / [星月夜](https://art-free-guide.taira-sakakibara.workers.dev/the-starry-night) / [モナ・リザ](https://art-free-guide.taira-sakakibara.workers.dev/mona-lisa)
+
+英語で聴く場合は `?lang=en` を付けてください（例: [Girl with a Pearl Earring in English](https://art-free-guide.taira-sakakibara.workers.dev/girl-with-a-pearl-earring?lang=en)）。`fr` / `es` / `zh` も同様ですが、未生成の言語は初回のみ生成に 1 分ほどかかります。
+
 ## 画面イメージ
 
 ### 解説を 1 文ずつ聴く
