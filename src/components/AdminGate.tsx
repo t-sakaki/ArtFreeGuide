@@ -16,18 +16,25 @@ export default function AdminGate({ children }: { children: (session: Session) =
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const supabase = browserClient();
+    let unsubscribe = () => {};
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setReady(true);
-    });
+    browserClient()
+      .then(async supabase => {
+        const { data } = await supabase.auth.getSession();
+        setSession(data.session);
+        setReady(true);
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
-      setSession(next);
-    });
+        const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
+          setSession(next);
+        });
+        unsubscribe = () => listener.subscription.unsubscribe();
+      })
+      .catch(err => {
+        setError(err.message || 'ログイン機能を初期化できませんでした');
+        setReady(true);
+      });
 
-    return () => listener.subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   async function sendMagicLink(event: React.FormEvent) {
@@ -35,13 +42,18 @@ export default function AdminGate({ children }: { children: (session: Session) =
     setError('');
     setNotice('');
 
-    const { error: authError } = await browserClient().auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.href }
-    });
+    try {
+      const supabase = await browserClient();
+      const { error: authError } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: window.location.href }
+      });
 
-    if (authError) setError(authError.message);
-    else setNotice(`${email} にログインリンクを送りました。メールのリンクを開いてください。`);
+      if (authError) setError(authError.message);
+      else setNotice(`${email} にログインリンクを送りました。メールのリンクを開いてください。`);
+    } catch (err: any) {
+      setError(err.message || 'ログインリンクを送れませんでした');
+    }
   }
 
   if (!ready) {
@@ -83,7 +95,13 @@ export default function AdminGate({ children }: { children: (session: Session) =
     <div className="space-y-4 font-sans">
       <div className="flex items-center justify-between text-xs text-slate-500">
         <span className="truncate">{session.user.email}</span>
-        <button onClick={() => browserClient().auth.signOut()} className="hover:underline">
+        <button
+          onClick={async () => {
+            const supabase = await browserClient();
+            await supabase.auth.signOut();
+          }}
+          className="hover:underline"
+        >
           ログアウト
         </button>
       </div>
