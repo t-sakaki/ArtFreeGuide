@@ -126,10 +126,49 @@
   animation: heartFloat 1.6s cubic-bezier(0.2, 0.6, 0.4, 1) forwards;
 }
 
+/* A question chip wobbles once to invite a tap after the narration ends */
+@keyframes chipNudge {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-3px) rotate(-2deg);
+  }
+  55% {
+    transform: translateY(-1px) rotate(2deg);
+  }
+  80% {
+    transform: translateY(0) rotate(-1deg);
+  }
+}
+
+.animate-chip-nudge {
+  animation: chipNudge 0.7s ease-in-out;
+}
+
+/* Slow breathing halo around the play button while the guide is speaking */
+@keyframes playPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+.animate-play-pulse {
+  animation: playPulse 2s ease-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-ken-burns,
   .animate-equalizer,
-  .animate-hotspot-ping {
+  .animate-hotspot-ping,
+  .animate-chip-nudge,
+  .animate-play-pulse {
     animation: none;
   }
 
