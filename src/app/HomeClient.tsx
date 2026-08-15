@@ -423,6 +423,7 @@ export default function HomeClient({
   const [heartCount, setHeartCount] = useState(0);
   /** Id of the last tap, so the button replays its pop on every single one. */
   const [heartPop, setHeartPop] = useState(-1);
+  const [deepDivePress, setDeepDivePress] = useState(0);
   const heartIdRef = useRef(0);
   const heartBurstRef = useRef(0);
   const heartSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1877,6 +1878,24 @@ export default function HomeClient({
   };
 
   // Deep Dive Feature
+  /**
+   * Folds what was just added on screen back into the archived guide, so the
+   * next visitor inherits it. Silent: the visitor already has the text.
+   */
+  const archiveGuideAddition = (block: string) => {
+    if (!canonicalArtwork.trim()) return;
+    fetch('/api/guide/augment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: canonicalArtwork,
+        artist: canonicalArtist,
+        locale: localeRef.current,
+        block
+      })
+    }).catch(e => console.warn('Guide augment failed:', e));
+  };
+
   const handleDeepDive = async () => {
     if (!artwork.trim() || deepDiveLoading) return;
 
@@ -1894,7 +1913,7 @@ export default function HomeClient({
           messages: [
             {
               role: 'user',
-              content: `作品名: ${shownArtwork}について、ガイドブックにも載っていないような知られざる面白い裏話や、美術史における深掘りエピソードを音声ガイド用に語ってください。短い2-3つの文で詳しく解説します。`
+              content: `作品名: ${shownArtwork}について、ガイドブックにも載っていないような知られざる面白い裏話や、美術史における深掘りエピソードを音声ガイド用に語ってください。すでに述べた基本情報は繰り返さず、エピソードを2〜3つ、合わせて300〜500文字程度で語ってください。`
             }
           ]
         })
@@ -1919,9 +1938,11 @@ export default function HomeClient({
       } catch (e) {}
 
       const visualHeader = `\n> 🔍 **${t.guide.deepDiveHeader}**\n`;
-      const updatedDeep = `${responseDeep}\n\n${visualHeader}\n\n${sanitizeGuideText(rawText)}`;
-      
+      const addition = `${visualHeader}\n\n${sanitizeGuideText(rawText)}`;
+      const updatedDeep = `${responseDeep}\n\n${addition}`;
+
       setResponseDeep(updatedDeep);
+      archiveGuideAddition(addition);
       setExplanationMode('deep');
 
       // Update History Entry
@@ -2011,9 +2032,11 @@ export default function HomeClient({
       }
 
       const header = `\n> ❓ **${trimmed}**\n`;
-      const updatedDeep = `${responseDeep}\n\n${header}\n\n${answer}`;
+      const addition = `${header}\n\n${answer}`;
+      const updatedDeep = `${responseDeep}\n\n${addition}`;
 
       setResponseDeep(updatedDeep);
+      archiveGuideAddition(addition);
       setExplanationMode('deep');
       updateHistoryEntryByArtwork(canonicalArtwork, canonicalArtist, { deep: updatedDeep });
 
@@ -3010,13 +3033,29 @@ export default function HomeClient({
               )}
               <div className="ml-auto flex items-center gap-3">
                 <button
-                  onClick={() =>
-                    explanationMode === 'deep' ? handleDeepDive() : setExplanationMode('deep')
-                  }
+                  key={deepDivePress}
+                  onClick={() => {
+                    setDeepDivePress(prev => prev + 1);
+                    if (explanationMode === 'deep') handleDeepDive();
+                    else setExplanationMode('deep');
+                  }}
                   disabled={deepDiveLoading}
-                  className="text-teal-400/80 hover:text-teal-300 disabled:opacity-40"
+                  className={`animate-dive-flash relative overflow-hidden rounded-full border px-3 py-1.5 transition-colors active:scale-95 ${
+                    deepDiveLoading
+                      ? 'border-amber-300/60 bg-amber-300/10 text-amber-200'
+                      : 'border-teal-500/40 text-teal-300 hover:border-teal-400/80 hover:bg-teal-500/10'
+                  }`}
                 >
-                  {deepDiveLoading ? t.ask.deepDiveLoading : t.ask.deepDive}
+                  {/* While the curator digs, gold light sweeps across the chip. */}
+                  {deepDiveLoading && (
+                    <span className="animate-shimmer absolute inset-0" aria-hidden="true" />
+                  )}
+                  <span className="relative flex items-center gap-1">
+                    <span className={deepDiveLoading ? 'animate-dig inline-block' : 'inline-block'}>
+                      🔍
+                    </span>
+                    {(deepDiveLoading ? t.ask.deepDiveLoading : t.ask.deepDive).replace('🔍 ', '')}
+                  </span>
                 </button>
                 <button
                   onClick={() => setShowReportForm(prev => !prev)}
