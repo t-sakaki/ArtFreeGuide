@@ -129,6 +129,15 @@ Supabase Auth のマジックリンクでログインすると、匿名で溜め
 | 解説の修正提案 → 承認 → 反映 | 内容の誤りを報告すると LLM が修正案を作り、管理者が差分を見て承認すると保存済み解説が置き換わる |
 | ログイン（任意） | 匿名のまま使えて、Supabase Auth のマジックリンクでログインすると匿名の履歴・好みをアカウントに引き継ぐ |
 
+## 検索エンジンへの登録（SEO）
+
+作品・ツアーはすべて英語スラグのパーマリンク（`/the-milkmaid`、`/impressionism` など）を持ち、検索エンジンから直接たどれます。
+
+- サイトマップ: <https://art-free-guide.taira-sakakibara.workers.dev/sitemap.xml>（235 URL、`src/app/sitemap.ts` が作品・ツアー・言語ごとに自動生成）
+- robots.txt: <https://art-free-guide.taira-sakakibara.workers.dev/robots.txt>（クロール許可＋サイトマップ行）
+- Google Search Console に所有権確認済みで、上記サイトマップを送信・登録済み
+- 各ページに canonical URL・メタディスクリプション・OGP を出力（`src/lib/guideMetadata.ts`）
+
 ## ハッカソンのポイント: ベクトル検索
 
 推薦の中核は Supabase（Postgres + pgvector）上のベクトル検索です。
