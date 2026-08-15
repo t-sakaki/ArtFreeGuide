@@ -29,6 +29,7 @@ import {
   isLocale,
 } from '@/lib/i18n';
 import { canonicalName, localizeName } from '@/lib/names';
+import { artworkPath } from '@/lib/site';
 import ReadingApprovals from '@/components/ReadingApprovals';
 import GuideCorrections from '@/components/GuideCorrections';
 import AppMenu, { type MenuItem } from '@/components/AppMenu';
@@ -312,7 +313,19 @@ class AudioController {
   }
 }
 
-export default function HomeClient() {
+/**
+ * A permalink (`/artwork/<slug>`, `/tour/<slug>`) names what to open through
+ * props; every other piece of state still travels in the query string.
+ */
+export default function HomeClient({
+  initialArtwork = '',
+  initialArtist = '',
+  initialTour = ''
+}: {
+  initialArtwork?: string;
+  initialArtist?: string;
+  initialTour?: string;
+} = {}) {
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
   // The reading approval queue is a moderator tool, so it stays out of the way
   // until someone opens the app with ?admin=1 once on this device.
@@ -645,17 +658,15 @@ export default function HomeClient() {
     tourId: string | null
   ) => {
     if (typeof window === 'undefined') return;
-    const url = new URL(window.location.href);
-    if (title.trim()) {
-      url.searchParams.set('artwork', title);
-    } else {
-      url.searchParams.delete('artwork');
-    }
-    if (artistName && artistName.trim()) {
-      url.searchParams.set('artist', artistName);
-    } else {
-      url.searchParams.delete('artist');
-    }
+    // The artwork owns the path when it has a permalink, and falls back to the
+    // query string when it does not, so the address bar always reads as a link
+    // that can be shared as it stands.
+    const canonicalTitle = canonicalName(title);
+    const canonicalArtistName = canonicalName(artistName ?? '');
+    const url = new URL(
+      canonicalTitle.trim() ? artworkPath(canonicalTitle, canonicalArtistName) : '/',
+      window.location.href
+    );
     url.searchParams.set('speed', speedValue.toFixed(1));
     url.searchParams.set('mode', modeValue);
     url.searchParams.set('lang', locale);
@@ -683,11 +694,11 @@ export default function HomeClient() {
 
     const handleUrlChange = () => {
       const params = new URLSearchParams(window.location.search);
-      const artworkParam = params.get('artwork') || '';
-      const artistParam = params.get('artist') || '';
+      const artworkParam = params.get('artwork') || initialArtwork;
+      const artistParam = params.get('artist') || initialArtist;
       const speedParam = params.get('speed') || '';
       const modeParam = params.get('mode') || '';
-      const tourParam = params.get('tour') || '';
+      const tourParam = params.get('tour') || initialTour;
       const spotParam = params.get('spot') || '';
 
       // 1. Sync speed if present in URL
@@ -1049,6 +1060,38 @@ export default function HomeClient() {
     tourTargetRef.current = null;
     setActivePlaylist(null);
     setPlaylistIndex(0);
+  };
+
+  /** Leaves the guide behind and shows the entrance hall again. */
+  const returnToHub = () => {
+    AudioController.clearQueue();
+    stopAmbientSound();
+    setIsPlaying(false);
+    setActiveSegmentIndex(-1);
+    exitTour();
+    setLoading(false);
+    setResponseShort('');
+    setResponseStandard('');
+    setResponseDeep('');
+    setImageUrl(null);
+    setImageError(false);
+    setRecommendations([]);
+    setShowInputDrawer(false);
+    setArtwork('');
+    setArtist('');
+    localStorage.removeItem('art_free_guide_draft_artwork');
+    localStorage.removeItem('art_free_guide_draft_artist');
+
+    if (typeof window !== 'undefined') {
+      // Back to the entrance hall: the permalink of the artwork we just left
+      // has to go with it, not only its query parameters.
+      const url = new URL('/', window.location.href);
+      for (const key of ['speed', 'lang']) {
+        const value = new URL(window.location.href).searchParams.get(key);
+        if (value) url.searchParams.set(key, value);
+      }
+      window.history.replaceState({}, '', url.toString());
+    }
   };
 
   useEffect(() => cancelTourAdvance, []);
@@ -2091,15 +2134,9 @@ export default function HomeClient() {
   const handleShare = async () => {
     if (typeof window === 'undefined') return;
 
-    // Construct the complete URL containing all active states
-    const url = new URL(window.location.href);
-    url.searchParams.set('artwork', canonicalArtwork);
+    // The permalink of the artwork, carrying every active state as parameters.
+    const url = new URL(artworkPath(canonicalArtwork, artist ? canonicalArtist : ''), window.location.href);
     url.searchParams.set('lang', locale);
-    if (artist) {
-      url.searchParams.set('artist', canonicalArtist);
-    } else {
-      url.searchParams.delete('artist');
-    }
     url.searchParams.set('speed', playbackSpeed.toFixed(1));
     url.searchParams.set('mode', explanationMode);
     if (activePlaylist) {
@@ -2509,8 +2546,15 @@ export default function HomeClient() {
         <div className="fixed top-0 left-0 right-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-900 px-4 py-3 flex flex-col items-center select-none shadow-md">
           {/* Top Row Navigation */}
           <div className="flex items-center justify-between w-full max-w-md mb-2">
-            <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-500 bg-clip-text text-transparent font-sans">
-              ArtFreeGuide
+            <h1 className="text-lg font-extrabold tracking-tight font-sans">
+              <button
+                onClick={returnToHub}
+                title={t.header.home}
+                aria-label={t.header.home}
+                className="bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-500 bg-clip-text text-transparent hover:opacity-80 active:scale-95 transition-all cursor-pointer"
+              >
+                ArtFreeGuide
+              </button>
             </h1>
 
             {renderMenu(true)}
@@ -2652,7 +2696,7 @@ export default function HomeClient() {
       )}
 
       {/* Scrollable Center Content */}
-      <div className={`w-full max-w-2xl px-4 mx-auto ${responseShort || loading ? 'pt-[19rem] sm:pt-[22rem] pb-32' : 'py-12 md:py-20 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]'}`}>
+      <div className={`w-full max-w-2xl px-4 mx-auto ${responseShort || loading ? 'pt-[19rem] sm:pt-[22rem] pb-44' : 'py-12 md:py-20 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]'}`}>
         
         {/* Empty state: Hero landing / initial search card */}
         {!responseShort && !loading && (
@@ -3006,7 +3050,7 @@ export default function HomeClient() {
                       className="bg-slate-900/30 border border-slate-900 hover:border-teal-500/40 hover:bg-slate-900/50 rounded-2xl p-3 flex gap-3 cursor-pointer transition-all duration-300 group shadow-md"
                     >
                       {/* Mini Thumbnail */}
-                      <div className="relative w-20 h-16 rounded-xl overflow-hidden bg-slate-950 border border-slate-850 shrink-0 flex items-center justify-center">
+                      <div className="relative w-28 h-24 rounded-xl overflow-hidden bg-slate-950 border border-slate-850 shrink-0 flex items-center justify-center">
                         {rec.imageLoading ? (
                           <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">
                             <div className="animate-pulse w-1.5 h-1.5 bg-slate-600 rounded-full"></div>
@@ -3014,7 +3058,7 @@ export default function HomeClient() {
                         ) : rec.imageUrl ? (
                           <img src={rec.imageUrl} alt={rec.title} className="w-full h-full object-cover" />
                         ) : (
-                          <span className="text-sm">🖼️</span>
+                          <span className="text-xl">🖼️</span>
                         )}
                       </div>
                       <div className="flex-1 min-w-0 text-left flex flex-col justify-between py-0.5 font-sans">
@@ -3050,7 +3094,7 @@ export default function HomeClient() {
 
       {/* Downward Fixed Controller Panel (Optimized Smartphone Thumb Reach) */}
       {responseShort && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 border-t border-slate-900 px-4 pt-2 pb-5 shadow-2xl flex flex-col justify-center gap-2 select-none min-h-28">
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950 border-t border-slate-800 px-4 pt-2 pb-5 shadow-[0_-12px_32px_rgba(2,6,23,0.9)] flex flex-col justify-center gap-2 select-none min-h-28">
           {voiceUnavailable && (
             <div className="w-full max-w-lg mx-auto px-1 text-[10px] leading-tight text-amber-300/80 font-sans">
               {t.voiceUnavailable}
