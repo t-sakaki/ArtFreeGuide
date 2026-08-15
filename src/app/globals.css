@@ -90,21 +90,21 @@
   animation: equalizerBar 0.9s ease-in-out infinite;
 }
 
-/* Halo that draws the eye to an unvisited viewing point */
-@keyframes hotspotPing {
-  0% {
-    transform: scale(0.9);
-    opacity: 0.9;
-  }
-  70%,
+/* A viewing point breathes instead of announcing itself over the painting */
+@keyframes hotspotBreathe {
+  0%,
   100% {
-    transform: scale(1.9);
-    opacity: 0;
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1);
   }
 }
 
-.animate-hotspot-ping {
-  animation: hotspotPing 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+.animate-hotspot-breathe {
+  animation: hotspotBreathe 3.2s ease-in-out infinite;
 }
 
 /* Hearts drifting up from the like button, as on a live stream */
@@ -166,10 +166,15 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-ken-burns,
   .animate-equalizer,
-  .animate-hotspot-ping,
   .animate-chip-nudge,
   .animate-play-pulse {
     animation: none;
+  }
+
+  /* Frozen mid-breath, so the point is still visible without pulsing. */
+  .animate-hotspot-breathe {
+    animation: none;
+    opacity: 0.7;
   }
 
   /* The hearts still need to disappear, so fade rather than freeze them. */
