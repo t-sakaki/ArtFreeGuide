@@ -304,6 +304,8 @@ export default function ArtFreeGuide() {
   // A tapped point stays focused until dismissed; narration must not steal it.
   const [hotspotPinned, setHotspotPinned] = useState(false);
   const [showArtworkViewer, setShowArtworkViewer] = useState(false);
+  /** Detail id carried by a shared link, applied once the artwork's hotspots load. */
+  const pendingHotspotRef = useRef<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -485,7 +487,8 @@ export default function ArtFreeGuide() {
     title: string,
     artistName: string,
     speedValue: number,
-    modeValue: 'short' | 'standard' | 'deep'
+    modeValue: 'short' | 'standard' | 'deep',
+    tourId: string | null
   ) => {
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
@@ -501,6 +504,13 @@ export default function ArtFreeGuide() {
     }
     url.searchParams.set('speed', speedValue.toFixed(1));
     url.searchParams.set('mode', modeValue);
+    if (tourId) {
+      url.searchParams.set('tour', tourId);
+    } else {
+      url.searchParams.delete('tour');
+    }
+    // The focused detail travels in shared links only, not in the live address bar.
+    url.searchParams.delete('spot');
 
     window.history.replaceState({}, '', url.toString());
   };
@@ -508,9 +518,9 @@ export default function ArtFreeGuide() {
   // Real-time synchronization effect
   useEffect(() => {
     if (artwork.trim()) {
-      syncUrlState(artwork, artist, playbackSpeed, explanationMode);
+      syncUrlState(artwork, artist, playbackSpeed, explanationMode, activePlaylist?.id ?? null);
     }
-  }, [artwork, artist, playbackSpeed, explanationMode]);
+  }, [artwork, artist, playbackSpeed, explanationMode, activePlaylist]);
 
   // URL parameters listener (Deep Linking & Initial State Setup)
   useEffect(() => {
@@ -522,6 +532,8 @@ export default function ArtFreeGuide() {
       const artistParam = params.get('artist') || '';
       const speedParam = params.get('speed') || '';
       const modeParam = params.get('mode') || '';
+      const tourParam = params.get('tour') || '';
+      const spotParam = params.get('spot') || '';
 
       // 1. Sync speed if present in URL
       if (speedParam) {
@@ -536,8 +548,15 @@ export default function ArtFreeGuide() {
         setExplanationMode(modeParam as 'short' | 'standard' | 'deep');
       }
 
-      // 3. Sync and generate guide if present in URL
-      if (artworkParam.trim()) {
+      // 3. Restore the shared detail once the artwork's hotspots are known
+      pendingHotspotRef.current = spotParam || null;
+
+      // 4. Sync and generate guide if present in URL
+      const sharedTour = tourParam ? PLAYLISTS.find(p => p.id === tourParam) ?? null : null;
+      if (sharedTour) {
+        const index = sharedTour.items.findIndex(item => item.title === artworkParam);
+        startTour(sharedTour, index >= 0 ? index : 0);
+      } else if (artworkParam.trim()) {
         generateGuide(artworkParam, artistParam, modeParam as 'short' | 'standard' | 'deep');
       }
     };
@@ -735,8 +754,11 @@ export default function ArtFreeGuide() {
   const activeHotspot = hotspots.find(h => h.id === activeHotspotId) ?? null;
 
   useEffect(() => {
-    setActiveHotspotId(null);
-    setHotspotPinned(false);
+    const shared = pendingHotspotRef.current;
+    pendingHotspotRef.current = null;
+    const restored = shared && hotspotSet?.hotspots.some(h => h.id === shared) ? shared : null;
+    setActiveHotspotId(restored);
+    setHotspotPinned(restored !== null);
   }, [hotspotSet]);
 
   // Follow the narration: zoom to whichever detail is being talked about.
@@ -1763,10 +1785,23 @@ export default function ArtFreeGuide() {
     }
     url.searchParams.set('speed', playbackSpeed.toFixed(1));
     url.searchParams.set('mode', explanationMode);
+    if (activePlaylist) {
+      url.searchParams.set('tour', activePlaylist.id);
+    } else {
+      url.searchParams.delete('tour');
+    }
+    // Share the detail being looked at, so the link opens on the same close-up.
+    if (activeHotspot) {
+      url.searchParams.set('spot', activeHotspot.id);
+    } else {
+      url.searchParams.delete('spot');
+    }
 
     const shareData = {
       title: `ArtFreeGuide - ${artwork}`,
-      text: `この作品のAI音声ガイドを聴いてみて！`,
+      text: activeHotspot
+        ? `「${artwork}」の見どころ「${activeHotspot.label}」を聴いてみて！`
+        : `この作品のAI音声ガイドを聴いてみて！`,
       url: url.toString()
     };
 
@@ -1961,17 +1996,28 @@ export default function ArtFreeGuide() {
               ArtFreeGuide
             </h1>
 
-            <button
-              onClick={() => setShowHistorySidebar(true)}
-              className="text-slate-400 hover:text-teal-400 transition-colors text-xs font-sans font-semibold flex items-center gap-1 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg relative"
-            >
-              <span>📜</span> <span>履歴</span>
-              {history.length > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-teal-500 text-slate-950 font-bold font-mono rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
-                  {history.length}
-                </span>
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleShare}
+                aria-label="この解説を共有"
+                title="この解説を共有"
+                className="text-slate-400 hover:text-teal-400 transition-colors text-sm bg-slate-900/60 border border-slate-800 hover:border-teal-500/40 w-8 h-8 rounded-lg flex items-center justify-center active:scale-95"
+              >
+                📤
+              </button>
+
+              <button
+                onClick={() => setShowHistorySidebar(true)}
+                className="text-slate-400 hover:text-teal-400 transition-colors text-xs font-sans font-semibold flex items-center gap-1 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg relative"
+              >
+                <span>📜</span> <span>履歴</span>
+                {history.length > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-teal-500 text-slate-950 font-bold font-mono rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
+                    {history.length}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Large Artwork Thumbnail (fixed) */}
@@ -2045,12 +2091,22 @@ export default function ArtFreeGuide() {
             <span className="text-xs font-bold text-slate-300 font-sans truncate pr-3">
               {artwork} {artist ? `／ ${artist}` : ''}
             </span>
-            <button
-              onClick={() => setShowArtworkViewer(false)}
-              className="text-slate-400 hover:text-teal-400 bg-slate-900/70 border border-slate-800 rounded-lg px-3 py-1.5 text-xs font-bold font-sans"
-            >
-              閉じる ✕
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleShare}
+                aria-label={activeHotspot ? 'この見どころを共有' : 'この解説を共有'}
+                title={activeHotspot ? 'この見どころを共有' : 'この解説を共有'}
+                className="text-slate-400 hover:text-teal-400 bg-slate-900/70 border border-slate-800 hover:border-teal-500/40 rounded-lg w-8 h-8 flex items-center justify-center text-sm active:scale-95"
+              >
+                📤
+              </button>
+              <button
+                onClick={() => setShowArtworkViewer(false)}
+                className="text-slate-400 hover:text-teal-400 bg-slate-900/70 border border-slate-800 rounded-lg px-3 py-1.5 text-xs font-bold font-sans"
+              >
+                閉じる ✕
+              </button>
+            </div>
           </div>
 
           <div className="relative flex-1 mx-4 mb-3 rounded-2xl overflow-hidden bg-slate-900/40 border border-slate-800">
@@ -2387,14 +2443,6 @@ export default function ArtFreeGuide() {
                 </button>
               )}
 
-              <button
-                onClick={handleShare}
-                className="px-5 py-2.5 bg-slate-900 border border-slate-800 hover:border-teal-500/40 text-slate-350 hover:text-teal-450 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-md font-sans"
-              >
-                <span>🔗</span>
-                <span>解説を共有する</span>
-              </button>
-
               {/* Deep Dive secondary trigger button */}
               {explanationMode === 'deep' && (
                 <button
@@ -2625,16 +2673,6 @@ export default function ArtFreeGuide() {
             >
               <span className="text-xl">⏭️</span>
               <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">次作品</span>
-            </button>
-
-            {/* Native Share button (Rightmost) */}
-            <button
-              onClick={handleShare}
-              className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-450 hover:text-teal-400 transition-all active:scale-90"
-              title="解説を共有"
-            >
-              <span className="text-lg">📤</span>
-              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">共有する</span>
             </button>
 
           </div>
