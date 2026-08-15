@@ -786,6 +786,17 @@ export default function ArtFreeGuide() {
     setImageError(entry.imageError);
     setSearchQuery(entry.searchQuery);
     setRecommendations(entry.recommendations);
+    // An entry stored before its image resolved would leave an empty frame:
+    // neither a picture nor the "no image" plaque.
+    if (!entry.imageUrl && !entry.imageError) {
+      const hotspotFile = findHotspotSet(entry.title, entry.artist)?.file ?? null;
+      fetchImage(
+        entry.searchQuery || `${entry.title} ${entry.artist}`.trim(),
+        undefined,
+        hotspotFile ? hotspotImageUrl(hotspotFile) : null,
+        { title: entry.title, artist: entry.artist }
+      );
+    }
 
     // Stop speaking immediately on navigation
     setActiveSegmentIndex(-1);
@@ -1519,6 +1530,14 @@ export default function ArtFreeGuide() {
       setImageError(cached.imageError);
       setSearchQuery(cached.searchQuery);
       setRecommendations(cached.recommendations);
+      if (!cached.imageUrl && !cached.imageError) {
+        fetchImage(
+          cached.searchQuery || `${targetArtwork} ${targetArtist}`.trim(),
+          cacheKey,
+          hotspotFile ? hotspotImageUrl(hotspotFile) : null,
+          { title: targetArtwork, artist: targetArtist }
+        );
+      }
 
       const cachedSpec = resolveMusicSpec(cached.music, cached.mood, `${targetArtwork} ${targetArtist}`);
       musicSpecRef.current = cachedSpec;
