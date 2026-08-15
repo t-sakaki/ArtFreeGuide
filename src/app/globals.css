@@ -90,21 +90,19 @@
   animation: equalizerBar 0.9s ease-in-out infinite;
 }
 
-/* A viewing point breathes instead of announcing itself over the painting */
-@keyframes hotspotBreathe {
+/* Only the point being talked about moves; the others stay transparent */
+@keyframes hotspotBlink {
   0%,
   100% {
-    opacity: 0.35;
-    transform: scale(0.85);
+    opacity: 0.25;
   }
   50% {
-    opacity: 0.85;
-    transform: scale(1);
+    opacity: 1;
   }
 }
 
-.animate-hotspot-breathe {
-  animation: hotspotBreathe 3.2s ease-in-out infinite;
+.animate-hotspot-blink {
+  animation: hotspotBlink 1.8s ease-in-out infinite;
 }
 
 /* Hearts drifting up from the like button, as on a live stream */
@@ -171,10 +169,10 @@
     animation: none;
   }
 
-  /* Frozen mid-breath, so the point is still visible without pulsing. */
-  .animate-hotspot-breathe {
+  /* Held bright rather than blinking, so the point is still identifiable. */
+  .animate-hotspot-blink {
     animation: none;
-    opacity: 0.7;
+    opacity: 0.9;
   }
 
   /* The hearts still need to disappear, so fade rather than freeze them. */
