@@ -74,7 +74,29 @@ export const NAMES: Record<string, Translations> = {
   '病める少女': { en: 'The Sick Child', fr: 'L’Enfant malade', zh: '病中的孩子', es: 'La niña enferma' },
   '黒い正方形': { en: 'Black Square', fr: 'Carré noir', zh: '黑方块', es: 'Cuadrado negro' },
   '鮭': { en: 'Salmon', fr: 'Saumon', zh: '鲑鱼', es: 'Salmón' },
+  'レースを編む女': { en: 'The Lacemaker', fr: 'La Dentellière', zh: '花边女工', es: 'La encajera' },
+  '牛乳を注ぐ女': { en: 'The Milkmaid', fr: 'La Laitière', zh: '倒牛奶的女仆', es: 'La lechera' },
 };
+
+/**
+ * The names the guide speaks for works the catalogue and the sources list
+ * under another title. A search finds nothing for the spoken form, so it is
+ * replaced by the catalogued one before an artwork is looked up.
+ */
+export const SPOKEN_TITLES: Record<string, string> = {
+  'レースの少女': 'レースを編む女',
+  'レース編みの少女': 'レースを編む女',
+  '牛乳注ぎ': '牛乳を注ぐ女',
+  'ミルクを注ぐ女': '牛乳を注ぐ女',
+  '絵画芸術': 'アトリエの中の画家',
+  '画家のアトリエ': 'アトリエの中の画家'
+};
+
+/** The catalogued title for a name the guide made up, or the name itself. */
+export function catalogueTitle(title: string): string {
+  const trimmed = title.trim();
+  return SPOKEN_TITLES[trimmed] ?? trimmed;
+}
 
 /** The name as the visitor's language writes it, or the original if unknown. */
 export function localizeName(name: string, locale: Locale): string {
