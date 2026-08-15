@@ -1,5 +1,5 @@
 import { createServiceClient } from '@/lib/supabase';
-import { GuideStore, StoredGuide, guideKey } from './provider';
+import { ArchivedGuide, GuideStore, StoredGuide, guideKey } from './provider';
 
 interface GuideRow {
   payload: string;
@@ -37,5 +37,18 @@ export class SupabaseGuideStore implements GuideStore {
       );
 
     if (error) throw new Error(error.message);
+  }
+
+  async search(query: string, limit: number): Promise<ArchivedGuide[]> {
+    const term = query.trim().replace(/[%,]/g, ' ');
+    const { data, error } = await createServiceClient()
+      .from('artwork_guides')
+      .select('title, artist')
+      .or(`title.ilike.%${term}%,artist.ilike.%${term}%`)
+      .order('updated_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw new Error(error.message);
+    return (data ?? []) as ArchivedGuide[];
   }
 }
