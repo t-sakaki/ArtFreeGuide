@@ -27,6 +27,10 @@ interface ArtworkStageProps {
  * The image is letterboxed (object-contain), so hotspot coordinates can only be
  * placed once the displayed rectangle is known — hence the measured frame
  * rather than positioning marks against the container.
+ *
+ * The marks stay deliberately quiet: a small translucent dot that breathes
+ * rather than a ringed pin, since anything with a hard white edge reads as part
+ * of the painting. Only the focused point is drawn as a ring.
  */
 export default function ArtworkStage({
   imageUrl,
@@ -115,21 +119,18 @@ export default function ArtworkStage({
                   event.stopPropagation();
                   onSelect(isActive ? null : hotspot.id);
                 }}
-                className="absolute w-7 h-7 -ml-3.5 -mt-3.5 rounded-full flex items-center justify-center drop-shadow-[0_1px_3px_rgba(2,6,23,0.9)]"
+                className="group absolute w-8 h-8 -ml-4 -mt-4 rounded-full flex items-center justify-center"
                 style={{
                   left: `${hotspot.x * 100}%`,
                   top: `${hotspot.y * 100}%`,
                   transform: `scale(${1 / zoom})`,
                 }}
               >
-                <span className="absolute inset-0 rounded-full ring-2 ring-slate-950/70" />
-                <span
-                  className={`absolute inset-0 rounded-full border-2 transition-all ${
-                    isActive ? 'border-teal-300 bg-teal-400/30' : 'border-white bg-slate-950/45 hover:border-teal-300'
-                  }`}
-                />
-                {!isActive && <span className="absolute inset-0 rounded-full border-2 border-teal-300 animate-hotspot-ping" />}
-                <span className="relative w-2 h-2 rounded-full bg-white ring-1 ring-slate-950/60" />
+                {isActive ? (
+                  <span className="absolute inset-1 rounded-full border border-teal-200/80 bg-teal-300/10 shadow-[0_0_10px_rgba(45,212,191,0.35)]" />
+                ) : (
+                  <span className="absolute inset-2.5 rounded-full bg-teal-200/70 transition-all animate-hotspot-breathe group-hover:animate-none group-hover:inset-1 group-hover:bg-transparent group-hover:border group-hover:border-teal-200/80 group-focus-visible:inset-1 group-focus-visible:bg-transparent group-focus-visible:border group-focus-visible:border-teal-200/80" />
+                )}
               </button>
             );
           })}
