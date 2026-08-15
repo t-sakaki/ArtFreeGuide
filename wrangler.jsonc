@@ -17,6 +17,12 @@
 		// (needs GEMINI_API_KEY). Set secrets with `wrangler secret put <NAME>`,
 		// or .dev.vars / .env.local locally.
 		"LLM_PROVIDER": "nvidia",
+		// Per-task overrides: LLM_<GUIDE|ASK|SUGGEST>_PROVIDER / _MODEL.
+		// Models are a comma separated priority list (fallback chain).
+		// Guides tolerate ~45s; answers and search chips must feel instant.
+		"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
+		"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
+		"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,nvidia/nemotron-3-super-120b-a12b",
 		// Where generated guides are archived: "d1" | "supabase" | "memory"
 		"GUIDE_STORE": "d1"
 	},

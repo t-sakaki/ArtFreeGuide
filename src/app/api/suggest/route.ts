@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       }
     ];
 
-    const provider = getLLMProvider();
+    const provider = getLLMProvider('suggest');
     const text = await provider.generateResponse(messages, { json: true });
 
     // Bulletproof JSON parser
