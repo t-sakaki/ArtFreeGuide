@@ -199,28 +199,45 @@ async function commonsSearch(search: string): Promise<string[]> {
     .filter(title => /\.(jpe?g|png|tiff?|webp)$/i.test(title));
 }
 
+const GENERIC_WORDS = new Set([
+  'painting',
+  'paintings',
+  'picture',
+  'artwork',
+  'oil',
+  'canvas',
+  'the',
+  'and',
+  'with',
+  'from',
+  'for'
+]);
+
+/** Commons also holds photographs of the artist and machine-made pastiches. */
+const NOT_AN_ARTWORK = /\b(sd|stable diffusion|ai[- ]generated|midjourney|photo(graph)? of|exhibition|museum visitors?)\b/i;
+
 /**
- * A file only counts when its name says so. Commons ranks by full text, so the
- * first hit for "Ramon Casas Madeleine" is a Moulin de la Galette poster.
+ * A file only counts when its name carries the title. Naming the artist is not
+ * enough: a search for Magritte's works returns photographs of Magritte, and a
+ * search for Gauguin's Tahitian women returns his self-portrait.
  */
-function bestCommonsMatch(
-  files: string[],
-  titleEn: string | null,
-  artistEn: string | null,
-  /** Inside the artist's category every file is his, so only the title decides. */
-  requireTitle = false
-): string | null {
-  const titleWords = titleEn ? nameTokens(titleEn) : [];
+function bestCommonsMatch(files: string[], titleEn: string | null, artistEn: string | null): string | null {
   const artistWords = artistEn ? nameTokens(artistEn) : [];
+  // "Magritte" inside the title would let a portrait of him pass as his work,
+  // and "painting" matches half of Commons.
+  const titleWords = (titleEn ? nameTokens(titleEn) : []).filter(
+    word => !artistWords.includes(word) && !GENERIC_WORDS.has(word)
+  );
+  if (titleWords.length === 0) return null;
 
   let best: { file: string; score: number } | null = null;
   for (const file of files) {
+    if (NOT_AN_ARTWORK.test(file)) continue;
     const haystack = file.toLowerCase();
     const titleHits = titleWords.filter(word => haystack.includes(word)).length;
-    if (requireTitle && titleHits === 0) continue;
-    let score = titleHits;
-    if (artistWords.some(word => haystack.includes(word))) score += 2;
-    if (score >= 2 && (!best || score > best.score)) best = { file, score };
+    if (titleHits === 0) continue;
+    const score = titleHits + (artistWords.some(word => haystack.includes(word)) ? 2 : 0);
+    if (!best || score > best.score) best = { file, score };
   }
   return best?.file ?? null;
 }
@@ -258,11 +275,11 @@ export async function resolveArtworkImage(input: ResolveInput): Promise<Resolved
     const scoped = await commonsSearch(
       `incategory:"Paintings by ${artistEn}" ${titleEn ?? ''}`.trim()
     );
-    const match = titleEn
-      ? bestCommonsMatch(scoped, titleEn, artistEn, true)
-      : // Nothing to match the title against; one painting in the category is
-        // still a painting by the right artist.
-        (scoped.length === 1 ? scoped[0] : null);
+    const match =
+      bestCommonsMatch(scoped, titleEn, artistEn) ??
+      // Nothing to match the title against; one painting in the category is
+      // still a painting by the right artist.
+      (!titleEn && scoped.length === 1 ? scoped[0] : null);
     if (match) return { url: fileUrl(match, width), source: 'commons-category' };
   }
 
