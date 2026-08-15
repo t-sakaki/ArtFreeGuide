@@ -29,6 +29,7 @@ import {
   isLocale,
 } from '@/lib/i18n';
 import { canonicalName, localizeName } from '@/lib/names';
+import { artworkPath } from '@/lib/site';
 import ReadingApprovals from '@/components/ReadingApprovals';
 import GuideCorrections from '@/components/GuideCorrections';
 import AppMenu, { type MenuItem } from '@/components/AppMenu';
@@ -312,7 +313,19 @@ class AudioController {
   }
 }
 
-export default function HomeClient() {
+/**
+ * A permalink (`/artwork/<slug>`, `/tour/<slug>`) names what to open through
+ * props; every other piece of state still travels in the query string.
+ */
+export default function HomeClient({
+  initialArtwork = '',
+  initialArtist = '',
+  initialTour = ''
+}: {
+  initialArtwork?: string;
+  initialArtist?: string;
+  initialTour?: string;
+} = {}) {
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
   // The reading approval queue is a moderator tool, so it stays out of the way
   // until someone opens the app with ?admin=1 once on this device.
@@ -645,17 +658,15 @@ export default function HomeClient() {
     tourId: string | null
   ) => {
     if (typeof window === 'undefined') return;
-    const url = new URL(window.location.href);
-    if (title.trim()) {
-      url.searchParams.set('artwork', title);
-    } else {
-      url.searchParams.delete('artwork');
-    }
-    if (artistName && artistName.trim()) {
-      url.searchParams.set('artist', artistName);
-    } else {
-      url.searchParams.delete('artist');
-    }
+    // The artwork owns the path when it has a permalink, and falls back to the
+    // query string when it does not, so the address bar always reads as a link
+    // that can be shared as it stands.
+    const canonicalTitle = canonicalName(title);
+    const canonicalArtistName = canonicalName(artistName ?? '');
+    const url = new URL(
+      canonicalTitle.trim() ? artworkPath(canonicalTitle, canonicalArtistName) : '/',
+      window.location.href
+    );
     url.searchParams.set('speed', speedValue.toFixed(1));
     url.searchParams.set('mode', modeValue);
     url.searchParams.set('lang', locale);
@@ -683,11 +694,11 @@ export default function HomeClient() {
 
     const handleUrlChange = () => {
       const params = new URLSearchParams(window.location.search);
-      const artworkParam = params.get('artwork') || '';
-      const artistParam = params.get('artist') || '';
+      const artworkParam = params.get('artwork') || initialArtwork;
+      const artistParam = params.get('artist') || initialArtist;
       const speedParam = params.get('speed') || '';
       const modeParam = params.get('mode') || '';
-      const tourParam = params.get('tour') || '';
+      const tourParam = params.get('tour') || initialTour;
       const spotParam = params.get('spot') || '';
 
       // 1. Sync speed if present in URL
@@ -1072,9 +1083,12 @@ export default function HomeClient() {
     localStorage.removeItem('art_free_guide_draft_artist');
 
     if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      for (const key of ['artwork', 'artist', 'mode', 'tour', 'spot']) {
-        url.searchParams.delete(key);
+      // Back to the entrance hall: the permalink of the artwork we just left
+      // has to go with it, not only its query parameters.
+      const url = new URL('/', window.location.href);
+      for (const key of ['speed', 'lang']) {
+        const value = new URL(window.location.href).searchParams.get(key);
+        if (value) url.searchParams.set(key, value);
       }
       window.history.replaceState({}, '', url.toString());
     }
@@ -2120,15 +2134,9 @@ export default function HomeClient() {
   const handleShare = async () => {
     if (typeof window === 'undefined') return;
 
-    // Construct the complete URL containing all active states
-    const url = new URL(window.location.href);
-    url.searchParams.set('artwork', canonicalArtwork);
+    // The permalink of the artwork, carrying every active state as parameters.
+    const url = new URL(artworkPath(canonicalArtwork, artist ? canonicalArtist : ''), window.location.href);
     url.searchParams.set('lang', locale);
-    if (artist) {
-      url.searchParams.set('artist', canonicalArtist);
-    } else {
-      url.searchParams.delete('artist');
-    }
     url.searchParams.set('speed', playbackSpeed.toFixed(1));
     url.searchParams.set('mode', explanationMode);
     if (activePlaylist) {
@@ -2688,7 +2696,7 @@ export default function HomeClient() {
       )}
 
       {/* Scrollable Center Content */}
-      <div className={`w-full max-w-2xl px-4 mx-auto ${responseShort || loading ? 'pt-[19rem] sm:pt-[22rem] pb-32' : 'py-12 md:py-20 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]'}`}>
+      <div className={`w-full max-w-2xl px-4 mx-auto ${responseShort || loading ? 'pt-[19rem] sm:pt-[22rem] pb-44' : 'py-12 md:py-20 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]'}`}>
         
         {/* Empty state: Hero landing / initial search card */}
         {!responseShort && !loading && (
@@ -3086,7 +3094,7 @@ export default function HomeClient() {
 
       {/* Downward Fixed Controller Panel (Optimized Smartphone Thumb Reach) */}
       {responseShort && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 border-t border-slate-900 px-4 pt-2 pb-5 shadow-2xl flex flex-col justify-center gap-2 select-none min-h-28">
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950 border-t border-slate-800 px-4 pt-2 pb-5 shadow-[0_-12px_32px_rgba(2,6,23,0.9)] flex flex-col justify-center gap-2 select-none min-h-28">
           {voiceUnavailable && (
             <div className="w-full max-w-lg mx-auto px-1 text-[10px] leading-tight text-amber-300/80 font-sans">
               {t.voiceUnavailable}
