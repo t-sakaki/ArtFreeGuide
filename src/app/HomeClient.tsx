@@ -32,6 +32,7 @@ import { canonicalName, localizeName } from '@/lib/names';
 import ReadingApprovals from '@/components/ReadingApprovals';
 import GuideCorrections from '@/components/GuideCorrections';
 import AccountPanel from '@/components/AccountPanel';
+import PhotoIdentify from '@/components/PhotoIdentify';
 import ReactMarkdown from 'react-markdown';
 
 interface ArtworkSuggestion {
@@ -2370,6 +2371,23 @@ export default function HomeClient() {
   const renderInputForm = (onSubmitted?: () => void) => {
     return (
       <div className="space-y-6">
+        {/* Standing in front of the work: photograph the label instead of typing */}
+        <PhotoIdentify
+          locale={locale}
+          t={t.camera}
+          disabled={loading}
+          onPrefill={(title, artistName) => {
+            setArtwork(title);
+            setArtist(artistName);
+          }}
+          onApply={(title, artistName) => {
+            exitTour();
+            setArtwork(title);
+            setArtist(artistName);
+            generateGuide(title, artistName);
+            onSubmitted?.();
+          }}
+        />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
           {/* Artwork Input with Autocomplete */}
           <div className="relative space-y-2">

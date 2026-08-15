@@ -81,6 +81,19 @@ export interface UIStrings {
     generating: string;
     generate: string;
   };
+  /** Reading the work off a photo instead of typing its name. */
+  camera: {
+    scan: string;
+    scanning: string;
+    fromCaption: string;
+    fromArtwork: string;
+    confirm: string;
+    apply: string;
+    dismiss: string;
+    notFound: string;
+    failed: string;
+    tooLarge: string;
+  };
   header: {
     search: string;
     share: string;
@@ -197,6 +210,18 @@ const ja: UIStrings = {
     maybe: 'もしかして',
     generating: 'AIキュレーターが分析中...',
     generate: '音声ガイドを生成',
+  },
+  camera: {
+    scan: '📷 写真から探す（題箋・絵画）',
+    scanning: '写真から読み取り中...',
+    fromCaption: '題箋から読み取りました',
+    fromArtwork: '絵の見た目から推定しました。違っていたら直してください',
+    confirm: 'この作品でよろしいですか？',
+    apply: 'この内容で生成',
+    dismiss: '手入力に戻る',
+    notFound: '作品を読み取れませんでした。題箋を大きく写すか、手入力で探してください。',
+    failed: '読み取りに失敗しました。手入力で探してください。',
+    tooLarge: '画像が大きすぎます。別の写真でお試しください。',
   },
   header: {
     search: 'さがす',
@@ -319,6 +344,18 @@ const en: UIStrings = {
     generating: 'The AI curator is looking...',
     generate: 'Create the audio guide',
   },
+  camera: {
+    scan: '📷 Find it from a photo (label or painting)',
+    scanning: 'Reading the photo...',
+    fromCaption: 'Read from the wall label',
+    fromArtwork: 'Recognised from the painting itself. Please correct it if it is wrong',
+    confirm: 'Is this the work in front of you?',
+    apply: 'Use this and create the guide',
+    dismiss: 'Type it myself',
+    notFound: 'Nothing could be read from the photo. Fill the frame with the label, or type the name.',
+    failed: 'The photo could not be read. Please type the name instead.',
+    tooLarge: 'That image is too large. Please try another photo.',
+  },
   header: {
     search: 'Browse',
     share: 'Share this guide',
@@ -439,6 +476,18 @@ const fr: UIStrings = {
     maybe: 'Peut-être',
     generating: 'Le conservateur IA cherche...',
     generate: 'Créer l’audioguide',
+  },
+  camera: {
+    scan: '📷 Trouver à partir d’une photo (cartel ou tableau)',
+    scanning: 'Lecture de la photo...',
+    fromCaption: 'Lu sur le cartel',
+    fromArtwork: 'Reconnu d’après le tableau lui-même. Corrigez si nécessaire',
+    confirm: 'Est-ce bien cette œuvre ?',
+    apply: 'Utiliser et créer le guide',
+    dismiss: 'Saisir moi-même',
+    notFound: 'Rien n’a pu être lu sur la photo. Cadrez le cartel de plus près, ou saisissez le titre.',
+    failed: 'La photo n’a pas pu être lue. Saisissez le titre à la main.',
+    tooLarge: 'Cette image est trop lourde. Essayez une autre photo.',
   },
   header: {
     search: 'Explorer',
@@ -562,6 +611,18 @@ const zh: UIStrings = {
     generating: 'AI 策展人正在查阅...',
     generate: '生成语音导览',
   },
+  camera: {
+    scan: '📷 用照片查找（说明牌或画作）',
+    scanning: '正在识别照片...',
+    fromCaption: '来自说明牌的识别结果',
+    fromArtwork: '根据画面本身推测，如有出入请修改',
+    confirm: '是这件作品吗？',
+    apply: '用这些信息生成',
+    dismiss: '手动输入',
+    notFound: '未能识别照片内容。请把说明牌拍大一些，或手动输入。',
+    failed: '识别失败，请手动输入作品名称。',
+    tooLarge: '图片过大，请换一张照片。',
+  },
   header: {
     search: '浏览',
     share: '分享这段导览',
@@ -683,6 +744,18 @@ const es: UIStrings = {
     maybe: 'Quizás',
     generating: 'El conservador con IA está buscando...',
     generate: 'Crear la audioguía',
+  },
+  camera: {
+    scan: '📷 Buscar con una foto (cartela u obra)',
+    scanning: 'Leyendo la foto...',
+    fromCaption: 'Leído en la cartela',
+    fromArtwork: 'Reconocido por la propia obra. Corrígelo si no es correcto',
+    confirm: '¿Es esta la obra que tienes delante?',
+    apply: 'Usar esto y crear la guía',
+    dismiss: 'Escribirlo yo',
+    notFound: 'No se pudo leer nada en la foto. Acerca la cartela o escribe el título.',
+    failed: 'No se pudo leer la foto. Escribe el título a mano.',
+    tooLarge: 'La imagen es demasiado grande. Prueba con otra foto.',
   },
   header: {
     search: 'Explorar',
