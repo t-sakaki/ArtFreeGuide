@@ -22,7 +22,7 @@
 		// Guides tolerate ~45s; answers and search chips must feel instant.
 		"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
 		"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
-		"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,nvidia/nemotron-3-super-120b-a12b",
+		"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,meta/llama-3.1-8b-instruct",
 		// Where generated guides are archived: "d1" | "supabase" | "memory"
 		"GUIDE_STORE": "d1"
 	},
