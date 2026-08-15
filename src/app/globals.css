@@ -15,6 +15,34 @@
   height: 0;
 }
 
+/*
+ * The wordmark, matching the share card and the README hero: a serif in the
+ * gold of a gallery label. System serifs only, so it costs no web font.
+ */
+.wordmark {
+  font-family: 'Noto Serif JP', 'Hiragino Mincho ProN', 'Yu Mincho', ui-serif, Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* The gallery spotlight of the share card: gold light falling on the wordmark. */
+.spotlight {
+  position: relative;
+}
+
+.spotlight::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -60%;
+  width: 140%;
+  height: 220%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at 50% 35%, rgb(253 230 138 / 0.13), transparent 62%);
+  pointer-events: none;
+  z-index: -1;
+}
+
 /* Inner panels should not drag the page along once they hit their end. */
 .scroll-area {
   overscroll-behavior: contain;
@@ -105,23 +133,63 @@
   animation: hotspotBlink 1.8s ease-in-out infinite;
 }
 
-/* Hearts drifting up from the like button, as on a live stream */
+/*
+ * Hearts drifting up from the like button, as on a live stream: they sway from
+ * side to side, grow as they rise, and fade out near the top.
+ */
 @keyframes heartFloat {
   0% {
-    transform: translate(0, 0) scale(0.6);
+    transform: translate(0, 0) scale(0.4) rotate(0deg);
     opacity: 0;
   }
-  15% {
+  12% {
+    opacity: 1;
+  }
+  30% {
+    transform: translate(calc(var(--heart-drift, 0px) * -0.6), -70px)
+      scale(calc(var(--heart-scale, 1) * 0.85)) rotate(calc(var(--heart-tilt, 0deg) * -1));
+  }
+  60% {
+    transform: translate(calc(var(--heart-drift, 0px) * 0.9), -145px) scale(var(--heart-scale, 1))
+      rotate(var(--heart-tilt, 0deg));
     opacity: 1;
   }
   100% {
-    transform: translate(var(--heart-drift, 0px), -150px) scale(var(--heart-scale, 1));
+    transform: translate(calc(var(--heart-drift, 0px) * 0.2), -235px)
+      scale(calc(var(--heart-scale, 1) * 1.3)) rotate(0deg);
     opacity: 0;
   }
 }
 
 .animate-heart-float {
-  animation: heartFloat 1.6s cubic-bezier(0.2, 0.6, 0.4, 1) forwards;
+  animation: heartFloat var(--heart-duration, 2s) cubic-bezier(0.25, 0.6, 0.35, 1) forwards;
+}
+
+/* The button answers every tap, so a burst feels like it is being counted. */
+@keyframes heartPop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.28);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-heart-pop {
+  animation: heartPop 0.35s cubic-bezier(0.25, 1.4, 0.5, 1);
+}
+
+/* Motion-free fallback: the heart is acknowledged, then simply fades. */
+@keyframes heartFadeOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 /* A question chip wobbles once to invite a tap after the narration ends */
@@ -161,10 +229,68 @@
   animation: playPulse 2s ease-out infinite;
 }
 
+/* Gold gallery light sweeping across the deep-dive chip while it is fetched */
+@keyframes shimmerSweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(253, 230, 138, 0.35),
+    rgba(253, 230, 138, 0.1),
+    transparent
+  );
+  animation: shimmerSweep 1.3s ease-in-out infinite;
+}
+
+/* One gold flash the moment the chip is pressed, before the fetch starts */
+@keyframes diveFlash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(253, 230, 138, 0.55);
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.06);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(253, 230, 138, 0);
+    transform: scale(1);
+  }
+}
+
+.animate-dive-flash {
+  animation: diveFlash 0.6s ease-out;
+}
+
+/* The magnifier rummages through the archive while the story is dug up */
+@keyframes digWiggle {
+  0%,
+  100% {
+    transform: rotate(-10deg) scale(1);
+  }
+  50% {
+    transform: rotate(12deg) scale(1.18);
+  }
+}
+
+.animate-dig {
+  animation: digWiggle 0.75s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-ken-burns,
   .animate-equalizer,
   .animate-chip-nudge,
+  .animate-dive-flash,
+  .animate-shimmer,
+  .animate-dig,
   .animate-play-pulse {
     animation: none;
   }
@@ -177,7 +303,11 @@
 
   /* The hearts still need to disappear, so fade rather than freeze them. */
   .animate-heart-float {
-    animation: heartFloat 1.6s linear forwards;
+    animation: heartFadeOut 1.2s linear forwards;
     transform: none;
+  }
+
+  .animate-heart-pop {
+    animation: none;
   }
 }

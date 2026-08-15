@@ -119,6 +119,9 @@ const QUICK_START_ARTWORKS: { title: string; artist: string; emoji: string }[] =
   { title: '富嶽三十六景 神奈川沖浪裏', artist: '葛飾北斎', emoji: '🌊' },
 ];
 
+/** A burst of taps looks alive when the hearts are not all identical. */
+const HEART_EMOJI = ['❤️', '💖', '💗', '🧡', '💛'];
+
 const PRESET_ARTISTS = [
   'フィンセント・ファン・ゴッホ',
   'レオナルド・ダ・ヴィンチ',
@@ -414,8 +417,13 @@ export default function HomeClient({
   const [reportComment, setReportComment] = useState('');
   const [regenerating, setRegenerating] = useState(false);
   // Live-stream style hearts: each tap spawns one that drifts up and is then dropped.
-  const [hearts, setHearts] = useState<{ id: number; drift: number; scale: number }[]>([]);
+  const [hearts, setHearts] = useState<
+    { id: number; drift: number; scale: number; tilt: number; duration: number; emoji: string }[]
+  >([]);
   const [heartCount, setHeartCount] = useState(0);
+  /** Id of the last tap, so the button replays its pop on every single one. */
+  const [heartPop, setHeartPop] = useState(-1);
+  const [deepDivePress, setDeepDivePress] = useState(0);
   const heartIdRef = useRef(0);
   const heartBurstRef = useRef(0);
   const heartSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1870,6 +1878,24 @@ export default function HomeClient({
   };
 
   // Deep Dive Feature
+  /**
+   * Folds what was just added on screen back into the archived guide, so the
+   * next visitor inherits it. Silent: the visitor already has the text.
+   */
+  const archiveGuideAddition = (block: string) => {
+    if (!canonicalArtwork.trim()) return;
+    fetch('/api/guide/augment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: canonicalArtwork,
+        artist: canonicalArtist,
+        locale: localeRef.current,
+        block
+      })
+    }).catch(e => console.warn('Guide augment failed:', e));
+  };
+
   const handleDeepDive = async () => {
     if (!artwork.trim() || deepDiveLoading) return;
 
@@ -1887,7 +1913,7 @@ export default function HomeClient({
           messages: [
             {
               role: 'user',
-              content: `作品名: ${shownArtwork}について、ガイドブックにも載っていないような知られざる面白い裏話や、美術史における深掘りエピソードを音声ガイド用に語ってください。短い2-3つの文で詳しく解説します。`
+              content: `作品名: ${shownArtwork}について、ガイドブックにも載っていないような知られざる面白い裏話や、美術史における深掘りエピソードを音声ガイド用に語ってください。すでに述べた基本情報は繰り返さず、エピソードを2〜3つ、合わせて300〜500文字程度で語ってください。`
             }
           ]
         })
@@ -1912,9 +1938,11 @@ export default function HomeClient({
       } catch (e) {}
 
       const visualHeader = `\n> 🔍 **${t.guide.deepDiveHeader}**\n`;
-      const updatedDeep = `${responseDeep}\n\n${visualHeader}\n\n${sanitizeGuideText(rawText)}`;
-      
+      const addition = `${visualHeader}\n\n${sanitizeGuideText(rawText)}`;
+      const updatedDeep = `${responseDeep}\n\n${addition}`;
+
       setResponseDeep(updatedDeep);
+      archiveGuideAddition(addition);
       setExplanationMode('deep');
 
       // Update History Entry
@@ -2004,9 +2032,11 @@ export default function HomeClient({
       }
 
       const header = `\n> ❓ **${trimmed}**\n`;
-      const updatedDeep = `${responseDeep}\n\n${header}\n\n${answer}`;
+      const addition = `${header}\n\n${answer}`;
+      const updatedDeep = `${responseDeep}\n\n${addition}`;
 
       setResponseDeep(updatedDeep);
+      archiveGuideAddition(addition);
       setExplanationMode('deep');
       updateHistoryEntryByArtwork(canonicalArtwork, canonicalArtist, { deep: updatedDeep });
 
@@ -2055,12 +2085,21 @@ export default function HomeClient({
    */
   const sendHeart = () => {
     const id = heartIdRef.current++;
+    const duration = 1.8 + Math.random() * 0.9;
     setHearts(prev => [
       ...prev,
-      { id, drift: Math.round((Math.random() - 0.5) * 60), scale: 0.9 + Math.random() * 0.6 }
+      {
+        id,
+        drift: Math.round((Math.random() - 0.5) * 110),
+        scale: 1.1 + Math.random() * 0.9,
+        tilt: Math.round((Math.random() - 0.5) * 40),
+        duration,
+        emoji: HEART_EMOJI[Math.floor(Math.random() * HEART_EMOJI.length)]
+      }
     ]);
-    setTimeout(() => setHearts(prev => prev.filter(h => h.id !== id)), 1700);
+    setTimeout(() => setHearts(prev => prev.filter(h => h.id !== id)), duration * 1000 + 100);
 
+    setHeartPop(id);
     setHeartCount(prev => prev + 1);
     heartBurstRef.current += 1;
 
@@ -2548,12 +2587,12 @@ export default function HomeClient({
         <div className="fixed top-0 left-0 right-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-900 px-4 py-3 flex flex-col items-center select-none shadow-md">
           {/* Top Row Navigation */}
           <div className="flex items-center justify-between w-full max-w-md mb-2">
-            <h1 className="text-lg font-extrabold tracking-tight font-sans">
+            <h1 className="text-xl tracking-tight">
               <button
                 onClick={returnToHub}
                 title={t.header.home}
                 aria-label={t.header.home}
-                className="bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-500 bg-clip-text text-transparent hover:opacity-80 active:scale-95 transition-all cursor-pointer"
+                className="wordmark text-amber-200 hover:text-amber-100 active:scale-95 transition-all cursor-pointer"
               >
                 ArtFreeGuide
               </button>
@@ -2706,8 +2745,11 @@ export default function HomeClient({
             <div className="w-full flex justify-end">{renderMenu(false)}</div>
 
             {/* Header Section */}
-            <div className="text-center mb-4 space-y-3">
-              <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-500 bg-clip-text text-transparent drop-shadow-sm select-none font-sans">
+            <div className="spotlight text-center mb-4 space-y-3">
+              <p className="text-[0.65rem] md:text-xs tracking-[0.45em] text-amber-200/60 uppercase select-none">
+                Free Audio Guide
+              </p>
+              <h1 className="wordmark text-5xl md:text-6xl tracking-tight text-amber-200 drop-shadow-sm select-none">
                 ArtFreeGuide
               </h1>
               <p className="text-slate-400 text-base md:text-lg font-medium max-w-xl mx-auto font-sans leading-relaxed">
@@ -2954,42 +2996,66 @@ export default function HomeClient({
             <div className="flex items-center gap-3 select-none font-sans text-[11px]">
               <div className="relative">
                 {/* Hearts rise out of the button without affecting the layout. */}
-                <div className="pointer-events-none absolute bottom-full left-1/2 h-40 w-24 -translate-x-1/2" aria-hidden="true">
+                <div
+                  className="pointer-events-none absolute bottom-full left-1/2 h-64 w-48 -translate-x-1/2"
+                  aria-hidden="true"
+                >
                   {hearts.map(heart => (
                     <span
                       key={heart.id}
-                      className="animate-heart-float absolute bottom-0 left-1/2 -translate-x-1/2 text-xl"
+                      className="animate-heart-float absolute bottom-0 left-1/2 -translate-x-1/2 text-2xl drop-shadow-[0_0_10px_rgba(244,63,94,0.45)]"
                       style={
                         {
                           '--heart-drift': `${heart.drift}px`,
-                          '--heart-scale': heart.scale
+                          '--heart-scale': heart.scale,
+                          '--heart-tilt': `${heart.tilt}deg`,
+                          '--heart-duration': `${heart.duration}s`
                         } as React.CSSProperties
                       }
                     >
-                      ❤️
+                      {heart.emoji}
                     </span>
                   ))}
                 </div>
                 <button
+                  key={heartPop}
                   onClick={sendHeart}
                   aria-label={t.feedback.heart}
-                  className="w-11 h-11 rounded-full bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-lg transition-colors active:scale-90"
+                  className="animate-heart-pop w-11 h-11 rounded-full bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-lg transition-colors active:scale-90"
                 >
                   {heartCount > 0 ? '❤️' : '🤍'}
                 </button>
               </div>
               {heartCount > 0 && (
-                <span className="text-rose-300 font-bold tabular-nums">{heartCount}</span>
+                <span key={heartPop} className="animate-heart-pop text-rose-300 font-bold tabular-nums">
+                  {heartCount}
+                </span>
               )}
               <div className="ml-auto flex items-center gap-3">
                 <button
-                  onClick={() =>
-                    explanationMode === 'deep' ? handleDeepDive() : setExplanationMode('deep')
-                  }
+                  key={deepDivePress}
+                  onClick={() => {
+                    setDeepDivePress(prev => prev + 1);
+                    if (explanationMode === 'deep') handleDeepDive();
+                    else setExplanationMode('deep');
+                  }}
                   disabled={deepDiveLoading}
-                  className="text-teal-400/80 hover:text-teal-300 disabled:opacity-40"
+                  className={`animate-dive-flash relative overflow-hidden rounded-full border px-3 py-1.5 transition-colors active:scale-95 ${
+                    deepDiveLoading
+                      ? 'border-amber-300/60 bg-amber-300/10 text-amber-200'
+                      : 'border-teal-500/40 text-teal-300 hover:border-teal-400/80 hover:bg-teal-500/10'
+                  }`}
                 >
-                  {deepDiveLoading ? t.ask.deepDiveLoading : t.ask.deepDive}
+                  {/* While the curator digs, gold light sweeps across the chip. */}
+                  {deepDiveLoading && (
+                    <span className="animate-shimmer absolute inset-0" aria-hidden="true" />
+                  )}
+                  <span className="relative flex items-center gap-1">
+                    <span className={deepDiveLoading ? 'animate-dig inline-block' : 'inline-block'}>
+                      🔍
+                    </span>
+                    {(deepDiveLoading ? t.ask.deepDiveLoading : t.ask.deepDive).replace('🔍 ', '')}
+                  </span>
                 </button>
                 <button
                   onClick={() => setShowReportForm(prev => !prev)}
