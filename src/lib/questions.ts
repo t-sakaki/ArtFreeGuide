@@ -21,5 +21,6 @@ export function suggestedQuestions(title: string, artist: string): string[] {
   questions.push('描かれた当時、どう受け止められたのですか？');
   questions.push('どんな技法で描かれているのですか？');
 
-  return questions.slice(0, 4);
+  // Three chips fit two lines on a phone; a fourth turns the row into a wall.
+  return questions.slice(0, 3);
 }
