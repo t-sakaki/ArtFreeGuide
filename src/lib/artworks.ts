@@ -69,6 +69,31 @@ export async function searchArtworks(
 }
 
 /**
+ * Fills in the embedding of a catalogue row that was created without one —
+ * `/api/artwork-image` inserts a row as soon as it finds a picture, so by the
+ * time a guide is generated the artwork often exists but has no vector yet.
+ */
+async function backfillEmbedding(
+  supabase: SupabaseClient,
+  row: ArtworkRecord,
+  input: { title: string; artist: string; description?: string | null }
+): Promise<ArtworkRecord> {
+  const embedding = await embedText(buildArtworkEmbeddingText(input));
+
+  const { error } = await supabase
+    .from('artworks')
+    .update({ [ARTWORK_EMBEDDING_COLUMN]: embedding })
+    .eq('id', row.id);
+
+  if (error) {
+    console.error(`Failed to embed ${input.title}:`, error.message);
+    return row;
+  }
+
+  return { ...row, embedding };
+}
+
+/**
  * Returns the catalogue row for an artwork, adding it (with a freshly generated
  * embedding) when the visitor asked for something not yet in the catalogue.
  */
@@ -77,7 +102,9 @@ export async function findOrCreateArtwork(
   input: { title: string; artist: string; description?: string | null; imageUrl?: string | null }
 ): Promise<ArtworkRecord | null> {
   const existing = await findArtwork(supabase, input.title, input.artist);
-  if (existing) return existing;
+  if (existing) {
+    return existing.embedding ? existing : backfillEmbedding(supabase, existing, input);
+  }
 
   const embedding = await embedText(buildArtworkEmbeddingText(input));
 
