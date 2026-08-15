@@ -12,9 +12,11 @@
 		"binding": "ASSETS"
 	},
 	"vars": {
-		// Set to "gemini" to use the Gemini API instead; that needs a GEMINI_API_KEY secret
-		// (`wrangler secret put GEMINI_API_KEY`, or .dev.vars / .env.local locally).
-		"LLM_PROVIDER": "workers-ai",
+		// "nvidia" (NVIDIA NIM, needs an NVIDIA_API_KEY secret), "workers-ai"
+		// (Cloudflare, no key but only 10,000 free neurons/day) or "gemini"
+		// (needs GEMINI_API_KEY). Set secrets with `wrangler secret put <NAME>`,
+		// or .dev.vars / .env.local locally.
+		"LLM_PROVIDER": "nvidia",
 		// Where generated guides are archived: "d1" | "supabase" | "memory"
 		"GUIDE_STORE": "d1"
 	},
