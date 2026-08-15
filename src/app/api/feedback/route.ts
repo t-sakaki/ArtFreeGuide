@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { FeedbackKind, getFeedbackStore } from '@/lib/feedbackStore';
 import { createServiceClient } from '@/lib/supabase';
 import { CORRECTIONS_TABLE } from '@/lib/readingCorrections';
+import { proposeGuideCorrection } from '@/lib/guideCorrections';
+import { DEFAULT_LOCALE, Locale, isLocale } from '@/lib/i18n';
 
 const KINDS: FeedbackKind[] = ['good', 'bad', 'bug'];
 
@@ -34,7 +36,7 @@ async function putPronunciation(body: any) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { title, artist, kind, comment, excerpt, userId } = body;
+    const { title, artist, kind, comment, excerpt, userId, locale: rawLocale } = body;
 
     if (kind === 'pronunciation') {
       return putPronunciation(body);
@@ -47,17 +49,42 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'title is required' }, { status: 400 });
     }
 
-    const store = getFeedbackStore();
-    await store.put({
+    const entry = {
       title,
       artist: typeof artist === 'string' ? artist : '',
       kind,
       comment: typeof comment === 'string' ? comment.slice(0, 2000) : '',
       excerpt: typeof excerpt === 'string' ? excerpt.slice(0, 2000) : '',
       userId: typeof userId === 'string' && userId ? userId : null
-    });
+    };
 
-    return NextResponse.json({ ok: true, store: store.name });
+    const store = getFeedbackStore();
+    await store.put(entry);
+
+    // A complaint with something to act on becomes a proposed edit for the
+    // moderation queue. It never changes the guide on its own, and a failure
+    // here must not lose the feedback that was just stored.
+    let proposed = false;
+    if (kind !== 'good' && entry.comment) {
+      try {
+        const locale: Locale =
+          typeof rawLocale === 'string' && isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
+        proposed = Boolean(
+          await proposeGuideCorrection({
+            title,
+            artist: entry.artist,
+            locale,
+            kind,
+            comment: entry.comment,
+            excerpt: entry.excerpt
+          })
+        );
+      } catch (error) {
+        console.warn('Guide correction proposal failed:', error);
+      }
+    }
+
+    return NextResponse.json({ ok: true, store: store.name, proposed });
   } catch (error: any) {
     console.error('Feedback API Route Error:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
