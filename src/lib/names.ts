@@ -87,6 +87,25 @@ export const ARTWORK_NAMES: Record<string, Translations> = {
 
 export const NAMES: Record<string, Translations> = { ...ARTIST_NAMES, ...ARTWORK_NAMES };
 
+/**
+ * The names the guide speaks for works the catalogue and the sources list
+ * under another title. A search finds nothing for the spoken form, so it is
+ * replaced by the catalogued one before an artwork is looked up.
+ */
+export const SPOKEN_TITLES: Record<string, string> = {
+  'レースの少女': 'レースを編む女',
+  'レース編みの少女': 'レースを編む女',
+  '牛乳注ぎ': '牛乳を注ぐ女',
+  'ミルクを注ぐ女': '牛乳を注ぐ女',
+  '絵画芸術': 'アトリエの中の画家',
+  '画家のアトリエ': 'アトリエの中の画家'
+};
+
+/** The catalogued title for a name the guide made up, or the name itself. */
+export function catalogueTitle(title: string): string {
+  const trimmed = title.trim();
+  return SPOKEN_TITLES[trimmed] ?? trimmed;
+}
 /** The name as the visitor's language writes it, or the original if unknown. */
 export function localizeName(name: string, locale: Locale): string {
   if (locale === 'ja') return name;
