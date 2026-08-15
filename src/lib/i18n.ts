@@ -45,6 +45,8 @@ export const OUTPUT_LANGUAGE_INSTRUCTION: Record<Locale, string> = {
 /** Names of the sentence-splitting punctuation differ, so does the guide's voice. */
 export interface UIStrings {
   htmlLang: string;
+  /** What the browser tab says once the visitor's language is known. */
+  documentTitle: string;
   tagline: string;
   hub: {
     tours: string;
@@ -121,6 +123,16 @@ export interface UIStrings {
     regenerateToast: string;
   };
   recommendations: string;
+  /** The pgvector recommendation shelf (ForYouShelf). */
+  shelf: {
+    tasteTitle: string;
+    tasteSubtitle: string;
+    blendSubtitle: string;
+    artworkTitle: string;
+    artworkSubtitle: string;
+    listened: (count: number) => string;
+    credit: string;
+  };
   player: {
     position: string;
     speed: string;
@@ -149,6 +161,7 @@ export interface UIStrings {
 
 const ja: UIStrings = {
   htmlLang: 'ja',
+  documentTitle: 'ArtFreeGuide | 無料のAI美術館音声ガイド',
   tagline: 'AIキュレーターが贈る、あなたのための特別な音声ガイド。美術作品をもっと深く、もっと身近に。',
   hub: {
     tours: 'テーマで巡るツアー',
@@ -225,6 +238,15 @@ const ja: UIStrings = {
     regenerateToast: '解説を作り直しています…',
   },
   recommendations: '💡 次におすすめの作品',
+  shelf: {
+    tasteTitle: '✨ あなたのために',
+    tasteSubtitle: 'これまで聴いた作品の嗜好ベクトルから選びました',
+    blendSubtitle: 'いま聴いている作品と、あなたの好みを掛け合わせた候補です',
+    artworkTitle: '🎨 この作品に近い',
+    artworkSubtitle: '聴くほどあなたの好みを学習し、この並びが変わります',
+    listened: count => `${count}作品を聴取`,
+    credit: 'Supabase pgvector · コサイン類似度',
+  },
   player: {
     position: '音声ガイドの再生位置',
     speed: '再生速度を変更',
@@ -259,6 +281,7 @@ const ja: UIStrings = {
 
 const en: UIStrings = {
   htmlLang: 'en',
+  documentTitle: 'ArtFreeGuide | Free AI museum audio guide',
   tagline: 'A personal audio guide written for you by an AI curator. Art, closer and deeper.',
   hub: {
     tours: 'Guided tours by theme',
@@ -335,6 +358,15 @@ const en: UIStrings = {
     regenerateToast: 'Rewriting the guide…',
   },
   recommendations: '💡 Listen to these next',
+  shelf: {
+    tasteTitle: '✨ Picked for you',
+    tasteSubtitle: 'Chosen from the taste vector built out of what you have heard',
+    blendSubtitle: 'Your taste blended with the work you are listening to',
+    artworkTitle: '🎨 Close to this work',
+    artworkSubtitle: 'The more you listen, the more this row learns your taste',
+    listened: count => (count === 1 ? '1 work heard' : `${count} works heard`),
+    credit: 'Supabase pgvector · cosine similarity',
+  },
   player: {
     position: 'Playback position',
     speed: 'Change the speed',
@@ -369,6 +401,7 @@ const en: UIStrings = {
 
 const fr: UIStrings = {
   htmlLang: 'fr',
+  documentTitle: 'ArtFreeGuide | Audioguide de musée IA gratuit',
   tagline: 'Un audioguide personnel écrit pour vous par un conservateur IA. L’art, de plus près.',
   hub: {
     tours: 'Parcours thématiques',
@@ -445,6 +478,15 @@ const fr: UIStrings = {
     regenerateToast: 'Réécriture du commentaire…',
   },
   recommendations: '💡 À écouter ensuite',
+  shelf: {
+    tasteTitle: '✨ Choisi pour vous',
+    tasteSubtitle: 'Sélection issue du vecteur de goûts formé par vos écoutes',
+    blendSubtitle: 'Vos goûts croisés avec l’œuvre que vous écoutez',
+    artworkTitle: '🎨 Proche de cette œuvre',
+    artworkSubtitle: 'Plus vous écoutez, plus cette sélection apprend vos goûts',
+    listened: count => (count === 1 ? '1 œuvre écoutée' : `${count} œuvres écoutées`),
+    credit: 'Supabase pgvector · similarité cosinus',
+  },
   player: {
     position: 'Position de lecture',
     speed: 'Changer la vitesse',
@@ -479,6 +521,7 @@ const fr: UIStrings = {
 
 const zh: UIStrings = {
   htmlLang: 'zh',
+  documentTitle: 'ArtFreeGuide | 免费的 AI 美术馆语音导览',
   tagline: 'AI 策展人为你写的专属语音导览，让艺术更近一点。',
   hub: {
     tours: '主题导览路线',
@@ -555,6 +598,15 @@ const zh: UIStrings = {
     regenerateToast: '正在重新生成讲解…',
   },
   recommendations: '💡 接下来推荐',
+  shelf: {
+    tasteTitle: '✨ 为你精选',
+    tasteSubtitle: '根据你已收听作品形成的偏好向量挑选',
+    blendSubtitle: '结合当前作品与你的偏好推荐',
+    artworkTitle: '🎨 与这件作品相近',
+    artworkSubtitle: '听得越多，这个推荐就越贴近你的喜好',
+    listened: count => `已收听 ${count} 件作品`,
+    credit: 'Supabase pgvector · 余弦相似度',
+  },
   player: {
     position: '播放进度',
     speed: '调整语速',
@@ -589,6 +641,7 @@ const zh: UIStrings = {
 
 const es: UIStrings = {
   htmlLang: 'es',
+  documentTitle: 'ArtFreeGuide | Audioguía de museo con IA, gratis',
   tagline:
     'Una audioguía personal escrita para ti por un conservador con IA. El arte, más cerca y más hondo.',
   hub: {
@@ -666,6 +719,15 @@ const es: UIStrings = {
     regenerateToast: 'Rehaciendo la guía…',
   },
   recommendations: '💡 Escucha estas a continuación',
+  shelf: {
+    tasteTitle: '✨ Elegido para ti',
+    tasteSubtitle: 'Seleccionado a partir del vector de gustos de lo que has escuchado',
+    blendSubtitle: 'Tus gustos combinados con la obra que estás escuchando',
+    artworkTitle: '🎨 Cercano a esta obra',
+    artworkSubtitle: 'Cuanto más escuchas, más se ajusta esta fila a tu gusto',
+    listened: count => (count === 1 ? '1 obra escuchada' : `${count} obras escuchadas`),
+    credit: 'Supabase pgvector · similitud del coseno',
+  },
   player: {
     position: 'Posición de reproducción',
     speed: 'Cambiar la velocidad',
