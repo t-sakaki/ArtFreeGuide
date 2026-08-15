@@ -94,11 +94,11 @@ export default function ForYouShelf({ items, basis, viewCount, favoriteTags, loc
               onClick={() => onPick(item.title, item.artist)}
               className="bg-slate-900/40 border border-slate-800 hover:border-teal-500/40 hover:bg-slate-900/70 rounded-2xl p-3 flex gap-3 text-left active:scale-95 transition-all shadow-md group"
             >
-              <div className="relative w-20 h-16 rounded-xl overflow-hidden bg-slate-950 border border-slate-850 shrink-0 flex items-center justify-center">
+              <div className="relative w-28 h-24 rounded-xl overflow-hidden bg-slate-950 border border-slate-850 shrink-0 flex items-center justify-center">
                 {image ? (
                   <img src={image} alt={item.title} className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-sm">🖼️</span>
+                  <span className="text-xl">🖼️</span>
                 )}
               </div>
               <div className="flex-1 min-w-0">
