@@ -29,6 +29,7 @@ import {
 } from '@/lib/i18n';
 import { canonicalName, localizeName } from '@/lib/names';
 import ReadingApprovals from '@/components/ReadingApprovals';
+import AccountPanel from '@/components/AccountPanel';
 import ReactMarkdown from 'react-markdown';
 
 interface ArtworkSuggestion {
@@ -290,6 +291,7 @@ export default function ArtFreeGuide() {
   // until someone opens the app with ?admin=1 once on this device.
   const [adminMode, setAdminMode] = useState(false);
   const [showReadingApprovals, setShowReadingApprovals] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
   const [artwork, setArtwork] = useState('');
   const [artist, setArtist] = useState('');
   const [loading, setLoading] = useState(false);
@@ -2132,6 +2134,18 @@ export default function ArtFreeGuide() {
     );
   };
 
+  /** Optional sign-in, so history and taste can follow the visitor. */
+  const renderAccountButton = () => (
+    <button
+      onClick={() => setShowAccount(true)}
+      aria-label="アカウント"
+      title="アカウント"
+      className="text-slate-300 hover:text-teal-400 transition-colors text-sm bg-slate-900/60 border border-slate-800 hover:border-teal-500/40 h-8 px-2.5 rounded-lg flex items-center gap-1 active:scale-95 font-sans"
+    >
+      <span>👤</span>
+    </button>
+  );
+
   /** Opens the reading approval queue in place, without leaving the guide. */
   const renderAdminButton = () =>
     adminMode ? (
@@ -2474,6 +2488,7 @@ export default function ArtFreeGuide() {
             </h1>
 
             <div className="flex items-center gap-2">
+              {renderAccountButton()}
               {renderAdminButton()}
               {renderLanguageSwitch()}
 
@@ -2642,6 +2657,7 @@ export default function ArtFreeGuide() {
         {!responseShort && !loading && (
           <div className="w-full space-y-8 animate-fade-in flex flex-col items-center">
             <div className="w-full flex justify-end gap-2">
+              {renderAccountButton()}
               {renderAdminButton()}
               {renderLanguageSwitch()}
             </div>
@@ -3208,6 +3224,32 @@ export default function ArtFreeGuide() {
             </div>
 
             {renderBrowseHub(() => setShowInputDrawer(false))}
+          </div>
+        </div>
+      )}
+
+      {/* Sign-in overlay: same in-place pattern as the approval queue */}
+      {showAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div
+            className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+            onClick={() => setShowAccount(false)}
+          ></div>
+
+          <div className="relative z-50 w-full max-w-md max-h-[85vh] overflow-y-auto scroll-area bg-slate-950 border border-slate-900 rounded-3xl shadow-2xl p-6">
+            <div className="flex items-center justify-between border-b border-slate-900 pb-4 mb-4 font-sans">
+              <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
+                <span>👤</span> アカウント
+              </h3>
+              <button
+                onClick={() => setShowAccount(false)}
+                className="text-slate-500 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <AccountPanel onUserId={setUserId} />
           </div>
         </div>
       )}

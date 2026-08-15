@@ -9,6 +9,16 @@ export function getStoredUserId(): string | null {
   return localStorage.getItem(STORAGE_KEY);
 }
 
+/** Point this browser at a profile, e.g. the one resolved after signing in. */
+export function setStoredUserId(userId: string): void {
+  localStorage.setItem(STORAGE_KEY, userId);
+}
+
+/** Forget the profile on sign-out; the next visit starts a fresh anonymous one. */
+export function clearStoredUserId(): void {
+  localStorage.removeItem(STORAGE_KEY);
+}
+
 export async function ensureAnonymousUser(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
 
