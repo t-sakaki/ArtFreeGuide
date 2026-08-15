@@ -364,7 +364,7 @@ const en: UIStrings = {
     blendSubtitle: 'Your taste blended with the work you are listening to',
     artworkTitle: '🎨 Close to this work',
     artworkSubtitle: 'The more you listen, the more this row learns your taste',
-    listened: count => `${count} works heard`,
+    listened: count => (count === 1 ? '1 work heard' : `${count} works heard`),
     credit: 'Supabase pgvector · cosine similarity',
   },
   player: {
@@ -484,7 +484,7 @@ const fr: UIStrings = {
     blendSubtitle: 'Vos goûts croisés avec l’œuvre que vous écoutez',
     artworkTitle: '🎨 Proche de cette œuvre',
     artworkSubtitle: 'Plus vous écoutez, plus cette sélection apprend vos goûts',
-    listened: count => `${count} œuvres écoutées`,
+    listened: count => (count === 1 ? '1 œuvre écoutée' : `${count} œuvres écoutées`),
     credit: 'Supabase pgvector · similarité cosinus',
   },
   player: {
@@ -725,7 +725,7 @@ const es: UIStrings = {
     blendSubtitle: 'Tus gustos combinados con la obra que estás escuchando',
     artworkTitle: '🎨 Cercano a esta obra',
     artworkSubtitle: 'Cuanto más escuchas, más se ajusta esta fila a tu gusto',
-    listened: count => `${count} obras escuchadas`,
+    listened: count => (count === 1 ? '1 obra escuchada' : `${count} obras escuchadas`),
     credit: 'Supabase pgvector · similitud del coseno',
   },
   player: {
