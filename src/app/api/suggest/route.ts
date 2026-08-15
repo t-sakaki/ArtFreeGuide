@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { searchArtworks } from '@/lib/artworks';
+import { DEFAULT_LOCALE, Locale, OUTPUT_LANGUAGE_INSTRUCTION, isLocale } from '@/lib/i18n';
 import { getGuideStore } from '@/lib/guideStore';
 import { getLLMProvider, Message } from '@/lib/llm';
 import { createServiceClient } from '@/lib/supabase';
@@ -33,7 +34,11 @@ function addUnique(into: Map<string, Suggestion>, items: Suggestion[]): void {
 }
 
 /** Titles an LLM invents ("ひまわりの丘") are only used to top up real matches. */
-async function inventedTitles(artworkQuery: string, artistName: string): Promise<Suggestion[]> {
+async function inventedTitles(
+  artworkQuery: string,
+  artistName: string,
+  locale: Locale
+): Promise<Suggestion[]> {
   const scope = artistName.trim()
     ? `アーティスト「${artistName}」の作品の中で、キーワード「${artworkQuery}」に関連する有名な作品`
     : `世界的に有名な美術作品の中で、キーワード「${artworkQuery}」に関連する代表的な作品`;
@@ -41,6 +46,7 @@ async function inventedTitles(artworkQuery: string, artistName: string): Promise
   const prompt = `${scope}を3〜5件提案してください。
 実在する作品名だけを挙げてください。存在しない作品を創作してはいけません。
 意味的な関連性も考慮してください（例：「春」というクエリに対して「ノルマンディーの春」を提案するなど）。
+${OUTPUT_LANGUAGE_INSTRUCTION[locale]}
 必ず、以下のJSON配列の形式のみを返してください。余計なマークダウンのバッククォート、解説、挨拶は一切含めず、純粋なパース可能なJSONオブジェクトとして出力してください。
 
 [
@@ -71,7 +77,9 @@ async function inventedTitles(artworkQuery: string, artistName: string): Promise
 
 export async function POST(req: Request) {
   try {
-    const { artworkQuery, artistName } = await req.json();
+    const { artworkQuery, artistName, locale: rawLocale } = await req.json();
+    const locale: Locale =
+      typeof rawLocale === 'string' && isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
     const query = typeof artworkQuery === 'string' ? artworkQuery.trim() : '';
     const artist = typeof artistName === 'string' ? artistName.trim() : '';
 
@@ -110,7 +118,7 @@ export async function POST(req: Request) {
     // 3. Only then ask the LLM, to cover artworks we simply do not know yet.
     if (suggestions.size < ENOUGH_REAL_MATCHES) {
       try {
-        addUnique(suggestions, await inventedTitles(query, artist));
+        addUnique(suggestions, await inventedTitles(query, artist, locale));
       } catch (error) {
         console.error('LLM suggestion failed:', error);
       }
