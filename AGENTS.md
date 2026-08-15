@@ -43,7 +43,7 @@
 - `src/app/api/suggest`: 入力補完（アーカイブ→カタログ→AI の順で候補を返す。推薦ではない）。
 - `src/app/api/artwork-image`: Wikidata/Commons による画像解決とカタログ書き戻し。
 - `src/app/api/identify`: 写真からの作品特定（VLM）。
-- `src/lib/names.ts`: 作品名・作家名の多言語辞書。`src/lib/slug.ts` のパーマリンクもここから生成。
+- `src/lib/names.ts`: 作品名・作家名の多言語辞書。`src/lib/slug.ts` のパーマリンクもここから生成。中身は `src/lib/names.data.json`（Supabase の `artwork_names`/`artist_names`/`title_aliases` から `scripts/sync_names.mjs` で生成）。
 - `src/lib/playlists.ts`: ツアー構成（作品順序）の定義ファイル。**外部ブランチのマージで多言語データが消えた事故があるため差分必須確認**。
 - `src/lib/guideStore/`: D1/Supabase へのデータアクセス層。
 
@@ -51,6 +51,7 @@
 - **ブランチ戦略**: `main`（本番）。作業は `feat/` または `devin/` ブランチで行い、PR 経由で `main` へ。`main` へ直接 push しない。
 - **デプロイ**: `main` への push で Cloudflare が自動デプロイ（手動なら `npx wrangler deploy`。wrangler は Node 22 以上が必要）。
 - **確認コマンド**: `npm ci` → `npx tsc --noEmit` → `npm run build`（OpenNext ビルドまで通ること）。
+- **名前辞書の更新**: DB を直したら `node scripts/sync_names.mjs`（--push で file → DB）。生成された `names.data.json` をコミットしないと本番には出ません（スラグと sitemap はビルド時確定のため）。
 - **デプロイ後のウォームアップ**: `node scripts/warm_cache.mjs --images-only --concurrency=1` と `--guides-only --locales=ja,en --limit=20 --concurrency=1`。
 
 ## 6. 既知の課題
