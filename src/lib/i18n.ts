@@ -81,11 +81,30 @@ export interface UIStrings {
     generating: string;
     generate: string;
   };
+  /** Reading the work off a photo instead of typing its name. */
+  camera: {
+    scan: string;
+    scanning: string;
+    fromCaption: string;
+    fromArtwork: string;
+    confirm: string;
+    apply: string;
+    dismiss: string;
+    notFound: string;
+    failed: string;
+    tooLarge: string;
+  };
   header: {
+    /** The banner doubles as the way back to the entrance hall. */
+    home: string;
     search: string;
     share: string;
     history: string;
     language: string;
+    /** The one corner button everything else now lives behind. */
+    menu: string;
+    account: string;
+    admin: string;
   };
   image: {
     loading: string;
@@ -170,6 +189,8 @@ export interface UIStrings {
     copyFailed: string;
   };
   loadingSteps: string[];
+  /** Shown when the browser has no working voice and the guide only scrolls. */
+  voiceUnavailable: string;
 }
 
 const ja: UIStrings = {
@@ -196,11 +217,27 @@ const ja: UIStrings = {
     generating: 'AIキュレーターが分析中...',
     generate: '音声ガイドを生成',
   },
+  camera: {
+    scan: '📷 写真から探す（題箋・絵画）',
+    scanning: '写真から読み取り中...',
+    fromCaption: '題箋から読み取りました',
+    fromArtwork: '絵の見た目から推定しました。違っていたら直してください',
+    confirm: 'この作品でよろしいですか？',
+    apply: 'この内容で生成',
+    dismiss: '手入力に戻る',
+    notFound: '作品を読み取れませんでした。題箋を大きく写すか、手入力で探してください。',
+    failed: '読み取りに失敗しました。手入力で探してください。',
+    tooLarge: '画像が大きすぎます。別の写真でお試しください。',
+  },
   header: {
+    home: 'トップにもどる',
     search: 'さがす',
     share: 'この解説を共有',
     history: '履歴',
     language: '言語を切り替える',
+    menu: 'メニュー',
+    account: 'アカウント',
+    admin: '承認キュー',
   },
   image: {
     loading: '画像を読み込み中...',
@@ -283,6 +320,7 @@ const ja: UIStrings = {
     copied: '共有URLをクリップボードにコピーしました！',
     copyFailed: 'コピーに失敗しました',
   },
+  voiceUnavailable: 'この端末では音声を再生できないため、テキストだけが読むペースで進みます。',
   loadingSteps: [
     '作品の資料を探しています...',
     '時代背景を読み解いています...',
@@ -316,11 +354,27 @@ const en: UIStrings = {
     generating: 'The AI curator is looking...',
     generate: 'Create the audio guide',
   },
+  camera: {
+    scan: '📷 Find it from a photo (label or painting)',
+    scanning: 'Reading the photo...',
+    fromCaption: 'Read from the wall label',
+    fromArtwork: 'Recognised from the painting itself. Please correct it if it is wrong',
+    confirm: 'Is this the work in front of you?',
+    apply: 'Use this and create the guide',
+    dismiss: 'Type it myself',
+    notFound: 'Nothing could be read from the photo. Fill the frame with the label, or type the name.',
+    failed: 'The photo could not be read. Please type the name instead.',
+    tooLarge: 'That image is too large. Please try another photo.',
+  },
   header: {
+    home: 'Back to the top page',
     search: 'Browse',
     share: 'Share this guide',
     history: 'History',
     language: 'Change language',
+    menu: 'Menu',
+    account: 'Account',
+    admin: 'Approval queue',
   },
   image: {
     loading: 'Loading the image...',
@@ -403,6 +457,7 @@ const en: UIStrings = {
     copied: 'Link copied to the clipboard!',
     copyFailed: 'Could not copy the link',
   },
+  voiceUnavailable: 'This browser has no speech voice available, so the text advances at reading pace without audio.',
   loadingSteps: [
     'Gathering material about the work...',
     'Reading the period it was made in...',
@@ -436,11 +491,27 @@ const fr: UIStrings = {
     generating: 'Le conservateur IA cherche...',
     generate: 'Créer l’audioguide',
   },
+  camera: {
+    scan: '📷 Trouver à partir d’une photo (cartel ou tableau)',
+    scanning: 'Lecture de la photo...',
+    fromCaption: 'Lu sur le cartel',
+    fromArtwork: 'Reconnu d’après le tableau lui-même. Corrigez si nécessaire',
+    confirm: 'Est-ce bien cette œuvre ?',
+    apply: 'Utiliser et créer le guide',
+    dismiss: 'Saisir moi-même',
+    notFound: 'Rien n’a pu être lu sur la photo. Cadrez le cartel de plus près, ou saisissez le titre.',
+    failed: 'La photo n’a pas pu être lue. Saisissez le titre à la main.',
+    tooLarge: 'Cette image est trop lourde. Essayez une autre photo.',
+  },
   header: {
+    home: 'Retour à l’accueil',
     search: 'Explorer',
     share: 'Partager ce guide',
     history: 'Historique',
     language: 'Changer de langue',
+    menu: 'Menu',
+    account: 'Compte',
+    admin: 'File de validation',
   },
   image: {
     loading: 'Chargement de l’image...',
@@ -523,6 +594,8 @@ const fr: UIStrings = {
     copied: 'Lien copié dans le presse-papiers !',
     copyFailed: 'Échec de la copie',
   },
+  voiceUnavailable:
+    "Ce navigateur ne dispose d'aucune voix de synthèse : le texte défile au rythme de la lecture, sans audio.",
   loadingSteps: [
     'Recherche de documentation sur l’œuvre...',
     'Lecture du contexte historique...',
@@ -556,11 +629,27 @@ const zh: UIStrings = {
     generating: 'AI 策展人正在查阅...',
     generate: '生成语音导览',
   },
+  camera: {
+    scan: '📷 用照片查找（说明牌或画作）',
+    scanning: '正在识别照片...',
+    fromCaption: '来自说明牌的识别结果',
+    fromArtwork: '根据画面本身推测，如有出入请修改',
+    confirm: '是这件作品吗？',
+    apply: '用这些信息生成',
+    dismiss: '手动输入',
+    notFound: '未能识别照片内容。请把说明牌拍大一些，或手动输入。',
+    failed: '识别失败，请手动输入作品名称。',
+    tooLarge: '图片过大，请换一张照片。',
+  },
   header: {
+    home: '返回首页',
     search: '浏览',
     share: '分享这段导览',
     history: '记录',
     language: '切换语言',
+    menu: '菜单',
+    account: '账户',
+    admin: '审核队列',
   },
   image: {
     loading: '正在加载图片...',
@@ -643,6 +732,7 @@ const zh: UIStrings = {
     copied: '链接已复制到剪贴板！',
     copyFailed: '复制失败',
   },
+  voiceUnavailable: '此浏览器没有可用的语音，因此文本将按阅读速度推进，不播放音频。',
   loadingSteps: [
     '正在查找作品资料...',
     '正在梳理时代背景...',
@@ -677,11 +767,27 @@ const es: UIStrings = {
     generating: 'El conservador con IA está buscando...',
     generate: 'Crear la audioguía',
   },
+  camera: {
+    scan: '📷 Buscar con una foto (cartela u obra)',
+    scanning: 'Leyendo la foto...',
+    fromCaption: 'Leído en la cartela',
+    fromArtwork: 'Reconocido por la propia obra. Corrígelo si no es correcto',
+    confirm: '¿Es esta la obra que tienes delante?',
+    apply: 'Usar esto y crear la guía',
+    dismiss: 'Escribirlo yo',
+    notFound: 'No se pudo leer nada en la foto. Acerca la cartela o escribe el título.',
+    failed: 'No se pudo leer la foto. Escribe el título a mano.',
+    tooLarge: 'La imagen es demasiado grande. Prueba con otra foto.',
+  },
   header: {
+    home: 'Volver al inicio',
     search: 'Explorar',
     share: 'Compartir esta guía',
     history: 'Historial',
     language: 'Cambiar de idioma',
+    menu: 'Menú',
+    account: 'Cuenta',
+    admin: 'Cola de aprobación',
   },
   image: {
     loading: 'Cargando la imagen...',
@@ -764,6 +870,7 @@ const es: UIStrings = {
     copied: '¡Enlace copiado al portapapeles!',
     copyFailed: 'No se ha podido copiar el enlace',
   },
+  voiceUnavailable: 'Este navegador no tiene ninguna voz disponible, así que el texto avanza al ritmo de lectura, sin audio.',
   loadingSteps: [
     'Reuniendo documentación sobre la obra...',
     'Leyendo la época en que se hizo...',
