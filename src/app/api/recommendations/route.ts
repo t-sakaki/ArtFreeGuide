@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase';
 import { parseEmbedding } from '@/lib/artworks';
+import { rankByPopularity } from '@/lib/popularity';
 import {
   ARTWORK_EMBEDDING_COLUMN,
   MATCH_FUNCTION,
@@ -10,6 +11,8 @@ import {
 
 const MATCH_COUNT = 6;
 const HEARD_LIMIT = 50;
+/** Extra neighbours to fetch, so plays and hearts have something to reorder. */
+const POPULARITY_POOL = 12;
 // Recommendations lean on the artwork the visitor is looking at, nudged by taste.
 const ARTWORK_WEIGHT = 0.6;
 
@@ -55,7 +58,7 @@ export async function POST(req: Request) {
         query_embedding: preference,
         match_threshold: MATCH_THRESHOLD,
         // Over-fetch: everything already heard is filtered out below.
-        match_count: MATCH_COUNT + HEARD_LIMIT
+        match_count: MATCH_COUNT + HEARD_LIMIT + POPULARITY_POOL
       });
 
       if (tasteError) {
@@ -75,9 +78,12 @@ export async function POST(req: Request) {
       const heardIds = new Set((heard ?? []).map(row => row.artwork_id));
       const fresh = (tasteMatches ?? [])
         .filter((match: { id: string }) => !heardIds.has(match.id))
-        .slice(0, MATCH_COUNT);
+        .slice(0, MATCH_COUNT + POPULARITY_POOL);
 
-      return NextResponse.json({ recommendations: fresh, basis: 'taste' });
+      return NextResponse.json({
+        recommendations: await rankByPopularity(supabase, fresh, MATCH_COUNT),
+        basis: 'taste'
+      });
     }
 
     let query = supabase
@@ -120,7 +126,7 @@ export async function POST(req: Request) {
     const { data: matches, error: matchError } = await supabase.rpc(MATCH_FUNCTION, {
       query_embedding: queryEmbedding,
       match_threshold: MATCH_THRESHOLD,
-      match_count: MATCH_COUNT
+      match_count: MATCH_COUNT + POPULARITY_POOL
     });
 
     if (matchError) {
@@ -128,7 +134,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ recommendations: [], basis: 'none' });
     }
 
-    const recommendations = (matches ?? []).filter((match: { id: string }) => match.id !== artwork.id);
+    const neighbours = (matches ?? []).filter((match: { id: string }) => match.id !== artwork.id);
+    const recommendations = await rankByPopularity(supabase, neighbours, MATCH_COUNT);
 
     return NextResponse.json({ artworkId: artwork.id, recommendations, basis });
   } catch (error: any) {

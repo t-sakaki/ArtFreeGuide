@@ -114,6 +114,12 @@ export default function ForYouShelf({ items, basis, viewCount, favoriteTags, loc
                   {localizeName(item.artist, locale)}
                   {item.year ? ` ・ ${item.year}` : ''}
                 </p>
+                {((item.hearts ?? 0) > 0 || (item.plays ?? 0) > 0) && (
+                  <p className="text-[10px] text-slate-500 font-mono mt-0.5 flex gap-2">
+                    {(item.hearts ?? 0) > 0 && <span className="text-rose-300/80">❤️ {item.hearts}</span>}
+                    {(item.plays ?? 0) > 0 && <span>▶ {item.plays}</span>}
+                  </p>
+                )}
                 <div className="mt-1 h-0.5 w-full bg-slate-900 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-teal-500/70"

@@ -10,6 +10,10 @@ export interface SimilarArtwork {
   description: string | null;
   image_url: string | null;
   similarity: number;
+  /** How often the guide was opened, across every visitor. */
+  plays?: number;
+  /** Hearts other listeners tapped on this guide. */
+  hearts?: number;
 }
 
 /** Which vector produced the list: the artwork, the taste vector, or both. */
@@ -22,7 +26,8 @@ interface RecommendationsResponse {
 
 /**
  * Similar-artwork recommendations from the Supabase catalogue (pgvector),
- * personalised with the anonymous user's taste vector when one exists.
+ * personalised with the anonymous user's taste vector when one exists and
+ * nudged by what other visitors played and hearted.
  * With an empty title the taste vector alone drives the search.
  */
 export function useRecommendations(title: string, artist: string, userId: string | null) {
