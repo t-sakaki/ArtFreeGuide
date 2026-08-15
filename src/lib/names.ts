@@ -74,6 +74,14 @@ export const NAMES: Record<string, Translations> = {
   '病める少女': { en: 'The Sick Child', fr: 'L’Enfant malade', zh: '病中的孩子', es: 'La niña enferma' },
   '黒い正方形': { en: 'Black Square', fr: 'Carré noir', zh: '黑方块', es: 'Cuadrado negro' },
   '鮭': { en: 'Salmon', fr: 'Saumon', zh: '鲑鱼', es: 'Salmón' },
+  // Titles the guide itself likes to use for two Vermeers, which the catalogue
+  // and Wikipedia write differently — without these their pictures never load.
+  // The catalogue's own spelling comes last of each pair: a translated name
+  // resolves back to it, not to the variant the guide made up.
+  '牛乳注ぎ': { en: 'The Milkmaid', fr: 'La Laitière', zh: '倒牛奶的女仆', es: 'La lechera' },
+  '牛乳を注ぐ女': { en: 'The Milkmaid', fr: 'La Laitière', zh: '倒牛奶的女仆', es: 'La lechera' },
+  'レースの少女': { en: 'The Lacemaker', fr: 'La Dentellière', zh: '花边女工', es: 'La encajera' },
+  'レースを編む女': { en: 'The Lacemaker', fr: 'La Dentellière', zh: '花边女工', es: 'La encajera' },
 };
 
 /** The name as the visitor's language writes it, or the original if unknown. */

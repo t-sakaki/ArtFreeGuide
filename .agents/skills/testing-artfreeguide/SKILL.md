@@ -128,6 +128,25 @@ Prefer either:
 - Mobile-width checks: `xdotool windowsize` is unreliable while Chrome is maximized — use DevTools
   device emulation (`Ctrl+Shift+M`) and set the width to 430 in the device toolbar.
 
+## Testing against production (fastest full-feature path)
+- https://art-free-guide.taira-sakakibara.workers.dev has D1-cached guides, so a curated artwork opens
+  in 1-3s (vs 40-90s locally). For demo/README-style verification prefer production over `next dev`.
+- The header 「ArtFreeGuide」 is a button (`returnToHub`): it clears the guide/image/recommendations,
+  stops playback, clears the 作品名/作者名 inputs + drafts and strips `artwork/artist/mode/tour/spot`
+  from the URL while keeping `lang`/`speed`. Handy to reset between artworks without a reload.
+- The app restores the previous artwork from localStorage on load, so a bare production URL may open a
+  guide instead of the entrance hall — click the header banner to get the hub.
+- Language switch: hamburger (top-right) → flag row (🇯🇵/🇬🇧/🇫🇷/🇪🇸/🇨🇳). If the target-locale guide is
+  pre-warmed it appears in a few seconds; otherwise expect a full ~60s regeneration.
+- Page scrolling is fought by the auto-scroll of the sentence player: **pause playback first**, then
+  scroll with the cursor over the left margin (x≈150) to reach 「💡 次におすすめの作品」 / 「🎨 この作品に近い」.
+- Full-resolution screenshots for README/PR evidence: `import -window <chrome_window_id> out.png`
+  (get the id from `wmctrl -l -G`/`xdotool search`) — the computer-tool screenshot is downscaled.
+- Recommendation thumbnails: 「💡 次におすすめの作品」 images are resolved per title from Wikimedia at
+  runtime. Non-canonical Japanese titles invented by the LLM (e.g. 「レースの少女」 instead of
+  「レースを編む女」) never resolve and stay a 🖼️ placeholder — this is a data/title problem, not a
+  layout bug. The pgvector shelf uses catalogue rows and always has images.
+
 ## Hotspots (見どころ) feature
 - Data lives in `src/lib/hotspots.ts` (6 works × 4 hotspots, x/y in 0–1, per-hotspot `zoom`).
   Read the x/y there first, then judge alignment against a full-resolution `zoom` screenshot of the
