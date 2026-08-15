@@ -148,9 +148,17 @@ function sanitizeGuideText(text: string): string {
     .trim();
 }
 
+// Roughly how long a passage takes to read aloud. Used to pace the guide when the
+// browser never actually produces audio.
+function estimatedSpeechMs(text: string, rate: number, lang: string): number {
+  const perChar = lang === 'ja-JP' || lang === 'zh-CN' ? 140 : 62;
+  return Math.max(1200, (text.length * perChar) / Math.max(rate, 0.5));
+}
+
 class AudioController {
   private static speechTimeoutId: any = null;
   private static startTimeoutId: any = null;
+  private static pacingTimeoutId: any = null;
 
   static clearQueue() {
     console.log('[AUDIO] Queue Cancelled');
@@ -169,6 +177,10 @@ class AudioController {
     if (this.startTimeoutId) {
       clearTimeout(this.startTimeoutId);
       this.startTimeoutId = null;
+    }
+    if (this.pacingTimeoutId) {
+      clearTimeout(this.pacingTimeoutId);
+      this.pacingTimeoutId = null;
     }
   }
 
@@ -192,7 +204,8 @@ class AudioController {
     lang: string,
     onStart: () => void,
     onEnd: () => void,
-    onError: (e: any) => void
+    onError: (e: any) => void,
+    onSilent?: () => void
   ) {
     this.clearQueue();
 
@@ -227,9 +240,14 @@ class AudioController {
       if (voice) utterance.voice = voice;
 
       let hasFinished = false;
+      let hasStarted = false;
 
       const handleTransition = (type: 'end' | 'error' | 'timeout', detail?: any) => {
         if (hasFinished) return;
+        // A cancel belongs to whoever asked for it; that caller decides what plays next.
+        if (type === 'error' && (detail?.error === 'interrupted' || detail?.error === 'canceled')) {
+          return;
+        }
         hasFinished = true;
 
         if (this.speechTimeoutId) {
@@ -239,6 +257,16 @@ class AudioController {
         if (this.startTimeoutId) {
           clearTimeout(this.startTimeoutId);
           this.startTimeoutId = null;
+        }
+
+        if (!hasStarted) {
+          // No audio ever came out (no voice for this language, engine blocked).
+          // Advancing right away runs the whole guide out in about a second, so let
+          // the text move at reading pace instead.
+          console.warn(`[AUDIO] Sentence #${index} produced no audio; pacing by text length`);
+          onSilent?.();
+          this.pacingTimeoutId = setTimeout(onEnd, estimatedSpeechMs(text, rate, lang));
+          return;
         }
 
         if (type === 'end') {
@@ -258,6 +286,17 @@ class AudioController {
       }, 2500);
 
       utterance.onstart = () => {
+        hasStarted = true;
+        // A slow engine can start after the 2.5s give-up; take the real audio back
+        // over from the text-paced fallback rather than talking over it.
+        if (hasFinished && this.pacingTimeoutId) {
+          clearTimeout(this.pacingTimeoutId);
+          this.pacingTimeoutId = null;
+          hasFinished = false;
+          this.speechTimeoutId = setTimeout(() => {
+            handleTransition('timeout');
+          }, Math.max(15000, text.length * 200));
+        }
         if (this.startTimeoutId) {
           clearTimeout(this.startTimeoutId);
           this.startTimeoutId = null;
@@ -362,6 +401,7 @@ export default function HomeClient() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE]);
   const [speechSupported, setSpeechSupported] = useState(false);
+  const [voiceUnavailable, setVoiceUnavailable] = useState(false);
 
   // Deep Dive & Interactive Feedback States
   const [deepDiveLoading, setDeepDiveLoading] = useState(false);
@@ -718,10 +758,15 @@ export default function HomeClient() {
   useEffect(() => {
     // 1. Restore playback speed
     // The language effect above already resolved the locale into the ref.
-    const savedSpeed = localStorage.getItem('art_free_guide_playback_speed');
-    setPlaybackSpeed(
-      savedSpeed ? parseFloat(savedSpeed) : DEFAULT_PLAYBACK_SPEED[localeRef.current]
-    );
+    // A speed carried in the link is a deliberate choice by whoever shared it, and
+    // this effect runs after the deep-link one, so it must not undo it.
+    const linkSpeed = new URLSearchParams(window.location.search).get('speed');
+    if (!linkSpeed) {
+      const savedSpeed = localStorage.getItem('art_free_guide_playback_speed');
+      setPlaybackSpeed(
+        savedSpeed ? parseFloat(savedSpeed) : DEFAULT_PLAYBACK_SPEED[localeRef.current]
+      );
+    }
 
     // 2. Restore history
     const savedHistoryStr = localStorage.getItem('art_free_guide_history');
@@ -1119,7 +1164,7 @@ export default function HomeClient() {
       speedRef.current,
       SPEECH_LANG[localeRef.current],
       () => {
-        // Voice started callback if needed
+        setVoiceUnavailable(false);
       },
       () => {
         if (isPlayingRef.current && activeIndexRef.current === index) {
@@ -1130,7 +1175,8 @@ export default function HomeClient() {
         if (isPlayingRef.current && activeIndexRef.current === index) {
           setActiveSegmentIndex(prev => prev + 1);
         }
-      }
+      },
+      () => setVoiceUnavailable(true)
     );
   };
 
@@ -2696,7 +2742,7 @@ export default function HomeClient() {
               <div className="h-4 bg-slate-800 rounded w-[95%]"></div>
               <div className="h-4 bg-slate-800 rounded w-[90%]"></div>
             </div>
-            <p className="text-center text-xs text-slate-400 font-sans pt-2" aria-live="polite">
+            <p className="text-center text-xs text-slate-400 font-sans pt-2 animate-pulse" aria-live="polite">
               {t.loadingSteps[loadingMessageIndex % t.loadingSteps.length]}
             </p>
           </div>
@@ -2891,7 +2937,9 @@ export default function HomeClient() {
                 <button
                   onClick={() => askQuestion(questionInput)}
                   disabled={askLoading || !questionInput.trim()}
-                  className="shrink-0 px-4 py-2.5 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-40"
+                  className={`shrink-0 px-4 py-2.5 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-40 ${
+                    askLoading ? 'animate-pulse disabled:opacity-100' : ''
+                  }`}
                 >
                   {askLoading ? t.ask.thinking : t.ask.submit}
                 </button>
@@ -3056,7 +3104,12 @@ export default function HomeClient() {
 
       {/* Downward Fixed Controller Panel (Optimized Smartphone Thumb Reach) */}
       {responseShort && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 border-t border-slate-900 px-4 pt-2 pb-5 shadow-2xl flex flex-col justify-center gap-2 select-none h-28">
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 border-t border-slate-900 px-4 pt-2 pb-5 shadow-2xl flex flex-col justify-center gap-2 select-none min-h-28">
+          {voiceUnavailable && (
+            <div className="w-full max-w-lg mx-auto px-1 text-[10px] leading-tight text-amber-300/80 font-sans">
+              {t.voiceUnavailable}
+            </div>
+          )}
           {/* Narration progress */}
           <div className="w-full max-w-lg mx-auto px-1 font-sans">
             <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono mb-1">
