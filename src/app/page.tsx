@@ -132,13 +132,15 @@ const PRESET_ARTISTS = [
 ];
 
 // LLM output occasionally leaks JSON escapes (literal \n, \") or wrapping quotes
-// into the guide body. Normalise it before it ever reaches the screen or the TTS.
+// into the guide body, sometimes escaped twice (\\n). Each escape has to consume
+// every backslash in front of it, otherwise the leftover one shows up in the text.
 function sanitizeGuideText(text: string): string {
   return text
-    .replace(/\\r\\n|\\r|\\n/g, '\n')
-    .replace(/\\t/g, ' ')
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, '\\')
+    .replace(/\\{1,2}r\\{1,2}n|\\{1,2}[rn]/g, '\n')
+    .replace(/\\{1,2}t/g, ' ')
+    .replace(/\\{1,2}"/g, '"')
+    .replace(/\\{2,}/g, '\\')
+    .replace(/\\+[ \t]*$/gm, '')
     .replace(/\r\n?/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .replace(/[ \t]+\n/g, '\n')
@@ -1674,13 +1676,13 @@ export default function ArtFreeGuide() {
           const matchStandard = data.text.match(/"standard"\s*:\s*"([\s\S]*?)"\s*,\s*"deep"/);
           const matchDeep = data.text.match(/"deep"\s*:\s*"([\s\S]*?)"\s*,\s*"searchQuery"/);
           if (matchShort && matchShort[1]) {
-            shortText = matchShort[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+            shortText = matchShort[1];
           }
           if (matchStandard && matchStandard[1]) {
-            standardText = matchStandard[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+            standardText = matchStandard[1];
           }
           if (matchDeep && matchDeep[1]) {
-            deepText = matchDeep[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+            deepText = matchDeep[1];
           }
           
           if (!shortText) {
