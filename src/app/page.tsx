@@ -403,6 +403,8 @@ export default function ArtFreeGuide() {
   const speedRef = useRef(1.5);
   const activeIndexRef = useRef(-1);
   const speakableSegmentsRef = useRef<string[]>([]);
+  /** `index::text` of the segment already handed to the speech engine. */
+  const spokenKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -777,11 +779,23 @@ export default function ArtFreeGuide() {
     }
   }, [activeSegmentIndex]);
 
-  // Trigger speech for active index
+  // Trigger speech for active index. Autoplay flips isPlaying in the same render
+  // that sets the guide text, so the segments only exist a render later: this has
+  // to react to speakableSegments too, or the bar shows playing in silence.
   useEffect(() => {
-    if (isPlaying && activeSegmentIndex >= 0 && activeSegmentIndex < speakableSegments.length) {
+    if (!isPlaying) {
+      spokenKeyRef.current = null;
+      return;
+    }
+    if (speakableSegments.length === 0) return;
+
+    if (activeSegmentIndex >= 0 && activeSegmentIndex < speakableSegments.length) {
+      // Appending an answer re-runs this effect; don't restart the current segment.
+      const key = `${activeSegmentIndex}::${speakableSegments[activeSegmentIndex]}`;
+      if (spokenKeyRef.current === key) return;
+      spokenKeyRef.current = key;
       speakSegment(activeSegmentIndex);
-    } else if (isPlaying && activeSegmentIndex >= speakableSegments.length && speakableSegments.length > 0) {
+    } else if (activeSegmentIndex >= speakableSegments.length) {
       // Finished speaking
       setIsPlaying(false);
       setActiveSegmentIndex(-1);
@@ -790,7 +804,7 @@ export default function ArtFreeGuide() {
       setNarrationDone(true);
       scheduleTourAdvance();
     }
-  }, [activeSegmentIndex, isPlaying]);
+  }, [activeSegmentIndex, isPlaying, speakableSegments]);
 
   const questionChips = useMemo(() => suggestedQuestions(artwork, artist), [artwork, artist]);
 
