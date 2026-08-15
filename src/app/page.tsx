@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { ensureAnonymousUser } from '@/lib/user';
 import ArtworkStage from '@/components/ArtworkStage';
-import { findHotspotSet, hotspotImageUrl, matchHotspot } from '@/lib/hotspots';
+import { findHotspotSet, hotspotImageUrl, localizeHotspotSet, matchHotspot } from '@/lib/hotspots';
 import { useRecommendations, useTasteProfile } from '@/hooks/useRecommendations';
 import ForYouShelf from '@/components/ForYouShelf';
 import {
@@ -14,9 +14,18 @@ import {
   normalizeMusicSpec,
   specFromLegacyMood,
 } from '@/lib/ambient';
-import { PLAYLISTS, Playlist } from '@/lib/playlists';
+import { PLAYLISTS, Playlist, localizePlaylist } from '@/lib/playlists';
 import { suggestedQuestions } from '@/lib/questions';
 import { toSpokenText } from '@/lib/pronunciation';
+import {
+  DEFAULT_LOCALE,
+  LOCALE_MENU,
+  Locale,
+  SPEECH_LANG,
+  UI,
+  isLocale,
+} from '@/lib/i18n';
+import { canonicalName, localizeName } from '@/lib/names';
 import ReactMarkdown from 'react-markdown';
 
 interface ArtworkSuggestion {
@@ -101,14 +110,6 @@ const QUICK_START_ARTWORKS: { title: string; artist: string; emoji: string }[] =
   { title: '富嶽三十六景 神奈川沖浪裏', artist: '葛飾北斎', emoji: '🌊' },
 ];
 
-const CURATOR_LOADING_MESSAGES = [
-  '作品の資料を探しています...',
-  '時代背景を読み解いています...',
-  '画家の人生をたどっています...',
-  '見どころを整理しています...',
-  '音声ガイドの原稿を書いています...',
-];
-
 const PRESET_ARTISTS = [
   'フィンセント・ファン・ゴッホ',
   'レオナルド・ダ・ヴィンチ',
@@ -181,6 +182,7 @@ class AudioController {
     index: number,
     text: string,
     rate: number,
+    lang: string,
     onStart: () => void,
     onEnd: () => void,
     onError: (e: any) => void
@@ -201,10 +203,21 @@ class AudioController {
         } catch (e) {}
       }
 
-      // The dictionary only affects what is spoken; the screen keeps the kanji.
-      const utterance = new SpeechSynthesisUtterance(toSpokenText(text));
-      utterance.lang = 'ja-JP';
+      // The reading dictionary is Japanese-only; it only affects what is spoken,
+      // the screen keeps the kanji.
+      const utterance = new SpeechSynthesisUtterance(
+        lang === 'ja-JP' ? toSpokenText(text) : text
+      );
+      utterance.lang = lang;
       utterance.rate = rate;
+
+      // Without an explicit voice, some browsers read French/Chinese with the
+      // default (often English) voice.
+      const prefix = lang.split('-')[0];
+      const voice =
+        window.speechSynthesis.getVoices().find(v => v.lang.replace('_', '-') === lang) ??
+        window.speechSynthesis.getVoices().find(v => v.lang.startsWith(prefix));
+      if (voice) utterance.voice = voice;
 
       let hasFinished = false;
 
@@ -268,9 +281,19 @@ class AudioController {
 }
 
 export default function ArtFreeGuide() {
+  const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   const [artwork, setArtwork] = useState('');
   const [artist, setArtist] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const t = UI[locale];
+  // Everything but the screen works in the Japanese form of a name, so the same
+  // work is one work whichever language it was started from.
+  const canonicalArtwork = canonicalName(artwork);
+  const canonicalArtist = canonicalName(artist);
+  const shownArtwork = localizeName(canonicalArtwork, locale);
+  const shownArtist = localizeName(canonicalArtist, locale);
 
   // Personalized Explanation Modes
   const [responseShort, setResponseShort] = useState('');
@@ -389,7 +412,7 @@ export default function ArtFreeGuide() {
   // Anonymous user + catalogue-based recommendations
   const [userId, setUserId] = useState<string | null>(null);
   const { similarArtworks, basis: recommendationBasis, reload: reloadRecommendations } =
-    useRecommendations(artwork, artist, userId);
+    useRecommendations(canonicalArtwork, canonicalArtist, userId);
   // Taste-only shelf for the browse hub, where no artwork is in context yet.
   const {
     similarArtworks: tasteRecommendations,
@@ -399,6 +422,9 @@ export default function ArtFreeGuide() {
   const { profile: tasteProfile, reload: reloadTasteProfile } = useTasteProfile(userId);
 
   // Refs for tracking properties in async speech callbacks
+  /** Read by callbacks and by the mount-time deep link, which run before a state update lands. */
+  const localeRef = useRef<Locale>(DEFAULT_LOCALE);
+  localeRef.current = locale;
   const isPlayingRef = useRef(false);
   const speedRef = useRef(1.5);
   const activeIndexRef = useRef(-1);
@@ -468,10 +494,10 @@ export default function ArtFreeGuide() {
       return;
     }
     const timer = setInterval(() => {
-      setLoadingMessageIndex(prev => (prev + 1) % CURATOR_LOADING_MESSAGES.length);
+      setLoadingMessageIndex(prev => (prev + 1) % t.loadingSteps.length);
     }, 2500);
     return () => clearInterval(timer);
-  }, [loading]);
+  }, [loading, t]);
 
   const recordListening = (completed: boolean) => {
     const listenedSeconds = listenedSecondsRef.current;
@@ -482,8 +508,8 @@ export default function ArtFreeGuide() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         userId,
-        title: artwork,
-        artist,
+        title: canonicalArtwork,
+        artist: canonicalArtist,
         description: responseShort || responseStandard || null,
         imageUrl,
         depth: explanationMode,
@@ -514,19 +540,61 @@ export default function ArtFreeGuide() {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognitionClass) {
       const instance = new SpeechRecognitionClass();
-      instance.lang = 'ja-JP';
+      instance.lang = SPEECH_LANG[locale];
       instance.interimResults = false;
       instance.continuous = false;
       instance.maxAlternatives = 1;
       setRecognition(instance);
     }
-  }, []);
+  }, [locale]);
 
   // Toast trigger helper
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 2000);
+  };
+
+  /**
+   * The language is decided once, in this order: the link that was opened, what
+   * the visitor chose last time, then Japanese.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const fromUrl = new URLSearchParams(window.location.search).get('lang') || '';
+    const stored = localStorage.getItem('artfreeguide-locale') || '';
+    const resolved = isLocale(fromUrl) ? fromUrl : isLocale(stored) ? stored : DEFAULT_LOCALE;
+    localeRef.current = resolved;
+    setLocale(resolved);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.lang = t.htmlLang;
+  }, [t]);
+
+  /**
+   * A guide is written in one language, so switching languages means asking for
+   * it again rather than showing the previous one under new buttons.
+   */
+  const changeLocale = (next: Locale) => {
+    if (next === locale) {
+      setShowLanguageMenu(false);
+      return;
+    }
+    localeRef.current = next;
+    setLocale(next);
+    setShowLanguageMenu(false);
+    localStorage.setItem('artfreeguide-locale', next);
+    setGuideCache({});
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('lang', next);
+      window.history.replaceState({}, '', url.toString());
+    }
+    if (canonicalArtwork.trim()) {
+      generateGuide(canonicalArtwork, canonicalArtist);
+    }
   };
 
   // State parameter synchronizer (using replaceState to avoid history clutter)
@@ -551,6 +619,7 @@ export default function ArtFreeGuide() {
     }
     url.searchParams.set('speed', speedValue.toFixed(1));
     url.searchParams.set('mode', modeValue);
+    url.searchParams.set('lang', locale);
     if (tourId) {
       url.searchParams.set('tour', tourId);
     } else {
@@ -567,7 +636,7 @@ export default function ArtFreeGuide() {
     if (artwork.trim()) {
       syncUrlState(artwork, artist, playbackSpeed, explanationMode, activePlaylist?.id ?? null);
     }
-  }, [artwork, artist, playbackSpeed, explanationMode, activePlaylist]);
+  }, [artwork, artist, playbackSpeed, explanationMode, activePlaylist, locale]);
 
   // URL parameters listener (Deep Linking & Initial State Setup)
   useEffect(() => {
@@ -806,7 +875,10 @@ export default function ArtFreeGuide() {
     }
   }, [activeSegmentIndex, isPlaying, speakableSegments]);
 
-  const questionChips = useMemo(() => suggestedQuestions(artwork, artist), [artwork, artist]);
+  const questionChips = useMemo(
+    () => suggestedQuestions(canonicalArtwork, canonicalArtist, locale),
+    [canonicalArtwork, canonicalArtist, locale]
+  );
 
   // After the guide falls silent, nudge each chip in turn a couple of rounds and stop.
   useEffect(() => {
@@ -833,7 +905,10 @@ export default function ArtFreeGuide() {
   }, [narrationDone, isPlaying, askLoading, nextUpCue, questionChips]);
 
   // Curated viewing points for the artwork on screen, if we have measured any.
-  const hotspotSet = useMemo(() => findHotspotSet(artwork, artist), [artwork, artist]);
+  const hotspotSet = useMemo(() => {
+    const found = findHotspotSet(canonicalArtwork, canonicalArtist);
+    return found ? localizeHotspotSet(found, locale) : null;
+  }, [canonicalArtwork, canonicalArtist, locale]);
   const hotspots = hotspotSet?.hotspots ?? [];
   // Coordinates were measured on one specific reproduction, so it wins over search results.
   const displayImageUrl = hotspotSet ? hotspotImageUrl(hotspotSet.file) : imageUrl;
@@ -866,14 +941,16 @@ export default function ArtFreeGuide() {
     const tour = activePlaylist;
     if (!tour) return;
 
+    const shown = localizePlaylist(tour, locale);
     const next = tour.items[playlistIndex + 1];
-    if (!next) {
+    const shownNext = shown.items[playlistIndex + 1];
+    if (!next || !shownNext) {
       setNextUpCue(null);
-      triggerToast(`「${tour.title}」はこれで終わりです。お疲れさまでした`);
+      triggerToast(t.tour.finished(shown.title));
       return;
     }
 
-    setNextUpCue(`次は「${next.title}」— ${next.cue}`);
+    setNextUpCue(t.tour.nextUp(shownNext.title, shownNext.cue));
     if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
     advanceTimerRef.current = setTimeout(() => {
       setNextUpCue(null);
@@ -1000,6 +1077,7 @@ export default function ArtFreeGuide() {
       index,
       cleanText,
       speedRef.current,
+      SPEECH_LANG[localeRef.current],
       () => {
         // Voice started callback if needed
       },
@@ -1048,7 +1126,7 @@ export default function ArtFreeGuide() {
       const res = await fetch('/api/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ artworkQuery: query, artistName })
+        body: JSON.stringify({ artworkQuery: query, artistName, locale })
       });
       const data = await res.json();
       if (data.suggestions && Array.isArray(data.suggestions)) {
@@ -1073,21 +1151,23 @@ export default function ArtFreeGuide() {
     }
 
     const handler = setTimeout(async () => {
-      const cacheKey = `${artwork.trim().toLowerCase()}::${artist.trim().toLowerCase()}`;
+      const cacheKey = `${artwork.trim().toLowerCase()}::${artist.trim().toLowerCase()}::${locale}`;
       if (suggestCache[cacheKey]) {
         setArtworkSuggestions(suggestCache[cacheKey]);
         return;
       }
 
       // Local preset Filter
-      const localMatches = PRESET_ARTWORKS.filter(item =>
-        item.title.toLowerCase().includes(artwork.toLowerCase())
-      ).map(item => ({ ...item, isAi: false }));
+      const localMatches: ArtworkSuggestion[] = PRESET_ARTWORKS.map(item => ({
+        title: localizeName(item.title, locale),
+        artist: localizeName(item.artist, locale),
+        isAi: false,
+      })).filter(item => item.title.toLowerCase().includes(artwork.toLowerCase()));
 
       // Wikipedia API Search
       let apiSuggestions: ArtworkSuggestion[] = [];
       try {
-        const url = `https://ja.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(artwork)}&limit=4&namespace=0&format=json&origin=*`;
+        const url = `https://${locale}.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(artwork)}&limit=4&namespace=0&format=json&origin=*`;
         const res = await fetch(url);
         const data = await res.json();
         const apiTitles: string[] = data[1] || [];
@@ -1125,7 +1205,7 @@ export default function ArtFreeGuide() {
     }, 450); // 450ms debounce
 
     return () => clearTimeout(handler);
-  }, [artwork, artist]);
+  }, [artwork, artist, locale]);
 
   // Debounce Autocomplete Artist
   useEffect(() => {
@@ -1136,13 +1216,13 @@ export default function ArtFreeGuide() {
 
     const handler = setTimeout(async () => {
       // Local Filter
-      const localMatches = PRESET_ARTISTS.filter(name =>
+      const localMatches = PRESET_ARTISTS.map(name => localizeName(name, locale)).filter(name =>
         name.toLowerCase().includes(artist.toLowerCase())
       );
 
       // Wikipedia API Search
       try {
-        const url = `https://ja.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(artist)}&limit=6&namespace=0&format=json&origin=*`;
+        const url = `https://${locale}.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(artist)}&limit=6&namespace=0&format=json&origin=*`;
         const res = await fetch(url);
         const data = await res.json();
         const apiTitles: string[] = data[1] || [];
@@ -1156,7 +1236,7 @@ export default function ArtFreeGuide() {
     }, 300);
 
     return () => clearTimeout(handler);
-  }, [artist]);
+  }, [artist, locale]);
 
   // Keyboard navigation for Artwork input
   const handleArtworkKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, onSubmitted?: () => void) => {
@@ -1267,7 +1347,7 @@ export default function ArtFreeGuide() {
             return prev;
           });
           const parts = cacheKey.split('::');
-          if (parts.length === 2) {
+          if (parts.length >= 2) {
             updateHistoryEntryByArtwork(parts[0], parts[1], { imageUrl: thumbUrl, imageError: false });
           }
         }
@@ -1284,7 +1364,7 @@ export default function ArtFreeGuide() {
             return prev;
           });
           const parts = cacheKey.split('::');
-          if (parts.length === 2) {
+          if (parts.length >= 2) {
             updateHistoryEntryByArtwork(parts[0], parts[1], { imageError: true });
           }
         }
@@ -1303,7 +1383,7 @@ export default function ArtFreeGuide() {
           return prev;
         });
         const parts = cacheKey.split('::');
-        if (parts.length === 2) {
+        if (parts.length >= 2) {
           updateHistoryEntryByArtwork(parts[0], parts[1], { imageError: true });
         }
       }
@@ -1361,8 +1441,9 @@ export default function ArtFreeGuide() {
     /** Skip both caches and overwrite the archive, after a visitor reported a problem. */
     refresh = false
   ) => {
-    const targetArtwork = customArtwork ?? artwork;
-    const targetArtist = customArtist ?? artist;
+    const targetArtwork = canonicalName(customArtwork ?? artwork);
+    const targetArtist = canonicalName(customArtist ?? artist);
+    const activeLocale = localeRef.current;
 
     if (!targetArtwork.trim()) return;
 
@@ -1374,12 +1455,12 @@ export default function ArtFreeGuide() {
     }
 
     if (customArtwork) {
-      setArtwork(customArtwork);
-      localStorage.setItem('art_free_guide_draft_artwork', customArtwork);
+      setArtwork(targetArtwork);
+      localStorage.setItem('art_free_guide_draft_artwork', targetArtwork);
     }
     if (customArtist !== undefined) {
-      setArtist(customArtist);
-      localStorage.setItem('art_free_guide_draft_artist', customArtist);
+      setArtist(targetArtist);
+      localStorage.setItem('art_free_guide_draft_artist', targetArtist);
     }
 
     // Audio Unlock: Trigger dummy utterance and initialize/resume AudioContext on user gesture
@@ -1424,7 +1505,8 @@ export default function ArtFreeGuide() {
       targetMode = customMode;
     }
 
-    const cacheKey = `${targetArtwork.trim().toLowerCase()}::${targetArtist.trim().toLowerCase()}`;
+    // A guide exists once per language, so the key carries the language too.
+    const cacheKey = `${targetArtwork.trim().toLowerCase()}::${targetArtist.trim().toLowerCase()}::${activeLocale}`;
     const hotspotFile = findHotspotSet(targetArtwork, targetArtist)?.file ?? null;
 
     // CHECK CLIENT-SIDE CACHE
@@ -1480,10 +1562,14 @@ export default function ArtFreeGuide() {
           title: targetArtwork,
           artist: targetArtist,
           refresh,
+          locale: activeLocale,
           messages: [
             {
               role: 'user',
-              content: `作品名: ${targetArtwork}${targetArtist ? `, 作者: ${targetArtist}` : ''}。この作品について詳しく解説してください。`
+              // The model is given the name as its own language writes it.
+              content: `作品名: ${localizeName(targetArtwork, activeLocale)}${
+                targetArtist ? `, 作者: ${localizeName(targetArtist, activeLocale)}` : ''
+              }。この作品について詳しく解説してください。`
             }
           ]
         }),
@@ -1494,11 +1580,11 @@ export default function ArtFreeGuide() {
       // Graceful Japanese Error Handling for rate limits (429) & server faults
       if (data.error) {
         if (data.error.includes('Too Many Requests') || data.error.includes('429') || data.error.includes('Quota')) {
-          setResponseShort('現在、大変混雑しているため音声ガイドを生成できません。しばらく時間をおいてから再度お試しください。');
+          setResponseShort(UI[activeLocale].guide.busy);
           setResponseStandard('');
           setResponseDeep('');
         } else {
-          setResponseShort('現在、音声ガイドサービスをご利用いただけません。しばらく時間をおいてから再度お試しください。');
+          setResponseShort(UI[activeLocale].guide.unavailable);
           setResponseStandard('');
           setResponseDeep('');
         }
@@ -1555,7 +1641,7 @@ export default function ArtFreeGuide() {
           
           if (!shortText) {
             if (data.text.trim().startsWith('{')) {
-              shortText = "音声ガイドの解析中にエラーが発生しました。もう一度生成をお試しください。";
+              shortText = UI[activeLocale].guide.parseError;
             } else {
               shortText = data.text;
             }
@@ -1651,11 +1737,11 @@ export default function ArtFreeGuide() {
       console.error(e);
       const errMsg = e.message || '';
       if (errMsg.includes('429') || errMsg.includes('Too Many Requests')) {
-        setResponseShort('現在、大変混雑しているため音声ガイドを生成できません。しばらく時間をおいてから再度お試しください。');
+        setResponseShort(UI[activeLocale].guide.busy);
         setResponseStandard('');
         setResponseDeep('');
       } else {
-        setResponseShort('現在、混雑のため音声ガイドを生成できません。しばらく時間をおいてから再度お試しください。');
+        setResponseShort(UI[activeLocale].guide.unavailable);
         setResponseStandard('');
         setResponseDeep('');
       }
@@ -1678,10 +1764,11 @@ export default function ArtFreeGuide() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          locale,
           messages: [
             {
               role: 'user',
-              content: `作品名: ${artwork}について、ガイドブックにも載っていないような知られざる面白い裏話や、美術史における深掘りエピソードを音声ガイド用に語ってください。短い2-3つの文で詳しく解説します。`
+              content: `作品名: ${shownArtwork}について、ガイドブックにも載っていないような知られざる面白い裏話や、美術史における深掘りエピソードを音声ガイド用に語ってください。短い2-3つの文で詳しく解説します。`
             }
           ]
         })
@@ -1705,14 +1792,14 @@ export default function ArtFreeGuide() {
         rawText = parsed.explanation || data.text;
       } catch (e) {}
 
-      const visualHeader = `\n> 🔍 **ディープな深掘りエピソードへようこそ**\n`;
+      const visualHeader = `\n> 🔍 **${t.guide.deepDiveHeader}**\n`;
       const updatedDeep = `${responseDeep}\n\n${visualHeader}\n\n${rawText}`;
       
       setResponseDeep(updatedDeep);
       setExplanationMode('deep');
 
       // Update History Entry
-      updateHistoryEntryByArtwork(artwork, artist, { deep: updatedDeep });
+      updateHistoryEntryByArtwork(canonicalArtwork, canonicalArtist, { deep: updatedDeep });
 
       // Play newly appended segments
       const prevLength = speakableSegments.length;
@@ -1777,22 +1864,23 @@ export default function ArtFreeGuide() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: artwork,
-          artist,
+          title: shownArtwork,
+          artist: shownArtist,
           question: trimmed,
-          context: responseStandard || responseShort
+          context: responseStandard || responseShort,
+          locale
         })
       });
       const data = await res.json();
 
       if (!res.ok || data.error) {
-        triggerToast('回答を生成できませんでした。少し時間をおいてお試しください');
+        triggerToast(t.ask.failed);
         return;
       }
 
       const answer = sanitizeGuideText(data.answer || '');
       if (!answer) {
-        triggerToast('回答を生成できませんでした。少し時間をおいてお試しください');
+        triggerToast(t.ask.failed);
         return;
       }
 
@@ -1801,7 +1889,7 @@ export default function ArtFreeGuide() {
 
       setResponseDeep(updatedDeep);
       setExplanationMode('deep');
-      updateHistoryEntryByArtwork(artwork, artist, { deep: updatedDeep });
+      updateHistoryEntryByArtwork(canonicalArtwork, canonicalArtist, { deep: updatedDeep });
 
       // Narrate the answer straight away, from where it was appended.
       const prevLength = speakableSegments.length;
@@ -1811,7 +1899,7 @@ export default function ArtFreeGuide() {
       }, 100);
     } catch (e) {
       console.error(e);
-      triggerToast('回答を生成できませんでした。少し時間をおいてお試しください');
+      triggerToast(t.ask.failed);
     } finally {
       setAskLoading(false);
     }
@@ -1827,8 +1915,8 @@ export default function ArtFreeGuide() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: artwork,
-          artist,
+          title: canonicalArtwork,
+          artist: canonicalArtist,
           kind,
           comment,
           excerpt: (responseStandard || responseShort || '').slice(0, 500),
@@ -1870,9 +1958,9 @@ export default function ArtFreeGuide() {
     if (regenerating) return;
     setRegenerating(true);
     setShowReportForm(false);
-    triggerToast('解説を作り直しています…');
+    triggerToast(t.feedback.regenerateToast);
     try {
-      await generateGuide(artwork, artist, 'short', true);
+      await generateGuide(canonicalArtwork, canonicalArtist, 'short', true);
     } finally {
       setRegenerating(false);
     }
@@ -1930,9 +2018,10 @@ export default function ArtFreeGuide() {
 
     // Construct the complete URL containing all active states
     const url = new URL(window.location.href);
-    url.searchParams.set('artwork', artwork);
+    url.searchParams.set('artwork', canonicalArtwork);
+    url.searchParams.set('lang', locale);
     if (artist) {
-      url.searchParams.set('artist', artist);
+      url.searchParams.set('artist', canonicalArtist);
     } else {
       url.searchParams.delete('artist');
     }
@@ -1951,17 +2040,17 @@ export default function ArtFreeGuide() {
     }
 
     const shareData = {
-      title: `ArtFreeGuide - ${artwork}`,
+      title: `ArtFreeGuide - ${shownArtwork}`,
       text: activeHotspot
-        ? `「${artwork}」の見どころ「${activeHotspot.label}」を聴いてみて！`
-        : `この作品のAI音声ガイドを聴いてみて！`,
+        ? t.share.hotspot(shownArtwork, activeHotspot.label)
+        : t.share.guide,
       url: url.toString()
     };
 
     if (navigator.share) {
       try {
         await navigator.share(shareData);
-        triggerToast('共有メニューを起動しました');
+        triggerToast(t.share.menuOpened);
       } catch (err: any) {
         if (err.name !== 'AbortError') {
           console.warn('Native share failed:', err);
@@ -1976,11 +2065,11 @@ export default function ArtFreeGuide() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
       .then(() => {
-        triggerToast('共有URLをクリップボードにコピーしました！');
+        triggerToast(t.share.copied);
       })
       .catch(err => {
         console.error('Failed to copy share link:', err);
-        triggerToast('コピーに失敗しました');
+        triggerToast(t.share.copyFailed);
       });
   };
 
@@ -1999,6 +2088,52 @@ export default function ArtFreeGuide() {
           )
         )}
       </span>
+    );
+  };
+
+  /** Four languages behind one flag, on the landing page and in the guide header. */
+  const renderLanguageSwitch = () => {
+    const current = LOCALE_MENU.find(entry => entry.locale === locale) ?? LOCALE_MENU[0];
+
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setShowLanguageMenu(prev => !prev)}
+          aria-label={t.header.language}
+          title={t.header.language}
+          aria-haspopup="listbox"
+          aria-expanded={showLanguageMenu}
+          className="text-slate-300 hover:text-teal-400 transition-colors text-sm bg-slate-900/60 border border-slate-800 hover:border-teal-500/40 h-8 px-2.5 rounded-lg flex items-center gap-1 active:scale-95 font-sans"
+        >
+          <span>{current.flag}</span>
+          <span className="text-[10px] font-bold uppercase">{current.locale}</span>
+        </button>
+
+        {showLanguageMenu && (
+          <ul
+            role="listbox"
+            className="absolute right-0 top-10 z-50 bg-slate-950 border border-slate-850 rounded-2xl p-1.5 shadow-2xl min-w-[132px] animate-fade-in font-sans"
+          >
+            {LOCALE_MENU.map(entry => (
+              <li key={entry.locale}>
+                <button
+                  role="option"
+                  aria-selected={entry.locale === locale}
+                  onClick={() => changeLocale(entry.locale)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-left transition-colors ${
+                    entry.locale === locale
+                      ? 'bg-teal-500 text-slate-950'
+                      : 'text-slate-300 hover:bg-slate-900'
+                  }`}
+                >
+                  <span>{entry.flag}</span>
+                  <span>{entry.label}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     );
   };
 
@@ -2023,7 +2158,7 @@ export default function ArtFreeGuide() {
         {activePlaylist && (
           <div className="flex items-center justify-between gap-2 bg-slate-900/60 border border-teal-900/60 rounded-2xl px-4 py-2.5 font-sans">
             <span className="text-xs font-bold text-teal-400 truncate">
-              ツアー中: {activePlaylist.emoji} {activePlaylist.title}
+              {t.hub.onTour}: {activePlaylist.emoji} {localizePlaylist(activePlaylist, locale).title}
               <span className="text-slate-500 font-mono ml-2">
                 {playlistIndex + 1}/{activePlaylist.items.length}
               </span>
@@ -2032,7 +2167,7 @@ export default function ArtFreeGuide() {
               onClick={pick(exitTour)}
               className="shrink-0 text-[11px] text-slate-400 hover:text-rose-300 underline underline-offset-2"
             >
-              終了する
+              {t.hub.endTour}
             </button>
           </div>
         )}
@@ -2050,13 +2185,15 @@ export default function ArtFreeGuide() {
         {/* Tours come first: the lowest-friction, most memorable way in */}
         <div className="w-full space-y-3">
           <p className="text-xs font-bold text-slate-500 tracking-wider uppercase font-sans text-center">
-            テーマで巡るツアー
+            {t.hub.tours}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {PLAYLISTS.map(tour => (
+            {PLAYLISTS.map(canonicalTour => {
+              const tour = localizePlaylist(canonicalTour, locale);
+              return (
               <button
                 key={tour.id}
-                onClick={pick(() => startTour(tour))}
+                onClick={pick(() => startTour(canonicalTour))}
                 className="bg-slate-900/40 border border-slate-800 hover:border-teal-500/40 hover:bg-slate-900/70 rounded-2xl px-4 py-3 text-left active:scale-95 transition-all shadow-md font-sans group"
               >
                 <div className="flex items-start gap-3">
@@ -2066,18 +2203,19 @@ export default function ArtFreeGuide() {
                       {tour.title}
                     </span>
                     <span className="block text-[11px] text-slate-500 truncate">{tour.subtitle}</span>
-                    <span className="block text-[10px] text-teal-500/80 mt-1">全{tour.items.length}作品・自動で次へ</span>
+                    <span className="block text-[10px] text-teal-500/80 mt-1">{t.hub.tourItems(tour.items.length)}</span>
                   </div>
                 </div>
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         {/* One-tap start: no typing needed to hear a guide */}
         <div className="w-full space-y-3">
           <p className="text-xs font-bold text-slate-500 tracking-wider uppercase font-sans text-center">
-            1作品だけ聴く
+            {t.hub.singleWork}
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {QUICK_START_ARTWORKS.map(item => (
@@ -2093,9 +2231,9 @@ export default function ArtFreeGuide() {
               >
                 <span className="text-xl block mb-1">{item.emoji}</span>
                 <span className="block text-xs font-bold text-slate-200 truncate group-hover:text-teal-400 transition-colors">
-                  {item.title}
+                  {localizeName(item.title, locale)}
                 </span>
-                <span className="block text-[10px] text-slate-500 truncate">{item.artist}</span>
+                <span className="block text-[10px] text-slate-500 truncate">{localizeName(item.artist, locale)}</span>
               </button>
             ))}
           </div>
@@ -2103,7 +2241,7 @@ export default function ArtFreeGuide() {
 
         <div className="w-full space-y-3">
           <p className="text-xs font-bold text-slate-500 tracking-wider uppercase font-sans text-center">
-            名前で探す
+            {t.hub.searchByName}
           </p>
           <div className="w-full bg-slate-900/40 border border-slate-800/80 rounded-3xl p-5 md:p-6 shadow-xl relative">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 via-emerald-500 to-blue-500 opacity-60 rounded-t-3xl"></div>
@@ -2117,7 +2255,7 @@ export default function ArtFreeGuide() {
             className="bg-slate-900/60 border border-slate-800 hover:bg-slate-900 hover:border-teal-500/40 text-slate-350 hover:text-teal-400 px-4 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-md font-sans"
           >
             <span>📜</span>
-            <span>閲覧履歴を見る ({history.length})</span>
+            <span>{t.hub.openHistory(history.length)}</span>
           </button>
         </div>
       </div>
@@ -2130,11 +2268,11 @@ export default function ArtFreeGuide() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
           {/* Artwork Input with Autocomplete */}
           <div className="relative space-y-2">
-            <label htmlFor="artwork" className="text-sm font-medium text-slate-400 block text-left select-none">作品名 <span className="text-rose-500">*</span></label>
+            <label htmlFor="artwork" className="text-sm font-medium text-slate-400 block text-left select-none">{t.form.artworkLabel} <span className="text-rose-500">*</span></label>
             <input
               id="artwork"
               type="text"
-              placeholder="例: ひまわり、モナ・リザ"
+              placeholder={t.form.artworkPlaceholder}
               value={artwork}
               onChange={(e) => {
                 setArtwork(e.target.value);
@@ -2163,12 +2301,12 @@ export default function ArtFreeGuide() {
                     <div className="text-left flex items-center gap-2">
                       {suggestion.isInstant && (
                         <span className="text-[9px] bg-teal-500/10 border border-teal-500/20 text-teal-400 px-1.5 py-0.5 rounded font-black shrink-0 uppercase tracking-wider">
-                          すぐ聴ける
+                          {t.form.ready}
                         </span>
                       )}
                       {suggestion.isAi && (
                         <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-black shrink-0 uppercase tracking-wider">
-                          もしかして
+                          {t.form.maybe}
                         </span>
                       )}
                       <div>
@@ -2188,11 +2326,11 @@ export default function ArtFreeGuide() {
 
           {/* Artist Input with Autocomplete */}
           <div className="relative space-y-2">
-            <label htmlFor="artist" className="text-sm font-medium text-slate-400 block text-left select-none">作者名</label>
+            <label htmlFor="artist" className="text-sm font-medium text-slate-400 block text-left select-none">{t.form.artistLabel}</label>
             <input
               id="artist"
               type="text"
-              placeholder="例: ゴッホ、ダ・ヴィンチ"
+              placeholder={t.form.artistPlaceholder}
               value={artist}
               onChange={(e) => {
                 setArtist(e.target.value);
@@ -2240,11 +2378,11 @@ export default function ArtFreeGuide() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <span>AIキュレーターが分析中...</span>
+              <span>{t.form.generating}</span>
             </>
           ) : (
             <>
-              <span>音声ガイドを生成</span>
+              <span>{t.form.generate}</span>
               <span className="group-hover:translate-x-1 transition-transform">→</span>
             </>
           )}
@@ -2272,7 +2410,7 @@ export default function ArtFreeGuide() {
               onClick={() => setShowInputDrawer(true)}
               className="text-slate-400 hover:text-teal-400 transition-colors text-xs font-sans font-semibold flex items-center gap-1 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg"
             >
-              <span>🔍</span> <span>さがす</span>
+              <span>🔍</span> <span>{t.header.search}</span>
             </button>
             
             <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-500 bg-clip-text text-transparent font-sans">
@@ -2280,10 +2418,12 @@ export default function ArtFreeGuide() {
             </h1>
 
             <div className="flex items-center gap-2">
+              {renderLanguageSwitch()}
+
               <button
                 onClick={handleShare}
-                aria-label="この解説を共有"
-                title="この解説を共有"
+                aria-label={t.header.share}
+                title={t.header.share}
                 className="text-slate-400 hover:text-teal-400 transition-colors text-sm bg-slate-900/60 border border-slate-800 hover:border-teal-500/40 w-8 h-8 rounded-lg flex items-center justify-center active:scale-95"
               >
                 📤
@@ -2293,7 +2433,7 @@ export default function ArtFreeGuide() {
                 onClick={() => setShowHistorySidebar(true)}
                 className="text-slate-400 hover:text-teal-400 transition-colors text-xs font-sans font-semibold flex items-center gap-1 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg relative"
               >
-                <span>📜</span> <span>履歴</span>
+                <span>📜</span> <span>{t.header.history}</span>
                 {history.length > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 bg-teal-500 text-slate-950 font-bold font-mono rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
                     {history.length}
@@ -2312,7 +2452,7 @@ export default function ArtFreeGuide() {
                   <div className="h-1.5 w-1.5 bg-slate-600 rounded-full animate-bounce [animation-delay:0.2s]"></div>
                   <div className="h-1.5 w-1.5 bg-slate-600 rounded-full animate-bounce [animation-delay:0.4s]"></div>
                 </div>
-                <span className="text-slate-500 text-[10px] font-sans">画像を読み込み中...</span>
+                <span className="text-slate-500 text-[10px] font-sans">{t.image.loading}</span>
               </div>
             )}
             {displayImageUrl && (
@@ -2341,7 +2481,7 @@ export default function ArtFreeGuide() {
                 onClick={() => setShowArtworkViewer(true)}
                 className="absolute top-2 right-2 bg-slate-950/70 hover:bg-slate-950 border border-slate-700 hover:border-teal-500/60 text-slate-300 hover:text-teal-400 rounded-lg px-2 py-1 text-[10px] font-bold font-sans transition-colors"
               >
-                {hotspots.length > 0 ? '🔍 見どころを拡大' : '🔍 拡大'}
+                {hotspots.length > 0 ? t.image.zoomHotspots : t.image.zoom}
               </button>
             )}
 
@@ -2360,7 +2500,7 @@ export default function ArtFreeGuide() {
             {imageError && !displayImageUrl && !imageLoading && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 gap-1 p-2 text-center select-none bg-slate-900/20">
                 <span className="text-2xl">🖼️</span>
-                <p className="text-[11px] font-semibold text-slate-500 font-sans">作品画像を取得できませんでした</p>
+                <p className="text-[11px] font-semibold text-slate-500 font-sans">{t.image.failed}</p>
               </div>
             )}
           </div>
@@ -2372,13 +2512,13 @@ export default function ArtFreeGuide() {
         <div className="fixed inset-0 z-[60] bg-slate-950/95 backdrop-blur-sm flex flex-col animate-fade-in">
           <div className="flex items-center justify-between px-4 py-3 shrink-0">
             <span className="text-xs font-bold text-slate-300 font-sans truncate pr-3">
-              {artwork} {artist ? `／ ${artist}` : ''}
+              {shownArtwork} {shownArtist ? `／ ${shownArtist}` : ''}
             </span>
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={handleShare}
-                aria-label={activeHotspot ? 'この見どころを共有' : 'この解説を共有'}
-                title={activeHotspot ? 'この見どころを共有' : 'この解説を共有'}
+                aria-label={activeHotspot ? t.image.shareHotspot : t.header.share}
+                title={activeHotspot ? t.image.shareHotspot : t.header.share}
                 className="text-slate-400 hover:text-teal-400 bg-slate-900/70 border border-slate-800 hover:border-teal-500/40 rounded-lg w-8 h-8 flex items-center justify-center text-sm active:scale-95"
               >
                 📤
@@ -2387,7 +2527,7 @@ export default function ArtFreeGuide() {
                 onClick={() => setShowArtworkViewer(false)}
                 className="text-slate-400 hover:text-teal-400 bg-slate-900/70 border border-slate-800 rounded-lg px-3 py-1.5 text-xs font-bold font-sans"
               >
-                閉じる ✕
+                {t.image.close} ✕
               </button>
             </div>
           </div>
@@ -2424,12 +2564,12 @@ export default function ArtFreeGuide() {
                 ))}
               </div>
               <p className="text-sm text-slate-300 font-serif leading-relaxed min-h-[3.5rem]">
-                {activeHotspot ? activeHotspot.detail : '見どころをタップすると、その部分を拡大して解説します。'}
+                {activeHotspot ? activeHotspot.detail : t.image.hotspotHint}
               </p>
             </div>
           ) : (
             <p className="px-4 pb-6 text-xs text-slate-500 font-sans text-center">
-              この作品にはまだ見どころの登録がありません。
+              {t.image.noHotspots}
             </p>
           )}
         </div>
@@ -2441,13 +2581,15 @@ export default function ArtFreeGuide() {
         {/* Empty state: Hero landing / initial search card */}
         {!responseShort && !loading && (
           <div className="w-full space-y-8 animate-fade-in flex flex-col items-center">
+            <div className="w-full flex justify-end">{renderLanguageSwitch()}</div>
+
             {/* Header Section */}
             <div className="text-center mb-4 space-y-3">
               <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-500 bg-clip-text text-transparent drop-shadow-sm select-none font-sans">
                 ArtFreeGuide
               </h1>
               <p className="text-slate-400 text-base md:text-lg font-medium max-w-xl mx-auto font-sans leading-relaxed">
-                AIキュレーターが贈る、あなたのための特別な音声ガイド。美術作品をもっと深く、もっと身近に。
+                {t.tagline}
               </p>
             </div>
 
@@ -2471,7 +2613,7 @@ export default function ArtFreeGuide() {
               <div className="h-4 bg-slate-800 rounded w-[90%]"></div>
             </div>
             <p className="text-center text-xs text-slate-400 font-sans pt-2" aria-live="polite">
-              {CURATOR_LOADING_MESSAGES[loadingMessageIndex]}
+              {t.loadingSteps[loadingMessageIndex % t.loadingSteps.length]}
             </p>
           </div>
         )}
@@ -2484,7 +2626,7 @@ export default function ArtFreeGuide() {
               <div className="bg-slate-900/50 border border-teal-900/60 rounded-2xl p-3 space-y-2 select-none font-sans">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-teal-400 truncate">
-                    {activePlaylist.emoji} {activePlaylist.title}
+                    {activePlaylist.emoji} {localizePlaylist(activePlaylist, locale).title}
                     <span className="text-slate-500 font-mono ml-2">
                       {playlistIndex + 1}/{activePlaylist.items.length}
                     </span>
@@ -2495,25 +2637,25 @@ export default function ArtFreeGuide() {
                       disabled={playlistIndex === 0 || loading}
                       className="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-300 hover:text-teal-400 disabled:opacity-30 active:scale-95 transition-all"
                     >
-                      前へ
+                      {t.tour.prev}
                     </button>
                     <button
                       onClick={() => startTour(activePlaylist, playlistIndex + 1)}
                       disabled={playlistIndex >= activePlaylist.items.length - 1 || loading}
                       className="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-300 hover:text-teal-400 disabled:opacity-30 active:scale-95 transition-all"
                     >
-                      次へ
+                      {t.tour.next}
                     </button>
                     <button
                       onClick={exitTour}
                       className="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-500 hover:text-rose-400 active:scale-95 transition-all"
                     >
-                      終了
+                      {t.tour.end}
                     </button>
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  {activePlaylist.items.map((item, i) => (
+                  {localizePlaylist(activePlaylist, locale).items.map((item, i) => (
                     <button
                       key={`${item.title}-${i}`}
                       onClick={() => startTour(activePlaylist, i)}
@@ -2536,7 +2678,7 @@ export default function ArtFreeGuide() {
                       onClick={cancelTourAdvance}
                       className="text-[10px] font-bold text-slate-500 hover:text-rose-400 shrink-0"
                     >
-                      自動再生を止める
+                      {t.tour.stopAuto}
                     </button>
                   </div>
                 )}
@@ -2546,7 +2688,7 @@ export default function ArtFreeGuide() {
             {/* Subtitle banner */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-900/60 select-none">
               <span className="text-xs text-slate-400 font-semibold truncate pr-2 font-sans">
-                🎧 {artwork} {artist ? `(${artist})` : ''}
+                🎧 {shownArtwork} {shownArtist ? `(${shownArtist})` : ''}
               </span>
               {ambientName && (
                 <div className="flex items-center gap-1 bg-teal-950/40 border border-teal-900 rounded-full px-2.5 py-0.5 text-[9px] text-teal-400 font-mono animate-pulse shrink-0">
@@ -2608,7 +2750,7 @@ export default function ArtFreeGuide() {
                   );
                 })
               ) : (
-                <div className="text-slate-350">解説を読み込み中...</div>
+                <div className="text-slate-350">{t.guide.loading}</div>
               )}
 
             </div>
@@ -2643,16 +2785,16 @@ export default function ArtFreeGuide() {
                       askQuestion(questionInput);
                     }
                   }}
-                  placeholder="この作品について質問する"
-                  aria-label="この作品について質問する"
+                  placeholder={t.ask.placeholder}
+                  aria-label={t.ask.placeholder}
                   className="flex-1 min-w-0 bg-slate-950/60 border border-slate-800 focus:border-teal-500/50 rounded-xl px-3 py-2.5 text-xs text-slate-200 placeholder-slate-600 outline-none"
                 />
                 {recognition && (
                   <button
                     onClick={startListening}
                     disabled={askLoading}
-                    aria-label="声で質問する"
-                    title="声で質問する"
+                    aria-label={t.ask.voice}
+                    title={t.ask.voice}
                     className={`shrink-0 w-10 h-10 rounded-xl text-sm transition-all active:scale-95 disabled:opacity-40 ${
                       isListening
                         ? 'bg-rose-500 text-white animate-pulse'
@@ -2667,7 +2809,7 @@ export default function ArtFreeGuide() {
                   disabled={askLoading || !questionInput.trim()}
                   className="shrink-0 px-4 py-2.5 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-40"
                 >
-                  {askLoading ? '考え中…' : '聞く'}
+                  {askLoading ? t.ask.thinking : t.ask.submit}
                 </button>
               </div>
 
@@ -2678,7 +2820,7 @@ export default function ArtFreeGuide() {
               <div className="p-3 bg-slate-950/40 border border-slate-900 rounded-xl text-xs text-slate-400 flex items-start gap-2 select-text font-sans">
                 <span className="text-sm">🗣️</span>
                 <div>
-                  <span className="font-semibold text-slate-300 block mb-0.5">あなたの質問:</span>
+                  <span className="font-semibold text-slate-300 block mb-0.5">{t.ask.yourQuestion}</span>
                   <p className="italic">「{voiceText}」</p>
                 </div>
               </div>
@@ -2706,7 +2848,7 @@ export default function ArtFreeGuide() {
                 </div>
                 <button
                   onClick={sendHeart}
-                  aria-label="この解説にハートを送る"
+                  aria-label={t.feedback.heart}
                   className="w-11 h-11 rounded-full bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-lg transition-colors active:scale-90"
                 >
                   {heartCount > 0 ? '❤️' : '🤍'}
@@ -2723,13 +2865,13 @@ export default function ArtFreeGuide() {
                   disabled={deepDiveLoading}
                   className="text-teal-400/80 hover:text-teal-300 disabled:opacity-40"
                 >
-                  {deepDiveLoading ? '探究中…' : '🔍 裏話・エピソード'}
+                  {deepDiveLoading ? t.ask.deepDiveLoading : t.ask.deepDive}
                 </button>
                 <button
                   onClick={() => setShowReportForm(prev => !prev)}
                   className="text-slate-500 hover:text-slate-300 underline underline-offset-2"
                 >
-                  気になる点
+                  {t.feedback.report}
                 </button>
               </div>
             </div>
@@ -2740,7 +2882,7 @@ export default function ArtFreeGuide() {
                   value={reportComment}
                   onChange={e => setReportComment(e.target.value)}
                   rows={2}
-                  placeholder="気になった点や不具合（例: 事実が違う、読み上げが不自然、画像が別の作品）"
+                  placeholder={t.feedback.reportPlaceholder}
                   className="w-full bg-slate-950/60 border border-slate-800 focus:border-teal-500/50 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 outline-none scroll-area"
                 />
                 <div className="flex flex-wrap items-center justify-end gap-2">
@@ -2748,25 +2890,25 @@ export default function ArtFreeGuide() {
                     onClick={() => setShowReportForm(false)}
                     className="px-3 py-2 text-[11px] text-slate-500 hover:text-slate-300"
                   >
-                    閉じる
+                    {t.feedback.close}
                   </button>
                   <button
                     onClick={handleRegenerateGuide}
                     disabled={regenerating}
                     className="px-3 py-2 bg-slate-900/60 border border-slate-800 hover:border-teal-500/40 text-slate-300 rounded-lg text-[11px] font-bold active:scale-95 disabled:opacity-40"
                   >
-                    {regenerating ? '作り直し中…' : '🔄 解説を作り直す'}
+                    {regenerating ? t.feedback.regenerating : t.feedback.regenerate}
                   </button>
                   <button
                     onClick={() => {
                       sendFeedback(reportComment.trim() ? 'bug' : 'bad', reportComment.trim());
                       setReportComment('');
                       setShowReportForm(false);
-                      triggerToast('ご報告ありがとうございます');
+                      triggerToast(t.feedback.thanks);
                     }}
                     className="px-3 py-2 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-lg text-[11px] font-bold active:scale-95"
                   >
-                    送信する
+                    {t.feedback.send}
                   </button>
                 </div>
               </div>
@@ -2776,7 +2918,7 @@ export default function ArtFreeGuide() {
             {recommendations.length > 0 && (
               <div className="pt-4 space-y-4 select-none">
                 <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase font-sans">
-                  💡 次におすすめの作品
+                  {t.recommendations}
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {recommendations.map((rec, index) => (
@@ -2800,9 +2942,9 @@ export default function ArtFreeGuide() {
                       <div className="flex-1 min-w-0 text-left flex flex-col justify-between py-0.5 font-sans">
                         <div>
                           <h4 className="font-semibold text-slate-200 text-xs truncate group-hover:text-teal-400 transition-colors">
-                            {rec.title}
+                            {localizeName(rec.title, locale)}
                           </h4>
-                          <p className="text-[10px] text-slate-500 truncate">{rec.artist}</p>
+                          <p className="text-[10px] text-slate-500 truncate">{localizeName(rec.artist, locale)}</p>
                         </div>
                         <p className="text-[10px] text-slate-400 line-clamp-1 italic">{rec.reason}</p>
                       </div>
@@ -2842,7 +2984,7 @@ export default function ArtFreeGuide() {
               aria-valuenow={Math.round(narrationProgress * 100)}
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-label="音声ガイドの再生位置"
+              aria-label={t.player.position}
             >
               <div
                 className="h-full bg-gradient-to-r from-teal-500 to-blue-500 transition-all duration-500"
@@ -2858,7 +3000,7 @@ export default function ArtFreeGuide() {
               <button
                 onClick={() => setShowSpeedMenu(!showSpeedMenu)}
                 className="flex flex-col items-center justify-center gap-1 text-teal-400 hover:text-teal-350 transition-all active:scale-90"
-                title="再生速度を変更"
+                title={t.player.speed}
               >
                 <span className="text-lg">⚡</span>
                 <span className="text-[8px] sm:text-[9px] font-mono font-bold truncate max-w-full">{playbackSpeed.toFixed(1)}x</span>
@@ -2896,10 +3038,10 @@ export default function ArtFreeGuide() {
               onClick={() => loadHistoryEntry(historyIndex - 1)}
               disabled={historyIndex <= 0}
               className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90 disabled:pointer-events-none"
-              title="前の作品に戻る"
+              title={t.player.prevWork}
             >
               <span className="text-xl">⏮️</span>
-              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">前作品</span>
+              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.prevWork}</span>
             </button>
 
             {/* Skip 1 segment backward */}
@@ -2907,10 +3049,10 @@ export default function ArtFreeGuide() {
               onClick={handleSkipBackward}
               disabled={activeSegmentIndex <= 0}
               className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90"
-              title="1文戻る"
+              title={t.player.backSentence}
             >
               <span className="text-lg">⏪</span>
-              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">1文戻る</span>
+              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.backSentence}</span>
             </button>
             
             {/* Central Play/Pause button (Enlarged circle) */}
@@ -2918,7 +3060,7 @@ export default function ArtFreeGuide() {
               {/* Browsers block autoplay, so point at the button until the first tap. */}
               {!hasPlayedOnce && (
                 <span className="animate-bounce pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap rounded-full bg-teal-500 px-3 py-1 text-[10px] font-bold text-slate-950 shadow-lg font-sans">
-                  🎧 ここから再生
+                  {t.player.playHere}
                 </span>
               )}
               {/* Halo lives outside the button so it can grow past its edge. */}
@@ -2953,10 +3095,10 @@ export default function ArtFreeGuide() {
               onClick={handleSkipForward}
               disabled={activeSegmentIndex >= speakableSegments.length - 1}
               className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90"
-              title="1文進む"
+              title={t.player.forwardSentence}
             >
               <span className="text-lg">⏩</span>
-              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">1文進む</span>
+              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.forwardSentence}</span>
             </button>
 
             {/* Next Artwork in History */}
@@ -2964,10 +3106,10 @@ export default function ArtFreeGuide() {
               onClick={() => loadHistoryEntry(historyIndex + 1)}
               disabled={historyIndex >= history.length - 1}
               className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90 disabled:pointer-events-none"
-              title="次の作品に進む"
+              title={t.player.nextWork}
             >
               <span className="text-xl">⏭️</span>
-              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">次作品</span>
+              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.nextWork}</span>
             </button>
 
           </div>
@@ -2991,7 +3133,7 @@ export default function ArtFreeGuide() {
 
             <div className="flex items-center justify-between mb-6 font-sans">
               <h2 className="text-xl font-bold text-slate-200 flex items-center gap-2">
-                <span className="text-teal-400">✦</span> つぎに聴くものをさがす
+                <span className="text-teal-400">✦</span> {t.hub.findNext}
               </h2>
               <button
                 onClick={() => setShowInputDrawer(false)}
@@ -3019,7 +3161,7 @@ export default function ArtFreeGuide() {
           <div className="relative w-full max-w-xs bg-slate-950 border-l border-slate-900 h-full flex flex-col shadow-2xl p-6 overflow-y-auto scroll-area z-50">
             <div className="flex items-center justify-between border-b border-slate-900 pb-4 mb-4 font-sans">
               <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
-                <span>📜</span> 閲覧履歴
+                <span>📜</span> {t.history.title}
               </h3>
               <button
                 onClick={() => setShowHistorySidebar(false)}
@@ -3033,7 +3175,7 @@ export default function ArtFreeGuide() {
             <div className="flex-1 space-y-2 overflow-y-auto scroll-area pr-1 font-sans">
               {history.length === 0 ? (
                 <div className="text-slate-650 text-xs py-8 text-center leading-relaxed">
-                  履歴はありません。<br />ガイドを生成するとここに保存されます。
+                  {t.history.empty}
                 </div>
               ) : (
                 history.map((entry, idx) => {
@@ -3060,8 +3202,8 @@ export default function ArtFreeGuide() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0 text-left">
-                        <p className="font-semibold text-xs truncate">{entry.title}</p>
-                        <p className="text-[10px] text-slate-500 truncate">{entry.artist || '作者不明'}</p>
+                        <p className="font-semibold text-xs truncate">{localizeName(entry.title, locale)}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{localizeName(entry.artist, locale) || t.history.unknownArtist}</p>
                       </div>
                     </div>
                   );
@@ -3073,7 +3215,7 @@ export default function ArtFreeGuide() {
             {history.length > 0 && (
               <button
                 onClick={() => {
-                  if (confirm('閲覧履歴をすべて消去しますか？')) {
+                  if (confirm(t.history.clearConfirm)) {
                     setHistory([]);
                     setHistoryIndex(-1);
                     localStorage.removeItem('art_free_guide_history');
@@ -3083,7 +3225,7 @@ export default function ArtFreeGuide() {
                 className="w-full mt-4 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/30 text-rose-400 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5 font-sans"
               >
                 <span>🗑️</span>
-                <span>履歴をクリア</span>
+                <span>{t.history.clear}</span>
               </button>
             )}
           </div>

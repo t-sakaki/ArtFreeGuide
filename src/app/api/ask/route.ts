@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
+import { DEFAULT_LOCALE, Locale, OUTPUT_LANGUAGE_INSTRUCTION, isLocale } from '@/lib/i18n';
 import { getLLMProvider, Message } from '@/lib/llm';
 
 export async function POST(req: Request) {
   try {
-    const { title, artist, question, context } = await req.json();
+    const { title, artist, question, context, locale: rawLocale } = await req.json();
+    const locale: Locale =
+      typeof rawLocale === 'string' && isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
 
     if (typeof question !== 'string' || !question.trim()) {
       return NextResponse.json({ error: '質問が空です' }, { status: 400 });
@@ -25,7 +28,8 @@ ${excerpt ? `\nこれまでの解説（参考）:\n${excerpt}\n` : ''}
 - 見出し・箇条書き・マークダウン記号・絵文字は使わないでください。
 - 確実でないことは断定せず、「〜と考えられています」のように述べてください。
 - 質問が作品と無関係な場合は、作品鑑賞に話を戻してください。
-- 説明文そのものだけを出力してください。前置きや後書きは不要です。`;
+- 説明文そのものだけを出力してください。前置きや後書きは不要です。
+- ${OUTPUT_LANGUAGE_INSTRUCTION[locale]}`;
 
     const messages: Message[] = [{ role: 'user', content: prompt }];
     const provider = getLLMProvider('ask');
