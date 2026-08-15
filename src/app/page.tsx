@@ -276,7 +276,7 @@ export default function ArtFreeGuide() {
   const [responseShort, setResponseShort] = useState('');
   const [responseStandard, setResponseStandard] = useState('');
   const [responseDeep, setResponseDeep] = useState('');
-  const [explanationMode, setExplanationMode] = useState<'short' | 'standard' | 'deep'>('short');
+  const [explanationMode, setExplanationMode] = useState<'short' | 'standard' | 'deep'>('standard');
 
   // Client-side cache for fetched guides
   const [guideCache, setGuideCache] = useState<Record<string, GuideCacheEntry>>({});
@@ -1412,7 +1412,7 @@ export default function ArtFreeGuide() {
     }
 
     // Determine target mode (URL parameters prioritize custom mode)
-    let targetMode: 'short' | 'standard' | 'deep' = 'short';
+    let targetMode: 'short' | 'standard' | 'deep' = 'standard';
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const modeParam = params.get('mode') || '';
@@ -2611,22 +2611,6 @@ export default function ArtFreeGuide() {
                 <div className="text-slate-350">解説を読み込み中...</div>
               )}
 
-              {/* "さらに詳しく" progressive button inside scroll area */}
-              {explanationMode !== 'deep' && (
-                <div className="pt-4 border-t border-slate-900/60 flex justify-center select-none">
-                  <button
-                    onClick={() => {
-                      // The existing text is a prefix of the deeper text, so segment
-                      // indices stay valid and playback can continue uninterrupted.
-                      setExplanationMode(explanationMode === 'short' ? 'standard' : 'deep');
-                    }}
-                    className="px-6 py-2.5 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-400 hover:text-teal-300 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-sm font-sans"
-                  >
-                    <span>👇</span>
-                    <span>{explanationMode === 'short' ? 'もっと詳しく聞く' : 'さらに深く聞く（裏話・エピソード）'}</span>
-                  </button>
-                </div>
-              )}
             </div>
             {showScrollHint && <div className="scroll-hint rounded-b-2xl" aria-hidden="true" />}
             </div>
@@ -2687,18 +2671,6 @@ export default function ArtFreeGuide() {
                 </button>
               </div>
 
-              {/* Deep Dive secondary trigger button */}
-              {explanationMode === 'deep' && (
-                <div className="flex justify-center pt-1">
-                  <button
-                    onClick={handleDeepDive}
-                    disabled={deepDiveLoading}
-                    className="px-5 py-2.5 bg-gradient-to-r from-teal-500/10 to-blue-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-md disabled:opacity-40"
-                  >
-                    <span>{deepDiveLoading ? '探究中...' : '🔍 さらなる面白裏話を発掘'}</span>
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* Voice question transcription indicator */}
@@ -2712,8 +2684,8 @@ export default function ArtFreeGuide() {
               </div>
             )}
 
-            {/* Guide feedback: tap the heart as often as you like, report separately */}
-            <div className="flex items-center justify-center gap-3 select-none font-sans text-[11px]">
+            {/* One quiet row: heart on the left, the rarely used actions as links */}
+            <div className="flex items-center gap-3 select-none font-sans text-[11px]">
               <div className="relative">
                 {/* Hearts rise out of the button without affecting the layout. */}
                 <div className="pointer-events-none absolute bottom-full left-1/2 h-40 w-24 -translate-x-1/2" aria-hidden="true">
@@ -2743,12 +2715,23 @@ export default function ArtFreeGuide() {
               {heartCount > 0 && (
                 <span className="text-rose-300 font-bold tabular-nums">{heartCount}</span>
               )}
-              <button
-                onClick={() => setShowReportForm(prev => !prev)}
-                className="text-slate-500 hover:text-slate-300 underline underline-offset-2"
-              >
-                気になる点を報告
-              </button>
+              <div className="ml-auto flex items-center gap-3">
+                <button
+                  onClick={() =>
+                    explanationMode === 'deep' ? handleDeepDive() : setExplanationMode('deep')
+                  }
+                  disabled={deepDiveLoading}
+                  className="text-teal-400/80 hover:text-teal-300 disabled:opacity-40"
+                >
+                  {deepDiveLoading ? '探究中…' : '🔍 裏話・エピソード'}
+                </button>
+                <button
+                  onClick={() => setShowReportForm(prev => !prev)}
+                  className="text-slate-500 hover:text-slate-300 underline underline-offset-2"
+                >
+                  気になる点
+                </button>
+              </div>
             </div>
 
             {showReportForm && (
