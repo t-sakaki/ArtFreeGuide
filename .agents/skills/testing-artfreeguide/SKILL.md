@@ -48,6 +48,35 @@ description: How to run and end-to-end test the ArtFreeGuide Next.js app locally
   In the UI, the fastest path is the landing page one-tap cards (睡蓮 / 星月夜 / モナ・リザ /
   真珠の耳飾りの少女 / 叫び / 富嶽三十六景 神奈川沖浪裏) — these are exactly the 6 curated-hotspot works.
 
+## When `npm run dev` is broken (Turbopack manifest errors)
+- Symptom: `/` returns 500 and the dev log repeats
+  `Could not find the module "[project]/.../HomeClient.tsx#default" in the React Client Manifest`
+  and/or `Failed to load external module @swc/helpers-<hash>/_/_interop_require_default`.
+  A stray `/home/ubuntu/package-lock.json` also makes Next infer the wrong workspace root.
+  Clearing `.next`, adding `turbopack: { root: __dirname }` to `next.config.js`, and
+  `SKIP_CF_DEV=1` did **not** fix it in at least one session.
+- Reliable fallback for UI testing: build and serve the production bundle.
+  ```bash
+  npm run build            # OpenNext build; also runs `next build`
+  npx next start -p 3000   # serves the same UI at http://localhost:3000
+  ```
+  This has no Cloudflare bindings (no D1 → no guide cache, hearts counts are 0), but Supabase-backed
+  routes such as `/api/recommendations` and the whole client UI work normally, and cached guides for
+  the curated works still render fast enough to test UI behaviour.
+- `SKIP_CF_DEV=1 npm run dev` skips `initOpenNextCloudflareForDev()` (added in PR #81) and avoids the
+  `Failed to start the remote proxy session ... Failed to obtain a preview token` hang when the
+  Cloudflare remote proxy is unreachable from the VM.
+
+## Heart (♡) burst animation testing
+- The ♡ button lives just below the question input on a guide screen. Each click appends a floating
+  emoji to a container that is cleaned up by a `setTimeout` of `duration*1000 + 100` ms (max ~2.8s),
+  so assert DOM cleanup after ~4s of idling.
+- Rapid xdotool clicks register fine in a normal window, but in **DevTools device emulation
+  (Ctrl+Shift+M) rapid repeated clicks are frequently swallowed** (only the first registers). For
+  narrow-viewport animation tests, resize the real Chrome window instead
+  (`wmctrl -r :ACTIVE: -e 0,0,0,430,880`; Chrome clamps to ~500px minimum width).
+- Check overflow with `document.documentElement.scrollWidth === clientWidth` rather than eyeballing.
+
 ## Devin Secrets Needed
 - `CLOUDFLARE_API_TOKEN` — needed for the remote Workers AI binding under `next dev`.
   Without it `/api/chat` cannot generate a guide.
