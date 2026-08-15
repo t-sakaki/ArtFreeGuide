@@ -13,6 +13,7 @@
 //   --images-only   resolve pictures, skip the guides
 //   --guides-only   skip the picture pass
 //   --locales=...   comma separated (default: ja,en)
+//   --titles=a,b    only these catalogue titles (the demo works, say)
 //   --limit=N       only the first N catalogue rows
 //   --concurrency=N parallel requests (default 3; the LLM is the bottleneck)
 
@@ -33,6 +34,10 @@ const LOCALES = option('locales', 'ja,en')
   .map(value => value.trim())
   .filter(Boolean);
 const LIMIT = Number(option('limit', '0')) || 0;
+const TITLES = option('titles', '')
+  .split(',')
+  .map(value => value.trim())
+  .filter(Boolean);
 const CONCURRENCY = Math.max(1, Number(option('concurrency', '3')) || 3);
 const DO_IMAGES = !flag('guides-only');
 const DO_GUIDES = !flag('images-only');
@@ -114,8 +119,12 @@ async function warmGuide(row, locale) {
   console.log(`guide  ${locale}  ${state}  ${seconds}s  ${row.title} / ${row.artist}`);
 }
 
-const rows = await catalogue();
+const all = await catalogue();
+const rows = TITLES.length > 0 ? all.filter(row => TITLES.includes(row.title)) : all;
 console.log(`${rows.length} catalogue rows via ${BASE_URL}`);
+
+const absent = TITLES.filter(title => !all.some(row => row.title === title));
+if (absent.length > 0) console.log(`not in the catalogue: ${absent.join(', ')}`);
 
 if (DO_IMAGES) {
   const missing = rows.filter(row => !row.image_url);

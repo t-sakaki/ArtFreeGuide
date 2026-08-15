@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { resolveArtworkImage } from '@/lib/artworkImage';
 import { createServiceClient } from '@/lib/supabase';
+import { catalogueTitle } from '@/lib/names';
 
 /**
  * The picture for one artwork, resolved once and then remembered.
@@ -70,7 +71,9 @@ async function writeCatalogImage(
 export async function POST(req: Request) {
   try {
     const { title: rawTitle, artist: rawArtist, searchQuery, create, width } = await req.json();
-    const title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
+    // Under the name the guide speaks there is no catalogue row and no source
+    // to search, so the lookup and the cache both use the catalogued title.
+    const title = typeof rawTitle === 'string' ? catalogueTitle(rawTitle) : '';
     const artist = typeof rawArtist === 'string' ? rawArtist.trim() : '';
 
     if (!title) {
