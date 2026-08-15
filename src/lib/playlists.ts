@@ -72,6 +72,17 @@ export const PLAYLISTS: Playlist[] = [
           '从记录光线，走向心中的风景',
         ],
       },
+      es: {
+        title: 'Los pintores que atraparon la luz',
+        subtitle: 'Cómo el impresionismo aprendió a pintar lo que ve el ojo',
+        cues: [
+          'Empezamos por el cuadro que dio nombre al impresionismo',
+          'En sus últimos años Monet apenas pintó otra cosa que este estanque',
+          'Hacia un domingo parisino bajo la luz tamizada',
+          'Lejos del aire libre, a un instante entre bastidores',
+          'De registrar la luz a pintar un paisaje interior',
+        ],
+      },
     },
   },
   {
@@ -120,6 +131,17 @@ export const PLAYLISTS: Playlist[] = [
           '离开绘画，以陶瓷之美收尾',
         ],
       },
+      es: {
+        title: 'Hokusai y la belleza de Japón',
+        subtitle: 'La ola, los dioses del trueno y la escuela Rinpa',
+        cues: [
+          'Comenzamos por la ola más famosa del mundo',
+          'Hacia el Fuji rojo y sereno de la misma serie',
+          'Paisajes de viaje del gran rival de Hokusai',
+          'Antes de la estampa: dioses danzando sobre oro',
+          'Dejamos la pintura y cerramos con la cerámica',
+        ],
+      },
     },
   },
   {
@@ -162,6 +184,16 @@ export const PLAYLISTS: Playlist[] = [
           '走向戈雅画在自家墙上的「黑色绘画」',
           '不安开始呈现出梦的形状',
           '然后，走向真实的战争',
+        ],
+      },
+      es: {
+        title: 'Las formas de la angustia',
+        subtitle: 'Los gritos y las pesadillas de la edad moderna',
+        cues: [
+          'Empezamos por la imagen misma de la angustia moderna',
+          'Hacia las «pinturas negras» que Goya pintó en su propia casa',
+          'La angustia empieza a tomar forma de sueño',
+          'Y después, hacia una guerra real',
         ],
       },
     },
@@ -212,6 +244,17 @@ export const PLAYLISTS: Playlist[] = [
           '走向西斯廷礼拜堂，巨匠的顶点',
         ],
       },
+      es: {
+        title: 'Los maestros del Renacimiento',
+        subtitle: 'La época que puso a la persona en el centro',
+        cues: [
+          'Desde el momento en que el mito volvió a pintarse',
+          'Hacia la sonrisa más famosa de todas',
+          'El mismo pintor, enfrentándose a un muro',
+          'De la pintura a la escultura: el cuerpo ideal',
+          'Hacia la Capilla Sixtina, cima del maestro',
+        ],
+      },
     },
   },
   {
@@ -258,6 +301,17 @@ export const PLAYLISTS: Playlist[] = [
           '不用黑色画出的夜晚',
           '从疗养院窗口望见的漩涡星空',
           '走向最后时期的麦田',
+        ],
+      },
+      es: {
+        title: 'Van Gogh, la historia de diez años',
+        subtitle: 'Siguiendo la vida de un solo pintor',
+        cues: [
+          'Campesinos en tonos oscuros: el punto de partida del pintor',
+          'La luz del sur de Francia cambia sus colores',
+          'Una noche pintada sin usar el negro',
+          'El cielo en remolino visto desde la ventana del sanatorio',
+          'Hacia los trigales de sus últimas semanas',
         ],
       },
     },

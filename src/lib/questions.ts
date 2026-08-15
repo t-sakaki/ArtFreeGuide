@@ -39,6 +39,15 @@ const TEMPLATES: Record<Locale, {
       'Quelle technique a été employée ?',
     ],
   },
+  es: {
+    hotspot: label => `¿Qué significa «${label}»?`,
+    artist: artist => `¿Qué clase de persona fue ${artist}?`,
+    general: [
+      '¿Dónde puedo ver esta obra en persona?',
+      '¿Cómo se recibió en su época?',
+      '¿Qué técnica se empleó?',
+    ],
+  },
   zh: {
     hotspot: label => `「${label}」有什么含义？`,
     artist: artist => `${artist}是怎样一个人？`,

@@ -1,5 +1,5 @@
 /**
- * Four-language support (Japanese, English, French, Chinese).
+ * Five-language support (Japanese, English, French, Spanish, Chinese).
  *
  * The visitor's language decides three separate things: the words on screen
  * (this file), the language the guide is written in (the prompt sent by
@@ -7,7 +7,7 @@
  * in one place so adding a language is a matter of adding one dictionary.
  */
 
-export const LOCALES = ['ja', 'en', 'fr', 'zh'] as const;
+export const LOCALES = ['ja', 'en', 'fr', 'es', 'zh'] as const;
 export type Locale = (typeof LOCALES)[number];
 
 export const DEFAULT_LOCALE: Locale = 'ja';
@@ -20,6 +20,7 @@ export const LOCALE_MENU: { locale: Locale; flag: string; label: string }[] = [
   { locale: 'ja', flag: '🇯🇵', label: '日本語' },
   { locale: 'en', flag: '🇬🇧', label: 'English' },
   { locale: 'fr', flag: '🇫🇷', label: 'Français' },
+  { locale: 'es', flag: '🇪🇸', label: 'Español' },
   { locale: 'zh', flag: '🇨🇳', label: '中文' },
 ];
 
@@ -28,6 +29,7 @@ export const SPEECH_LANG: Record<Locale, string> = {
   ja: 'ja-JP',
   en: 'en-US',
   fr: 'fr-FR',
+  es: 'es-ES',
   zh: 'zh-CN',
 };
 
@@ -36,6 +38,7 @@ export const OUTPUT_LANGUAGE_INSTRUCTION: Record<Locale, string> = {
   ja: 'すべてのテキストを日本語で書いてください。',
   en: 'Write every field in natural English. Do not use Japanese.',
   fr: 'Rédigez tous les champs en français naturel. N’utilisez pas le japonais.',
+  es: 'Redacta todos los campos en español natural. No uses japonés.',
   zh: '请用自然的简体中文撰写所有字段，不要使用日语。',
 };
 
@@ -574,4 +577,113 @@ const zh: UIStrings = {
   ],
 };
 
-export const UI: Record<Locale, UIStrings> = { ja, en, fr, zh };
+const es: UIStrings = {
+  htmlLang: 'es',
+  tagline:
+    'Una audioguía personal escrita para ti por un conservador con IA. El arte, más cerca y más hondo.',
+  hub: {
+    tours: 'Recorridos temáticos',
+    tourItems: count => `${count} obras · avanza solo`,
+    singleWork: 'Solo una obra',
+    searchByName: 'Buscar por nombre',
+    openHistory: count => `Historial de escucha (${count})`,
+    onTour: 'En recorrido',
+    endTour: 'Terminar',
+    findNext: 'Buscar qué escuchar después',
+  },
+  form: {
+    artworkLabel: 'Obra',
+    artworkPlaceholder: 'p. ej. Los girasoles, La Gioconda',
+    artistLabel: 'Artista',
+    artistPlaceholder: 'p. ej. Van Gogh, Da Vinci',
+    ready: 'Listo para escuchar',
+    maybe: 'Quizás',
+    generating: 'El conservador con IA está buscando...',
+    generate: 'Crear la audioguía',
+  },
+  header: {
+    search: 'Explorar',
+    share: 'Compartir esta guía',
+    history: 'Historial',
+    language: 'Cambiar de idioma',
+  },
+  image: {
+    loading: 'Cargando la imagen...',
+    zoomHotspots: '🔍 Ampliar los detalles',
+    zoom: '🔍 Ampliar',
+    failed: 'No se ha podido cargar la imagen',
+    shareHotspot: 'Compartir este detalle',
+    close: 'Cerrar',
+    hotspotHint: 'Toca un detalle marcado para ampliarlo y escucharlo.',
+    noHotspots: 'Todavía no hay detalles marcados en esta obra.',
+  },
+  tour: {
+    prev: 'Anterior',
+    next: 'Siguiente',
+    end: 'Terminar',
+    stopAuto: 'Detener el avance automático',
+    nextUp: (title, cue) => `A continuación: «${title}» — ${cue}`,
+    finished: title => `Era la última obra de «${title}». Gracias por escuchar.`,
+  },
+  guide: {
+    loading: 'Cargando el comentario...',
+    busy: 'El servicio está muy saturado ahora mismo. Inténtalo de nuevo en un momento.',
+    unavailable: 'La audioguía no está disponible ahora mismo. Inténtalo de nuevo en un momento.',
+    parseError: 'Ha ocurrido un error al leer la guía. Prueba a generarla otra vez.',
+    deepDiveHeader: 'Bienvenido a la historia oculta',
+  },
+  ask: {
+    placeholder: 'Pregunta sobre esta obra',
+    voice: 'Preguntar con la voz',
+    thinking: 'Pensando…',
+    submit: 'Preguntar',
+    yourQuestion: 'Tu pregunta:',
+    failed: 'No se ha podido generar la respuesta. Inténtalo de nuevo en un momento.',
+    deepDiveLoading: 'Indagando…',
+    deepDive: '🔍 Entre bastidores',
+  },
+  feedback: {
+    heart: 'Enviar un corazón a esta guía',
+    report: 'Señalar un problema',
+    reportPlaceholder: '¿Qué no encaja? (p. ej. un dato erróneo, una locución rara, otra imagen)',
+    close: 'Cerrar',
+    regenerating: 'Reescribiendo…',
+    regenerate: '🔄 Rehacer esta guía',
+    send: 'Enviar',
+    thanks: 'Gracias por avisar',
+    regenerateToast: 'Rehaciendo la guía…',
+  },
+  recommendations: '💡 Escucha estas a continuación',
+  player: {
+    position: 'Posición de reproducción',
+    speed: 'Cambiar la velocidad',
+    prevWork: 'Anterior',
+    backSentence: 'Atrás',
+    forwardSentence: 'Adelante',
+    nextWork: 'Siguiente',
+    playHere: '🎧 Empezar aquí',
+  },
+  history: {
+    title: 'Historial de escucha',
+    empty: 'Aún no hay nada. Las guías que crees se guardarán aquí.',
+    unknownArtist: 'Artista desconocido',
+    clearConfirm: '¿Borrar todo el historial de escucha?',
+    clear: 'Borrar el historial',
+  },
+  share: {
+    hotspot: (artwork, hotspot) => `¡Escucha «${hotspot}» en ${artwork}!`,
+    guide: '¡Escucha la audioguía con IA de esta obra!',
+    menuOpened: 'Se ha abierto el menú de compartir',
+    copied: '¡Enlace copiado al portapapeles!',
+    copyFailed: 'No se ha podido copiar el enlace',
+  },
+  loadingSteps: [
+    'Reuniendo documentación sobre la obra...',
+    'Leyendo la época en que se hizo...',
+    'Siguiendo la vida del artista...',
+    'Eligiendo los detalles que mirar...',
+    'Escribiendo tu audioguía...',
+  ],
+};
+
+export const UI: Record<Locale, UIStrings> = { ja, en, fr, es, zh };

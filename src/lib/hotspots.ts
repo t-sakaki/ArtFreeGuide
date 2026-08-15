@@ -83,6 +83,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             detail: '碎裂的浪头如白色利爪般伸向小船。北斋把每一滴浪花都图案化，使自然之力如同活物。',
             keywords: ['浪', '大浪', '浪头', '爪', '浪花', '波涛'],
           },
+          es: {
+            label: 'La garra de la ola',
+            detail: 'La cresta que rompe se alarga hacia las barcas como garras blancas. Hokusai estilizó cada gota de espuma y convirtió la fuerza de la naturaleza en un ser vivo.',
+            keywords: ['ola', 'cresta', 'garra', 'espuma', 'oleaje', 'marejada'],
+          },
         },
       },
       {
@@ -108,6 +113,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             label: '小小的富士山',
             detail: '画面中下方、浪谷之间坐着小小的富士山。本应是主角的富士被推向远景，反而突显了浪的巨大。',
             keywords: ['富士', '富士山', '远景', '雪'],
+          },
+          es: {
+            label: 'El pequeño monte Fuji',
+            detail: 'Bajo y en el centro, el Fuji queda en el seno de la ola. Al alejar el supuesto tema principal, Hokusai hace que la ola parezca enorme.',
+            keywords: ['Fuji', 'montaña', 'fondo', 'nieve'],
           },
         },
       },
@@ -135,6 +145,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             detail: '三艘快船上是低伏的划手。他们并非逃避，而是顺着浪势操船，这才是画面张力的来源。',
             keywords: ['船', '小船', '划手', '人'],
           },
+          es: {
+            label: 'Las barcas y sus remeros',
+            detail: 'Tres rápidas barcas de carga llevan remeros agazapados. No huyen: cabalgan la ola, y de ahí nace la tensión de la estampa.',
+            keywords: ['barca', 'barcas', 'remero', 'tripulación', 'hombres'],
+          },
         },
       },
       {
@@ -160,6 +175,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             label: '题筺与落款',
             detail: '左上方的方框是系列题筺，下方是北斋的落款。进口的普鲁士蓝支撑起整幅画面。',
             keywords: ['落款', '签名', '题', '普鲁士蓝', '蓝', '版画'],
+          },
+          es: {
+            label: 'Cartela del título y firma',
+            detail: 'El recuadro superior izquierdo lleva el título de la serie y, debajo, la firma de Hokusai. El azul de Prusia importado sostiene toda la estampa.',
+            keywords: ['firma', 'título', 'cartela', 'azul de Prusia', 'azul', 'estampa', 'xilografía'],
           },
         },
       },
@@ -195,6 +215,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             detail: '一道巨大的漩涡横跨夜空。现实的夜空并无此景，笔触里留下的是梵高感受到的宇宙运动。',
             keywords: ['漩涡', '旋涡', '夜空', '天空', '笔触'],
           },
+          es: {
+            label: 'El cielo nocturno en remolino',
+            detail: 'Una gran espiral cruza el cielo. Nada así se ve de noche: en las pinceladas queda el movimiento que Van Gogh sentía en el universo.',
+            keywords: ['remolino', 'espiral', 'cielo', 'cielo nocturno', 'pincelada', 'estrellas'],
+          },
         },
       },
       {
@@ -220,6 +245,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             label: '燃烧般的柏树',
             detail: '前景中如黑色火焰般竖起的是柏树。在欧洲它是墓地之树，在这里则是连接大地与天空的柱子。',
             keywords: ['柏树', '树', '前景', '火焰', '死亡'],
+          },
+          es: {
+            label: 'El ciprés en llamas',
+            detail: 'La forma oscura que se alza en primer plano como una llama negra es un ciprés: en Europa, árbol de cementerio; aquí, columna que une tierra y cielo.',
+            keywords: ['ciprés', 'árbol', 'primer plano', 'llama', 'muerte'],
           },
         },
       },
@@ -247,6 +277,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             detail: '右上方旋转的月亮。梵高把黄色当作希望的颜色，堆叠的颜料让光本身有了厚度。',
             keywords: ['月', '黄色', '光', '星', '金色'],
           },
+          es: {
+            label: 'La luna dorada',
+            detail: 'La luna gira en espiral arriba a la derecha. Van Gogh usó el amarillo como color de la esperanza y el empaste convierte la luz en algo sólido.',
+            keywords: ['luna', 'amarillo', 'luz', 'oro', 'estrella'],
+          },
         },
       },
       {
@@ -272,6 +307,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             label: '熟睡的村庄与尖塔',
             detail: '山脚下的村庄是北方风格，并不存在于疗养地圣雷米。故乡荷兰的记忆，被画成高过柏树的尖塔。',
             keywords: ['村', '教堂', '尖塔', '房屋', '圣雷米', '故乡'],
+          },
+          es: {
+            label: 'El pueblo dormido y su campanario',
+            detail: 'El pueblo de abajo es del norte, muy distinto del entorno del sanatorio de Saint-Rémy. Un recuerdo de los Países Bajos, con un campanario más alto que el ciprés.',
+            keywords: ['pueblo', 'iglesia', 'campanario', 'casas', 'Saint-Rémy', 'hogar'],
           },
         },
       },
@@ -307,6 +347,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             detail: '嘴角没有轮廓线，阴影如雾般消融。这就是晕涂法，也是笑容随角度变化的原因。',
             keywords: ['微笑', '笑容', '嘴', '晕涂', '模糊'],
           },
+          es: {
+            label: 'La boca que sonríe',
+            detail: 'Las comisuras no tienen contorno; las sombras se disuelven como niebla. Esa técnica es el sfumato, y por eso la sonrisa cambia según el ángulo.',
+            keywords: ['sonrisa', 'boca', 'labios', 'sfumato', 'ambigua'],
+          },
         },
       },
       {
@@ -332,6 +377,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             label: '追随你的目光',
             detail: '目光略微偏离正面，却仍似乎在追随观者。没有画出睫毛与眉毛，更添神秘。',
             keywords: ['目光', '眼睛', '瞳', '眉毛'],
+          },
+          es: {
+            label: 'La mirada que te sigue',
+            detail: 'Los ojos miran algo desviados y aun así parecen seguir al espectador. La ausencia de pestañas y cejas añade misterio.',
+            keywords: ['mirada', 'ojos', 'vista', 'cejas'],
           },
         },
       },
@@ -359,6 +409,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             detail: '搭在扶手上的双手姿态放松，在当时的胖像中十分少见。指尖的柔软让人物显得鲜活。',
             keywords: ['手', '手指', '姿势', '扶手', '衣'],
           },
+          es: {
+            label: 'Las manos cruzadas',
+            detail: 'Apoyadas en el brazo del sillón, las manos adoptan una pose relajada, rara en los retratos de la época. Su suavidad da vida al modelo.',
+            keywords: ['manos', 'dedos', 'pose', 'reposabrazos', 'manga'],
+          },
         },
       },
       {
@@ -384,6 +439,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             label: '左右不一致的风景',
             detail: '背景的地平线右高左低。配合让远处发蓝的空气透视，人物仿佛浮在一个非现实的空间里。',
             keywords: ['背景', '风景', '地平线', '透视', '雾', '山', '桥'],
+          },
+          es: {
+            label: 'Un paisaje que no encaja',
+            detail: 'El horizonte está más alto a la derecha que a la izquierda. Con la perspectiva aérea azulando la lejanía, la modelo flota en un espacio irreal.',
+            keywords: ['fondo', 'paisaje', 'horizonte', 'perspectiva', 'bruma', 'montañas', 'puente'],
           },
         },
       },
@@ -424,6 +484,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             detail: '走近看，珍珠只是两笔白颜料。它没有轮廓，仅靠锐利的高光与柔和的反光就成了球体。',
             keywords: ['珍珠', '耳环', '光', '反光'],
           },
+          es: {
+            label: 'El pendiente de perla',
+            detail: 'De cerca, la perla son solo dos toques de blanco. No tiene contorno: bastan un brillo nítido y un reflejo suave para crear una esfera.',
+            keywords: ['perla', 'pendiente', 'luz', 'reflejo'],
+          },
         },
       },
       {
@@ -449,6 +514,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             label: '回眸的目光',
             detail: '越过肩头回望的一瞬。眼眶边缘微微的湿润，仿佛少女正要开口。',
             keywords: ['目光', '眼睛', '回眸', '一瞬'],
+          },
+          es: {
+            label: 'La mirada por encima del hombro',
+            detail: 'Un instante al volverse. Una leve humedad en el borde de los ojos hace pensar que va a hablar.',
+            keywords: ['mirada', 'ojos', 'vistazo', 'giro', 'instante'],
           },
         },
       },
@@ -476,6 +546,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             detail: '下唇湿润的光，是维米尔偏爱的点状高光。同样的手法也用在珍珠上，让画面呼吸起来。',
             keywords: ['唇', '嘴', '高光', '湿润'],
           },
+          es: {
+            label: 'El brillo de los labios',
+            detail: 'La luz húmeda del labio inferior es uno de los puntos de luz de Vermeer. El mismo recurso ilumina la perla y hace respirar al cuadro.',
+            keywords: ['labios', 'boca', 'brillo', 'húmedo'],
+          },
         },
       },
       {
@@ -501,6 +576,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             label: '蓝色头巾',
             detail: '用昂贵的青金石磨成的群青，毫不名惜地涂上。与黄色布相邻，两种颜色互相辉映。',
             keywords: ['头巾', '蓝', '群青', '青金石', '黄色', '布'],
+          },
+          es: {
+            label: 'El turbante azul',
+            detail: 'Ultramar hecho con costoso lapislázuli, usado sin reservas. Junto a la tela amarilla, cada color aviva al otro.',
+            keywords: ['turbante', 'azul', 'ultramar', 'lapislázuli', 'amarillo', 'tela'],
           },
         },
       },
@@ -536,6 +616,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             detail: '呐喊的并不是这个人。根据蒙克的日记，他听见「穿透自然的呐喊」，于是捼住了耳朵。',
             keywords: ['脸', '呐喊', '耳', '人物', '嘴'],
           },
+          es: {
+            label: 'El rostro que se tapa los oídos',
+            detail: 'Esta figura no es la que grita. Según el diario de Munch, él oyó «un grito que atravesaba la naturaleza» y se tapó los oídos.',
+            keywords: ['rostro', 'grito', 'oídos', 'figura', 'boca'],
+          },
         },
       },
       {
@@ -561,6 +646,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             label: '血一样的天空',
             detail: '波动的红色条带是夕阳的记忆。只有天空在激烈翻涌，与仰望它的人物内心的骚动合为一体。',
             keywords: ['天空', '红', '夕阳', '云'],
+          },
+          es: {
+            label: 'El cielo rojo sangre',
+            detail: 'Las franjas rojas onduladas son un atardecer recordado. Solo el cielo se agita, y se funde con la angustia de quien lo mira.',
+            keywords: ['cielo', 'rojo', 'atardecer', 'nubes'],
           },
         },
       },
@@ -588,6 +678,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             detail: '桥的深处那两个人什么都没察觉，自顾走远。他们的冷漠让前景的孤独更深。',
             keywords: ['两个人', '人影', '桥', '孤独', '冷漠'],
           },
+          es: {
+            label: 'Las dos figuras que se alejan',
+            detail: 'La pareja que sigue por el puente no advierte nada y continúa caminando. Su indiferencia ahonda la soledad del primer plano.',
+            keywords: ['dos figuras', 'amigos', 'puente', 'soledad', 'indiferencia'],
+          },
         },
       },
       {
@@ -613,6 +708,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             label: '刺入画面的桥线',
             detail: '桥的护栏化作锐利的斜线划开画面。笔直的风景与翻涌的天空形成对比，令人不安。',
             keywords: ['桥', '斜线', '透视', '护栏', '直线', '构图'],
+          },
+          es: {
+            label: 'La línea punzante del puente',
+            detail: 'La barandilla cruza el cuadro en una diagonal cortante. El paisaje recto contra el cielo revuelto es lo que inquieta.',
+            keywords: ['puente', 'diagonal', 'perspectiva', 'barandilla', 'línea', 'composición'],
           },
         },
       },
@@ -648,6 +748,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             detail: '浮在水面上的淡粉色花朵。仅凭几笔厚涂，就能感到花瓣的重量与水的张力。',
             keywords: ['花', '睡莲', '粉色', '盛开'],
           },
+          es: {
+            label: 'Una flor abierta',
+            detail: 'Una flor rosa pálido flotando en la superficie. Bastan unas pinceladas densas para transmitir el peso de los pétalos y la tensión del agua.',
+            keywords: ['flor', 'nenúfar', 'rosa', 'floración'],
+          },
         },
       },
       {
@@ -673,6 +778,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             label: '映在水中的天空',
             detail: '那片蓝与灰并非水本身，而是水面倒映的天空。不画天空却让人看见天空，这是莫奈的倒置风景。',
             keywords: ['天空', '倒映', '反射', '水面', '云', '蓝'],
+          },
+          es: {
+            label: 'El cielo reflejado en el agua',
+            detail: 'La extensión de azules y grises no es el agua, sino el cielo reflejado en ella: el paisaje invertido de Monet, que muestra el cielo sin pintarlo.',
+            keywords: ['cielo', 'reflejo', 'superficie', 'nubes', 'azul'],
           },
         },
       },
@@ -700,6 +810,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             detail: '椭圆的叶片越往上越扭平，仅此就产生了空间深度。画中既没有地平线，也没有岸。',
             keywords: ['叶', '深度', '构图', '地平线', '岸', '池塘'],
           },
+          es: {
+            label: 'Las hojas que se alejan',
+            detail: 'Las hojas ovaladas se aplanan al subir por el lienzo y solo con eso nace la profundidad. No hay horizonte ni orilla pintados.',
+            keywords: ['hojas', 'nenúfares', 'profundidad', 'composición', 'horizonte', 'estanque'],
+          },
         },
       },
       {
@@ -725,6 +840,11 @@ export const HOTSPOT_SETS: HotspotSet[] = [
             label: '签名',
             detail: '右下角写着「Claude Monet 1906」。在吉韦尼自家的花园里，晚年的莫奈反复描绘这个池塘。',
             keywords: ['签名', '吉韦尼', '花园', '1906'],
+          },
+          es: {
+            label: 'La firma',
+            detail: '«Claude Monet 1906», abajo a la derecha. En el jardín de su casa de Giverny, el anciano Monet pintó este estanque una y otra vez.',
+            keywords: ['firma', 'Giverny', 'jardín', '1906'],
           },
         },
       },
