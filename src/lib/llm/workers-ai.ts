@@ -1,8 +1,9 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { LLMProvider, Message } from './provider';
+import { parseModelList } from './models';
 
 // Fallback models in case the primary one is overloaded or unavailable
-const FALLBACK_MODELS = [
+const DEFAULT_MODELS = [
   '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
   '@cf/meta/llama-3.1-8b-instruct-fast',
   '@cf/qwen/qwen2.5-coder-32b-instruct'
@@ -15,6 +16,13 @@ interface AiBinding {
 }
 
 export class WorkersAiProvider implements LLMProvider {
+  private readonly models: string[];
+
+  constructor(models: string[] = []) {
+    const configured = models.length ? models : parseModelList(process.env.WORKERS_AI_MODEL);
+    this.models = configured.length ? configured : DEFAULT_MODELS;
+  }
+
   async generateResponse(messages: Message[], options?: { json?: boolean }): Promise<string> {
     const { env } = await getCloudflareContext({ async: true });
     const ai = (env as unknown as { AI?: AiBinding }).AI;
@@ -32,7 +40,7 @@ export class WorkersAiProvider implements LLMProvider {
 
     let lastError: unknown = null;
 
-    for (const modelName of FALLBACK_MODELS) {
+    for (const modelName of this.models) {
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           const result = await ai.run(modelName, {
