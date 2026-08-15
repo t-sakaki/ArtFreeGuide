@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { fetchCommonsThumbnail } from '@/lib/commonsImage';
+import { Locale, UI } from '@/lib/i18n';
+import { localizeName } from '@/lib/names';
 import type { RecommendationBasis, SimilarArtwork } from '@/hooks/useRecommendations';
 
 interface Props {
@@ -10,30 +12,29 @@ interface Props {
   /** Guides heard so far — the number the taste vector was built from. */
   viewCount: number;
   favoriteTags: string[];
+  locale: Locale;
   onPick: (title: string, artist: string) => void;
 }
 
-const HEADINGS: Record<RecommendationBasis, { title: string; subtitle: string }> = {
-  taste: {
-    title: '✨ あなたのために',
-    subtitle: 'これまで聴いた作品の嗜好ベクトルから選びました'
-  },
-  blend: {
-    title: '✨ あなたのために',
-    subtitle: 'いま聴いている作品と、あなたの好みを掛け合わせた候補です'
-  },
-  artwork: {
-    title: '🎨 この作品に近い',
-    subtitle: '聴くほどあなたの好みを学習し、この並びが変わります'
-  },
-  none: { title: '', subtitle: '' }
-};
+function headings(basis: RecommendationBasis, locale: Locale): { title: string; subtitle: string } {
+  const s = UI[locale].shelf;
+  switch (basis) {
+    case 'taste':
+      return { title: s.tasteTitle, subtitle: s.tasteSubtitle };
+    case 'blend':
+      return { title: s.tasteTitle, subtitle: s.blendSubtitle };
+    case 'artwork':
+      return { title: s.artworkTitle, subtitle: s.artworkSubtitle };
+    default:
+      return { title: '', subtitle: '' };
+  }
+}
 
 /**
  * The recommendation shelf: Supabase pgvector similarity over the artwork
  * catalogue, blended with the visitor's taste vector as they listen.
  */
-export default function ForYouShelf({ items, basis, viewCount, favoriteTags, onPick }: Props) {
+export default function ForYouShelf({ items, basis, viewCount, favoriteTags, locale, onPick }: Props) {
   const [thumbnails, setThumbnails] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
@@ -56,7 +57,10 @@ export default function ForYouShelf({ items, basis, viewCount, favoriteTags, onP
 
   if (items.length === 0 || basis === 'none') return null;
 
-  const heading = HEADINGS[basis];
+  const heading = headings(basis, locale);
+  const t = UI[locale].shelf;
+  // The catalogue is written in Japanese; a translated blurb would need the LLM.
+  const showDescription = locale === 'ja';
 
   return (
     <div className="w-full space-y-3 select-none font-sans">
@@ -66,7 +70,7 @@ export default function ForYouShelf({ items, basis, viewCount, favoriteTags, onP
         {(viewCount > 0 || favoriteTags.length > 0) && (
           <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
             {viewCount > 0 && (
-              <span className="text-[10px] text-teal-400/90 font-mono">{viewCount}作品を聴取</span>
+              <span className="text-[10px] text-teal-400/90 font-mono">{t.listened(viewCount)}</span>
             )}
             {favoriteTags.slice(0, 5).map(tag => (
               <span
@@ -100,14 +104,14 @@ export default function ForYouShelf({ items, basis, viewCount, favoriteTags, onP
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="font-semibold text-slate-200 text-xs truncate group-hover:text-teal-400 transition-colors">
-                    {item.title}
+                    {localizeName(item.title, locale)}
                   </span>
                   <span className="text-[10px] text-teal-500/80 font-mono shrink-0">
                     {Math.round(item.similarity * 100)}%
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-500 truncate">
-                  {item.artist}
+                  {localizeName(item.artist, locale)}
                   {item.year ? ` ・ ${item.year}` : ''}
                 </p>
                 <div className="mt-1 h-0.5 w-full bg-slate-900 rounded-full overflow-hidden">
@@ -116,7 +120,7 @@ export default function ForYouShelf({ items, basis, viewCount, favoriteTags, onP
                     style={{ width: `${Math.round(Math.min(Math.max(item.similarity, 0), 1) * 100)}%` }}
                   />
                 </div>
-                {item.description && (
+                {showDescription && item.description && (
                   <p className="text-[10px] text-slate-400 line-clamp-2 mt-1">{item.description}</p>
                 )}
               </div>
@@ -126,7 +130,7 @@ export default function ForYouShelf({ items, basis, viewCount, favoriteTags, onP
       </div>
 
       <p className="text-[9px] text-slate-600 text-center font-mono">
-        Supabase pgvector · コサイン類似度
+        {t.credit}
       </p>
     </div>
   );
