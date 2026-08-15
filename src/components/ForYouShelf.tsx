@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { fetchCommonsThumbnail } from '@/lib/commonsImage';
+import { fetchArtworkImage } from '@/lib/artworkThumbnail';
 import { Locale, UI } from '@/lib/i18n';
 import { localizeName } from '@/lib/names';
 import type { RecommendationBasis, SimilarArtwork } from '@/hooks/useRecommendations';
@@ -44,7 +44,7 @@ export default function ForYouShelf({ items, basis, viewCount, favoriteTags, loc
       if (item.image_url) return;
       setThumbnails(prev => (item.id in prev ? prev : { ...prev, [item.id]: null }));
 
-      fetchCommonsThumbnail(`${item.title} ${item.artist}`).then(url => {
+      fetchArtworkImage(item.title, item.artist).then(url => {
         if (cancelled || !url) return;
         setThumbnails(prev => ({ ...prev, [item.id]: url }));
       });
