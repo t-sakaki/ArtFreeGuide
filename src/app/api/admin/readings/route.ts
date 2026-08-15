@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase';
+import { denyAdmin } from '@/lib/adminAuth';
 import { CORRECTIONS_TABLE, CorrectionRow } from '@/lib/readingCorrections';
 
 const ACTIONS = {
@@ -9,25 +10,10 @@ const ACTIONS = {
 
 type Action = keyof typeof ACTIONS;
 
-/**
- * Shared secret check. Without ADMIN_TOKEN configured the endpoint stays
- * closed rather than open, so a missing variable cannot expose the queue.
- */
-function unauthorized(token: unknown): NextResponse | null {
-  const expected = process.env.ADMIN_TOKEN;
-  if (!expected) {
-    return NextResponse.json({ error: 'ADMIN_TOKEN is not configured' }, { status: 503 });
-  }
-  if (typeof token !== 'string' || token !== expected) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  return null;
-}
-
 /** Reported misreadings still waiting for a decision. */
 export async function GET(req: Request) {
   try {
-    const denied = unauthorized(new URL(req.url).searchParams.get('token'));
+    const denied = await denyAdmin(req, new URL(req.url).searchParams.get('token'));
     if (denied) return denied;
 
     const supabase = createServiceClient();
@@ -54,7 +40,7 @@ export async function POST(req: Request) {
   try {
     const { token, id, action } = await req.json();
 
-    const denied = unauthorized(token);
+    const denied = await denyAdmin(req, token);
     if (denied) return denied;
 
     if (typeof id !== 'string' || !id) {
