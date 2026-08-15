@@ -2567,7 +2567,7 @@ export default function HomeClient() {
           </div>
 
           {/* Large Artwork Thumbnail (fixed) */}
-          <div className="relative w-full max-w-md h-36 sm:h-44 rounded-2xl overflow-hidden bg-slate-900 border border-slate-800/80 shadow-inner flex items-center justify-center group shrink-0">
+          <div className="relative w-full max-w-md h-48 sm:h-60 rounded-2xl overflow-hidden bg-slate-900 border border-slate-800/80 shadow-inner flex items-center justify-center group shrink-0">
             {imageLoading && (
               <div className="absolute inset-0 bg-slate-900/60 flex flex-col items-center justify-center gap-2">
                 <div className="animate-pulse flex space-x-2">
@@ -2673,13 +2673,13 @@ export default function HomeClient() {
           </div>
 
           {hotspots.length > 0 ? (
-            <div className="px-4 pb-6 space-y-3 shrink-0 max-w-2xl w-full mx-auto">
-              <div className="flex flex-wrap gap-2">
+            <div className="px-4 pb-6 space-y-2.5 shrink-0 max-w-2xl w-full mx-auto">
+              <div className="scroll-area flex gap-2 overflow-x-auto snap-x snap-mandatory -mx-1 px-1">
                 {hotspots.map(hotspot => (
                   <button
                     key={hotspot.id}
                     onClick={() => selectHotspot(activeHotspotId === hotspot.id ? null : hotspot.id)}
-                    className={`px-3 py-1.5 rounded-full text-[11px] font-bold font-sans border transition-colors ${
+                    className={`shrink-0 snap-start whitespace-nowrap px-3 py-1.5 rounded-full text-[11px] font-bold font-sans border transition-colors ${
                       activeHotspotId === hotspot.id
                         ? 'bg-teal-500 text-slate-950 border-teal-400'
                         : 'bg-slate-900/60 text-slate-300 border-slate-800 hover:border-teal-500/50'
@@ -2689,7 +2689,7 @@ export default function HomeClient() {
                   </button>
                 ))}
               </div>
-              <p className="text-sm text-slate-300 font-serif leading-relaxed min-h-[3.5rem]">
+              <p className="text-sm text-slate-300 font-serif leading-relaxed min-h-[3rem]">
                 {activeHotspot ? activeHotspot.detail : t.image.hotspotHint}
               </p>
             </div>
@@ -2702,7 +2702,7 @@ export default function HomeClient() {
       )}
 
       {/* Scrollable Center Content */}
-      <div className={`w-full max-w-2xl px-4 mx-auto ${responseShort || loading ? 'pt-64 sm:pt-72 pb-32' : 'py-12 md:py-20 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]'}`}>
+      <div className={`w-full max-w-2xl px-4 mx-auto ${responseShort || loading ? 'pt-[19rem] sm:pt-[22rem] pb-32' : 'py-12 md:py-20 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]'}`}>
         
         {/* Empty state: Hero landing / initial search card */}
         {!responseShort && !loading && (
@@ -2837,7 +2837,7 @@ export default function HomeClient() {
               onPointerMove={handleGuidePointerMove}
               onPointerUp={endGuideDrag}
               onPointerCancel={endGuideDrag}
-              className={`bg-slate-900/20 border border-slate-900 rounded-2xl p-4 md:p-6 max-h-[380px] overflow-y-auto scroll-area space-y-3 font-serif leading-relaxed text-base selection:bg-teal-500/20 shadow-inner ${
+              className={`bg-slate-900/20 border border-slate-900 rounded-2xl p-3.5 md:p-5 max-h-[300px] overflow-y-auto scroll-area space-y-2 font-serif leading-7 text-base selection:bg-teal-500/20 shadow-inner ${
                 isDraggingGuide ? 'cursor-grabbing select-none' : ''
               }`}
             >
@@ -2889,13 +2889,13 @@ export default function HomeClient() {
 
             {/* Ask the curator: suggested questions, free text and voice */}
             <div className="space-y-2.5 select-none font-sans">
-              <div className="flex flex-wrap gap-2">
+              <div className="scroll-area flex gap-2 overflow-x-auto snap-x snap-mandatory -mx-1 px-1">
                 {questionChips.map((question, index) => (
                   <button
                     key={question}
                     onClick={() => askQuestion(question)}
                     disabled={askLoading}
-                    className={`px-3 py-1.5 bg-slate-900/50 border rounded-full text-[11px] transition-colors active:scale-95 disabled:opacity-40 ${
+                    className={`shrink-0 snap-start whitespace-nowrap px-3 py-1.5 bg-slate-900/50 border rounded-full text-[11px] transition-colors active:scale-95 disabled:opacity-40 ${
                       nudgedChip === index
                         ? 'animate-chip-nudge border-teal-500/50 text-teal-300'
                         : 'border-slate-800 hover:border-teal-500/40 hover:text-teal-300 text-slate-300'
