@@ -7,7 +7,7 @@
 - **Framework**: Next.js 16（App Router） / React 19 / TypeScript / Tailwind CSS
 - **Deployment**: Cloudflare Workers（OpenNext）。`main` への push で自動デプロイ
 - **Database**:
-    - **Cloudflare D1** `artfreeguide_db_trial`: 生成済み解説のアーカイブ（`artwork_guides` / `guide_feedback`）
+    - **Cloudflare D1** `artfreeguide_db_trial`: 生成済み解説のアーカイブ（`artwork_guides` / `guide_feedback`）。名前は trial だが本番稼働中で削除禁止。改名する場合は `docs/d1-rename-runbook.md`
     - **Supabase (PostgreSQL)**: 作品カタログ、ベクトルデータ（`pgvector`）、認証、閲覧履歴
 - **LLM/Embedding**: NVIDIA NIM。モデルは wrangler.jsonc の vars で指定（解説 `nvidia/nemotron-3-super-120b-a12b`→`google/gemma-4-31b-it`、Q&A `nemotron-3-nano-30b-a3b`、サジェスト `mistralai/mistral-nemotron`、埋め込み `nvidia/llama-nemotron-embed-1b-v2`、画像認識 `nvidia/nemotron-nano-12b-v2-vl`）
 - **その他**: Web Speech API（読み上げ）、Web Audio API、Wikimedia Commons / Wikidata / ja.wikipedia API
