@@ -340,6 +340,8 @@ export default function ArtFreeGuide() {
   const heartIdRef = useRef(0);
   const heartBurstRef = useRef(0);
   const heartSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Browsers need a gesture before speech works, so the play button is signposted once.
+  const [hasPlayedOnce, setHasPlayedOnce] = useState(false);
   // Once the narration is over the question chips take turns wobbling to invite a tap.
   const [narrationDone, setNarrationDone] = useState(false);
   const [nudgedChip, setNudgedChip] = useState(-1);
@@ -1841,6 +1843,7 @@ export default function ArtFreeGuide() {
   // Playback Control Handlers
   const handlePlayPause = () => {
     console.log('[AUDIO] Button Clicked');
+    setHasPlayedOnce(true);
     
     // 1. Force unlock on user gesture
     AudioController.forceUnlock();
@@ -2495,19 +2498,6 @@ export default function ArtFreeGuide() {
               )}
             </div>
 
-            {/* Autoplay Policy Avoidance button */}
-            {activeSegmentIndex === -1 && !isPlaying && (
-              <div className="flex justify-center py-2 animate-bounce">
-                <button
-                  onClick={handlePlayPause}
-                  className="px-8 py-3.5 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-400 hover:to-blue-500 text-slate-950 font-black rounded-full shadow-lg shadow-teal-500/20 active:scale-95 transition-all flex items-center gap-2 text-sm font-sans"
-                >
-                  <span>🎧</span>
-                  <span>音声ガイドを再生する</span>
-                </button>
-              </div>
-            )}
-
             {/* Highlights Segment Box */}
             <div className="relative">
             <div
@@ -2907,6 +2897,12 @@ export default function ArtFreeGuide() {
             
             {/* Central Play/Pause button (Enlarged circle) */}
             <div className="relative shrink-0 mx-2">
+              {/* Browsers block autoplay, so point at the button until the first tap. */}
+              {!hasPlayedOnce && (
+                <span className="animate-bounce pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap rounded-full bg-teal-500 px-3 py-1 text-[10px] font-bold text-slate-950 shadow-lg font-sans">
+                  🎧 ここから再生
+                </span>
+              )}
               {/* Halo lives outside the button so it can grow past its edge. */}
               {isPlaying && (
                 <span
