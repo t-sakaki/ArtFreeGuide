@@ -1,5 +1,5 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
-import { GuideStore, StoredGuide, guideKey } from './provider';
+import { ArchivedGuide, GuideStore, StoredGuide, escapeLike, guideKey } from './provider';
 
 interface D1Result<T> {
   results?: T[];
@@ -8,6 +8,7 @@ interface D1Result<T> {
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
   first<T>(): Promise<T | null>;
+  all<T>(): Promise<D1Result<T>>;
   run(): Promise<D1Result<unknown>>;
 }
 
@@ -55,5 +56,21 @@ export class D1GuideStore implements GuideStore {
       )
       .bind(guideKey(title, artist), title.trim(), artist.trim(), payload, new Date().toISOString())
       .run();
+  }
+
+  async search(query: string, limit: number): Promise<ArchivedGuide[]> {
+    const db = await this.binding();
+    const like = `%${escapeLike(query.trim())}%`;
+    const { results } = await db
+      .prepare(
+        `SELECT title, artist FROM artwork_guides
+         WHERE title LIKE ?1 ESCAPE '\\' OR artist LIKE ?1 ESCAPE '\\'
+         ORDER BY updated_at DESC
+         LIMIT ?2`
+      )
+      .bind(like, limit)
+      .all<ArchivedGuide>();
+
+    return results ?? [];
   }
 }
