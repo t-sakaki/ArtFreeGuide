@@ -1,13 +1,36 @@
-# ArtFreeGuide
+<p align="center">
+  <img src="docs/images/hero.png" alt="ArtFreeGuide - 美術館のAI音声ガイド" width="100%">
+</p>
 
-**美術館の音声ガイドを、誰でも無料で。**
+<h1 align="center">ArtFreeGuide</h1>
+
+<p align="center">
+  <b>美術館の音声ガイドを、誰でも無料で。</b><br>
+  聴くほど賢くなる、AI 学芸員付きのパーソナルガイド
+</p>
+
+<p align="center">
+  <a href="https://art-free-guide.taira-sakakibara.workers.dev">
+    <img src="https://img.shields.io/badge/%F0%9F%8E%A8%20デモを試す-art--free--guide.taira--sakakibara.workers.dev-fde68a?style=for-the-badge&labelColor=0f172a" alt="デモを試す">
+  </a>
+  <a href="#ハッカソンのポイント-ベクトル検索">
+    <img src="https://img.shields.io/badge/%F0%9F%94%8D%20技術詳細-ベクトル検索-2dd4bf?style=for-the-badge&labelColor=0f172a" alt="技術詳細">
+  </a>
+  <a href="https://github.com/t-sakaki/ArtFreeGuide">
+    <img src="https://img.shields.io/github/stars/t-sakaki/ArtFreeGuide?style=for-the-badge&color=fde68a&labelColor=0f172a" alt="Stars">
+  </a>
+</p>
 
 作品名を入れるだけで、AI が学芸員のように解説を書き起こし、1 文ずつ読み上げます。絵の「見どころ」は画像上でポイントされ、気になったことはその場で質問でき、聴いた作品からベクトル検索で「次の 1 枚」を提案します。
+
+有料の音声ガイド機を借りずに、手元のスマートフォンだけで、深いところまで作品を味わえる状態を目指しています。
 
 - サービス URL: https://art-free-guide.taira-sakakibara.workers.dev
 - リポジトリ: https://github.com/t-sakaki/ArtFreeGuide
 
-有料の音声ガイド機を借りずに、手元のスマートフォンだけで、深いところまで作品を味わえる状態を目指しています。
+<p align="center">
+  <img src="docs/images/ogp.png" alt="ArtFreeGuide の共有カード" width="600">
+</p>
 
 ## 画面イメージ
 
@@ -163,7 +186,7 @@ src/lib/          LLM / 埋め込み / 推薦 / 読み辞書 / i18n / 共有メ�
 supabase/         Supabase のマイグレーション
 d1/               D1 のマイグレーション
 scripts/          埋め込みバックフィル
-docs/             設計メモと README 用スクリーンショット
+docs/             設計メモ、README 用スクリーンショット、ヒーロー/OGP 画像の生成元（docs/brand）
 ```
 
 ## 今後
