@@ -16,6 +16,7 @@ import {
   specFromLegacyMood,
 } from '@/lib/ambient';
 import { PLAYLISTS, Playlist, localizePlaylist } from '@/lib/playlists';
+import { sanitizeGuideText } from '@/lib/guideText';
 import { suggestedQuestions } from '@/lib/questions';
 import { loadDynamicReadings, toSpokenText } from '@/lib/pronunciation';
 import {
@@ -130,23 +131,6 @@ const PRESET_ARTISTS = [
   'ミケランジェロ・ブオナローティ',
   'ジャン＝ミシェル・バスキア',
 ];
-
-// LLM output occasionally leaks JSON escapes (literal \n, \") or wrapping quotes
-// into the guide body, sometimes escaped twice (\\n). Each escape has to consume
-// every backslash in front of it, otherwise the leftover one shows up in the text.
-function sanitizeGuideText(text: string): string {
-  return text
-    .replace(/\\{1,2}r\\{1,2}n|\\{1,2}[rn]/g, '\n')
-    .replace(/\\{1,2}t/g, ' ')
-    .replace(/\\{1,2}"/g, '"')
-    .replace(/\\{2,}/g, '\\')
-    .replace(/\\+[ \t]*$/gm, '')
-    .replace(/\r\n?/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/^[\s"']+|[\s"']+$/g, '')
-    .trim();
-}
 
 // Roughly how long a passage takes to read aloud. Used to pace the guide when the
 // browser never actually produces audio.
@@ -1886,7 +1870,7 @@ export default function HomeClient() {
       } catch (e) {}
 
       const visualHeader = `\n> 🔍 **${t.guide.deepDiveHeader}**\n`;
-      const updatedDeep = `${responseDeep}\n\n${visualHeader}\n\n${rawText}`;
+      const updatedDeep = `${responseDeep}\n\n${visualHeader}\n\n${sanitizeGuideText(rawText)}`;
       
       setResponseDeep(updatedDeep);
       setExplanationMode('deep');
