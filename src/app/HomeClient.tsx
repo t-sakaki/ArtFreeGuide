@@ -658,22 +658,24 @@ export default function HomeClient({
     tourId: string | null
   ) => {
     if (typeof window === 'undefined') return;
-    // The artwork owns the path when it has a permalink, and falls back to the
-    // query string when it does not, so the address bar always reads as a link
-    // that can be shared as it stands.
+    // The path names what is being visited: the tour while one is running, and
+    // otherwise the artwork's permalink — falling back to the query string for
+    // an artwork that has none. Either way the address bar can be shared as is.
     const canonicalTitle = canonicalName(title);
     const canonicalArtistName = canonicalName(artistName ?? '');
-    const url = new URL(
-      canonicalTitle.trim() ? artworkPath(canonicalTitle, canonicalArtistName) : '/',
-      window.location.href
-    );
+    const path = tourId
+      ? `/${tourId}`
+      : canonicalTitle.trim()
+        ? artworkPath(canonicalTitle, canonicalArtistName)
+        : '/';
+    const url = new URL(path, window.location.href);
     url.searchParams.set('speed', speedValue.toFixed(1));
     url.searchParams.set('mode', modeValue);
     url.searchParams.set('lang', locale);
-    if (tourId) {
-      url.searchParams.set('tour', tourId);
-    } else {
-      url.searchParams.delete('tour');
+    // Which stop of the tour, so that a shared link opens where it was shared.
+    if (tourId && canonicalTitle.trim()) {
+      url.searchParams.set('artwork', canonicalTitle);
+      if (canonicalArtistName.trim()) url.searchParams.set('artist', canonicalArtistName);
     }
     // The focused detail travels in shared links only, not in the live address bar.
     url.searchParams.delete('spot');
