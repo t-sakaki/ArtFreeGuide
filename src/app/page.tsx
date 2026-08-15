@@ -17,7 +17,7 @@ import {
 } from '@/lib/ambient';
 import { PLAYLISTS, Playlist, localizePlaylist } from '@/lib/playlists';
 import { suggestedQuestions } from '@/lib/questions';
-import { toSpokenText } from '@/lib/pronunciation';
+import { loadDynamicReadings, toSpokenText } from '@/lib/pronunciation';
 import {
   DEFAULT_LOCALE,
   DEFAULT_PLAYBACK_SPEED,
@@ -689,6 +689,11 @@ export default function ArtFreeGuide() {
     handleUrlChange();
 
     return () => window.removeEventListener('popstate', handleUrlChange);
+  }, []);
+
+  // Approved reading corrections, layered over the bundled dictionary.
+  useEffect(() => {
+    loadDynamicReadings();
   }, []);
 
   // Load initial settings and session on mount
