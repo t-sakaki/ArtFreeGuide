@@ -170,6 +170,8 @@ export interface UIStrings {
     copyFailed: string;
   };
   loadingSteps: string[];
+  /** Shown when the browser has no working voice and the guide only scrolls. */
+  voiceUnavailable: string;
 }
 
 const ja: UIStrings = {
@@ -283,6 +285,7 @@ const ja: UIStrings = {
     copied: '共有URLをクリップボードにコピーしました！',
     copyFailed: 'コピーに失敗しました',
   },
+  voiceUnavailable: 'この端末では音声を再生できないため、テキストだけが読むペースで進みます。',
   loadingSteps: [
     '作品の資料を探しています...',
     '時代背景を読み解いています...',
@@ -403,6 +406,7 @@ const en: UIStrings = {
     copied: 'Link copied to the clipboard!',
     copyFailed: 'Could not copy the link',
   },
+  voiceUnavailable: 'This browser has no speech voice available, so the text advances at reading pace without audio.',
   loadingSteps: [
     'Gathering material about the work...',
     'Reading the period it was made in...',
@@ -523,6 +527,8 @@ const fr: UIStrings = {
     copied: 'Lien copié dans le presse-papiers !',
     copyFailed: 'Échec de la copie',
   },
+  voiceUnavailable:
+    "Ce navigateur ne dispose d'aucune voix de synthèse : le texte défile au rythme de la lecture, sans audio.",
   loadingSteps: [
     'Recherche de documentation sur l’œuvre...',
     'Lecture du contexte historique...',
@@ -643,6 +649,7 @@ const zh: UIStrings = {
     copied: '链接已复制到剪贴板！',
     copyFailed: '复制失败',
   },
+  voiceUnavailable: '此浏览器没有可用的语音，因此文本将按阅读速度推进，不播放音频。',
   loadingSteps: [
     '正在查找作品资料...',
     '正在梳理时代背景...',
@@ -764,6 +771,7 @@ const es: UIStrings = {
     copied: '¡Enlace copiado al portapapeles!',
     copyFailed: 'No se ha podido copiar el enlace',
   },
+  voiceUnavailable: 'Este navegador no tiene ninguna voz disponible, así que el texto avanza al ritmo de lectura, sin audio.',
   loadingSteps: [
     'Reuniendo documentación sobre la obra...',
     'Leyendo la época en que se hizo...',
