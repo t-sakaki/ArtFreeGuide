@@ -20,6 +20,7 @@ import { suggestedQuestions } from '@/lib/questions';
 import { toSpokenText } from '@/lib/pronunciation';
 import {
   DEFAULT_LOCALE,
+  DEFAULT_PLAYBACK_SPEED,
   LOCALE_MENU,
   Locale,
   SPEECH_LANG,
@@ -348,7 +349,7 @@ export default function ArtFreeGuide() {
   const [speakableSegments, setSpeakableSegments] = useState<string[]>([]);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState<number>(-1);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.5);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE]);
   const [speechSupported, setSpeechSupported] = useState(false);
 
   // Deep Dive & Interactive Feedback States
@@ -427,7 +428,7 @@ export default function ArtFreeGuide() {
   const localeRef = useRef<Locale>(DEFAULT_LOCALE);
   localeRef.current = locale;
   const isPlayingRef = useRef(false);
-  const speedRef = useRef(1.5);
+  const speedRef = useRef(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE]);
   const activeIndexRef = useRef(-1);
   const speakableSegmentsRef = useRef<string[]>([]);
   /** `index::text` of the segment already handed to the speech engine. */
@@ -588,6 +589,10 @@ export default function ArtFreeGuide() {
     setLocale(next);
     setShowLanguageMenu(false);
     localStorage.setItem('artfreeguide-locale', next);
+    // Until the visitor picks a speed themselves, follow the language's default.
+    if (!localStorage.getItem('art_free_guide_playback_speed')) {
+      setPlaybackSpeed(DEFAULT_PLAYBACK_SPEED[next]);
+    }
     setGuideCache({});
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
@@ -689,12 +694,11 @@ export default function ArtFreeGuide() {
   // Load initial settings and session on mount
   useEffect(() => {
     // 1. Restore playback speed
+    // The language effect above already resolved the locale into the ref.
     const savedSpeed = localStorage.getItem('art_free_guide_playback_speed');
-    if (savedSpeed) {
-      setPlaybackSpeed(parseFloat(savedSpeed));
-    } else {
-      setPlaybackSpeed(1.5);
-    }
+    setPlaybackSpeed(
+      savedSpeed ? parseFloat(savedSpeed) : DEFAULT_PLAYBACK_SPEED[localeRef.current]
+    );
 
     // 2. Restore history
     const savedHistoryStr = localStorage.getItem('art_free_guide_history');
