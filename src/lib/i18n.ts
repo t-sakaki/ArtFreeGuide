@@ -33,6 +33,19 @@ export const SPEECH_LANG: Record<Locale, string> = {
   zh: 'zh-CN',
 };
 
+/**
+ * Default narration speed per language. Japanese TTS voices read slowly enough
+ * that 1.5x feels natural; the English voices are already brisk, so they start
+ * lower. The visitor's own choice, once made, always wins.
+ */
+export const DEFAULT_PLAYBACK_SPEED: Record<Locale, number> = {
+  ja: 1.5,
+  en: 1.2,
+  fr: 1.5,
+  es: 1.5,
+  zh: 1.5,
+};
+
 /** How the guide is asked to write, in the language it must write in. */
 export const OUTPUT_LANGUAGE_INSTRUCTION: Record<Locale, string> = {
   ja: 'すべてのテキストを日本語で書いてください。',
