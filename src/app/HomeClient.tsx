@@ -1051,6 +1051,35 @@ export default function HomeClient() {
     setPlaylistIndex(0);
   };
 
+  /** Leaves the guide behind and shows the entrance hall again. */
+  const returnToHub = () => {
+    AudioController.clearQueue();
+    stopAmbientSound();
+    setIsPlaying(false);
+    setActiveSegmentIndex(-1);
+    exitTour();
+    setLoading(false);
+    setResponseShort('');
+    setResponseStandard('');
+    setResponseDeep('');
+    setImageUrl(null);
+    setImageError(false);
+    setRecommendations([]);
+    setShowInputDrawer(false);
+    setArtwork('');
+    setArtist('');
+    localStorage.removeItem('art_free_guide_draft_artwork');
+    localStorage.removeItem('art_free_guide_draft_artist');
+
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      for (const key of ['artwork', 'artist', 'mode', 'tour', 'spot']) {
+        url.searchParams.delete(key);
+      }
+      window.history.replaceState({}, '', url.toString());
+    }
+  };
+
   useEffect(() => cancelTourAdvance, []);
 
   useEffect(() => {
@@ -2509,8 +2538,15 @@ export default function HomeClient() {
         <div className="fixed top-0 left-0 right-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-900 px-4 py-3 flex flex-col items-center select-none shadow-md">
           {/* Top Row Navigation */}
           <div className="flex items-center justify-between w-full max-w-md mb-2">
-            <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-500 bg-clip-text text-transparent font-sans">
-              ArtFreeGuide
+            <h1 className="text-lg font-extrabold tracking-tight font-sans">
+              <button
+                onClick={returnToHub}
+                title={t.header.home}
+                aria-label={t.header.home}
+                className="bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-500 bg-clip-text text-transparent hover:opacity-80 active:scale-95 transition-all cursor-pointer"
+              >
+                ArtFreeGuide
+              </button>
             </h1>
 
             {renderMenu(true)}
@@ -3006,7 +3042,7 @@ export default function HomeClient() {
                       className="bg-slate-900/30 border border-slate-900 hover:border-teal-500/40 hover:bg-slate-900/50 rounded-2xl p-3 flex gap-3 cursor-pointer transition-all duration-300 group shadow-md"
                     >
                       {/* Mini Thumbnail */}
-                      <div className="relative w-20 h-16 rounded-xl overflow-hidden bg-slate-950 border border-slate-850 shrink-0 flex items-center justify-center">
+                      <div className="relative w-28 h-24 rounded-xl overflow-hidden bg-slate-950 border border-slate-850 shrink-0 flex items-center justify-center">
                         {rec.imageLoading ? (
                           <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">
                             <div className="animate-pulse w-1.5 h-1.5 bg-slate-600 rounded-full"></div>
@@ -3014,7 +3050,7 @@ export default function HomeClient() {
                         ) : rec.imageUrl ? (
                           <img src={rec.imageUrl} alt={rec.title} className="w-full h-full object-cover" />
                         ) : (
-                          <span className="text-sm">🖼️</span>
+                          <span className="text-xl">🖼️</span>
                         )}
                       </div>
                       <div className="flex-1 min-w-0 text-left flex flex-col justify-between py-0.5 font-sans">
