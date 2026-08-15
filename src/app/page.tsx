@@ -15,6 +15,7 @@ import {
 } from '@/lib/ambient';
 import { PLAYLISTS, Playlist } from '@/lib/playlists';
 import { suggestedQuestions } from '@/lib/questions';
+import { toSpokenText } from '@/lib/pronunciation';
 import ReactMarkdown from 'react-markdown';
 
 interface ArtworkSuggestion {
@@ -197,7 +198,8 @@ class AudioController {
         } catch (e) {}
       }
 
-      const utterance = new SpeechSynthesisUtterance(text);
+      // The dictionary only affects what is spoken; the screen keeps the kanji.
+      const utterance = new SpeechSynthesisUtterance(toSpokenText(text));
       utterance.lang = 'ja-JP';
       utterance.rate = rate;
 
