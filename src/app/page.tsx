@@ -14,6 +14,7 @@ import {
   specFromLegacyMood,
 } from '@/lib/ambient';
 import { PLAYLISTS, Playlist } from '@/lib/playlists';
+import { suggestedQuestions } from '@/lib/questions';
 import ReactMarkdown from 'react-markdown';
 
 interface ArtworkSuggestion {
@@ -327,6 +328,14 @@ export default function ArtFreeGuide() {
   const [voiceText, setVoiceText] = useState('');
   const [recognition, setRecognition] = useState<any>(null);
 
+  // Visitor questions and feedback on the guide
+  const [questionInput, setQuestionInput] = useState('');
+  const [askLoading, setAskLoading] = useState(false);
+  const [feedbackKind, setFeedbackKind] = useState<'good' | 'bad' | null>(null);
+  const [showReportForm, setShowReportForm] = useState(false);
+  const [reportComment, setReportComment] = useState('');
+  const [regenerating, setRegenerating] = useState(false);
+
   // Ambient Sound States
   const [ambientName, setAmbientName] = useState<string | null>(null);
   const ambientPlayerRef = useRef<AmbientPlayer | null>(null);
@@ -405,6 +414,9 @@ export default function ArtFreeGuide() {
   useEffect(() => {
     listenedSecondsRef.current = 0;
     listenStartRef.current = null;
+    setFeedbackKind(null);
+    setShowReportForm(false);
+    setReportComment('');
   }, [artwork, artist]);
 
   useEffect(() => {
@@ -1269,7 +1281,9 @@ export default function ArtFreeGuide() {
   const generateGuide = async (
     customArtwork?: string,
     customArtist?: string,
-    customMode?: 'short' | 'standard' | 'deep'
+    customMode?: 'short' | 'standard' | 'deep',
+    /** Skip both caches and overwrite the archive, after a visitor reported a problem. */
+    refresh = false
   ) => {
     const targetArtwork = customArtwork ?? artwork;
     const targetArtist = customArtist ?? artist;
@@ -1338,7 +1352,7 @@ export default function ArtFreeGuide() {
     const hotspotFile = findHotspotSet(targetArtwork, targetArtist)?.file ?? null;
 
     // CHECK CLIENT-SIDE CACHE
-    if (guideCache[cacheKey]) {
+    if (guideCache[cacheKey] && !refresh) {
       const cached = guideCache[cacheKey];
       setResponseShort(sanitizeGuideText(cached.short));
       setResponseStandard(sanitizeGuideText(cached.standard));
@@ -1389,6 +1403,7 @@ export default function ArtFreeGuide() {
           // title / artist let the server reuse a guide generated for an earlier visitor.
           title: targetArtwork,
           artist: targetArtist,
+          refresh,
           messages: [
             {
               role: 'user',
@@ -1637,7 +1652,7 @@ export default function ArtFreeGuide() {
     }
   };
 
-  // Interactive Voice feedback Mode
+  // Interactive question mode (voice input)
   const startListening = () => {
     if (!recognition) return;
     setIsListening(true);
@@ -1654,7 +1669,7 @@ export default function ArtFreeGuide() {
       const resultText = event.results[0][0].transcript;
       setVoiceText(resultText);
       setIsListening(false);
-      sendVoiceFeedback(resultText);
+      askQuestion(resultText);
     };
 
     recognition.onerror = (event: any) => {
@@ -1667,62 +1682,98 @@ export default function ArtFreeGuide() {
     };
   };
 
-  const sendVoiceFeedback = async (inputText: string) => {
-    if (!inputText.trim()) return;
+  /**
+   * A question is answered by the same curator voice and appended to the guide,
+   * so the answer is narrated in place instead of opening a separate chat.
+   */
+  const askQuestion = async (question: string) => {
+    const trimmed = question.trim();
+    if (!trimmed || !artwork.trim() || askLoading) return;
 
-    setLoading(true);
+    setAskLoading(true);
+    setVoiceText(trimmed);
+    setQuestionInput('');
+    setIsPlaying(false);
+    AudioController.clearQueue();
+
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [
-            {
-              role: 'user',
-              content: `作品名: ${artwork}について、私は「${inputText}」と感じました。これについて、親身で魅力的な美術館キュレーターとして短く、優しく会話をするように音声ガイドで答えてください。`
-            }
-          ]
+          title: artwork,
+          artist,
+          question: trimmed,
+          context: responseStandard || responseShort
         })
       });
       const data = await res.json();
-      
-      if (data.error) {
-        console.warn('Voice feedback error:', data.error);
+
+      if (!res.ok || data.error) {
+        triggerToast('回答を生成できませんでした。少し時間をおいてお試しください');
         return;
       }
 
-      let rawText = data.text;
-      try {
-        let jsonString = data.text.trim();
-        const firstBrace = jsonString.indexOf('{');
-        const lastBrace = jsonString.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-          jsonString = jsonString.substring(firstBrace, lastBrace + 1);
-        }
-        const parsed = JSON.parse(jsonString);
-        rawText = parsed.explanation || data.text;
-      } catch (e) {}
+      const answer = sanitizeGuideText(data.answer || '');
+      if (!answer) {
+        triggerToast('回答を生成できませんでした。少し時間をおいてお試しください');
+        return;
+      }
 
-      const header = `\n> 🎙️ **あなたへの語りかけ対話**\n`;
-      const updatedDeep = `${responseDeep}\n\n${header}\n\n${rawText}`;
-      
+      const header = `\n> ❓ **${trimmed}**\n`;
+      const updatedDeep = `${responseDeep}\n\n${header}\n\n${answer}`;
+
       setResponseDeep(updatedDeep);
       setExplanationMode('deep');
-
-      // Update History Entry
       updateHistoryEntryByArtwork(artwork, artist, { deep: updatedDeep });
 
-      // Play replies
+      // Narrate the answer straight away, from where it was appended.
       const prevLength = speakableSegments.length;
       setTimeout(() => {
         setActiveSegmentIndex(prevLength);
         setIsPlaying(true);
       }, 100);
-
     } catch (e) {
       console.error(e);
+      triggerToast('回答を生成できませんでした。少し時間をおいてお試しください');
     } finally {
-      setLoading(false);
+      setAskLoading(false);
+    }
+  };
+
+  const sendFeedback = async (
+    kind: 'good' | 'bad' | 'bug',
+    comment = ''
+  ) => {
+    if (!artwork.trim()) return;
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: artwork,
+          artist,
+          kind,
+          comment,
+          excerpt: (responseStandard || responseShort || '').slice(0, 500),
+          userId
+        })
+      });
+    } catch (e) {
+      // Feedback must never interrupt the visit.
+      console.warn('Feedback submission failed:', e);
+    }
+  };
+
+  const handleRegenerateGuide = async () => {
+    if (regenerating) return;
+    setRegenerating(true);
+    setShowReportForm(false);
+    triggerToast('解説を作り直しています…');
+    try {
+      await generateGuide(artwork, artist, 'short', true);
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -2427,41 +2478,152 @@ export default function ArtFreeGuide() {
             {showScrollHint && <div className="scroll-hint rounded-b-2xl" aria-hidden="true" />}
             </div>
 
-            {/* Shared and speech interaction action buttons */}
-            <div className="flex flex-wrap items-center justify-center gap-3 select-none">
-              {recognition && (
+            {/* Ask the curator: suggested questions, free text and voice */}
+            <div className="space-y-2.5 select-none font-sans">
+              <div className="flex flex-wrap gap-2">
+                {suggestedQuestions(artwork, artist).map(question => (
+                  <button
+                    key={question}
+                    onClick={() => askQuestion(question)}
+                    disabled={askLoading}
+                    className="px-3 py-1.5 bg-slate-900/50 border border-slate-800 hover:border-teal-500/40 hover:text-teal-300 text-slate-300 rounded-full text-[11px] transition-colors active:scale-95 disabled:opacity-40"
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  value={questionInput}
+                  onChange={e => setQuestionInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                      askQuestion(questionInput);
+                    }
+                  }}
+                  placeholder="この作品について質問する"
+                  aria-label="この作品について質問する"
+                  className="flex-1 min-w-0 bg-slate-950/60 border border-slate-800 focus:border-teal-500/50 rounded-xl px-3 py-2.5 text-xs text-slate-200 placeholder-slate-600 outline-none"
+                />
+                {recognition && (
+                  <button
+                    onClick={startListening}
+                    disabled={askLoading}
+                    aria-label="声で質問する"
+                    title="声で質問する"
+                    className={`shrink-0 w-10 h-10 rounded-xl text-sm transition-all active:scale-95 disabled:opacity-40 ${
+                      isListening
+                        ? 'bg-rose-500 text-white animate-pulse'
+                        : 'bg-blue-500/10 border border-blue-500/20 text-blue-450 hover:bg-blue-500/20'
+                    }`}
+                  >
+                    🎙️
+                  </button>
+                )}
                 <button
-                  onClick={startListening}
-                  className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 shadow-md font-sans ${
-                    isListening
-                      ? 'bg-rose-500 text-white animate-pulse'
-                      : 'bg-blue-500/10 border border-blue-500/20 text-blue-450 hover:bg-blue-500/20'
-                  }`}
+                  onClick={() => askQuestion(questionInput)}
+                  disabled={askLoading || !questionInput.trim()}
+                  className="shrink-0 px-4 py-2.5 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-40"
                 >
-                  <span>🎙️</span>
-                  <span>{isListening ? 'お話し中...' : '感想を声で伝える'}</span>
+                  {askLoading ? '考え中…' : '聞く'}
                 </button>
-              )}
+              </div>
 
               {/* Deep Dive secondary trigger button */}
               {explanationMode === 'deep' && (
-                <button
-                  onClick={handleDeepDive}
-                  disabled={deepDiveLoading}
-                  className="px-5 py-2.5 bg-gradient-to-r from-teal-500/10 to-blue-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-md font-sans disabled:opacity-40"
-                >
-                  <span>{deepDiveLoading ? '探究中...' : '🔍 さらなる面白裏話を発掘'}</span>
-                </button>
+                <div className="flex justify-center pt-1">
+                  <button
+                    onClick={handleDeepDive}
+                    disabled={deepDiveLoading}
+                    className="px-5 py-2.5 bg-gradient-to-r from-teal-500/10 to-blue-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-md disabled:opacity-40"
+                  >
+                    <span>{deepDiveLoading ? '探究中...' : '🔍 さらなる面白裏話を発掘'}</span>
+                  </button>
+                </div>
               )}
             </div>
 
-            {/* Voice feedback transcription indicator */}
+            {/* Voice question transcription indicator */}
             {voiceText && (
               <div className="p-3 bg-slate-950/40 border border-slate-900 rounded-xl text-xs text-slate-400 flex items-start gap-2 select-text font-sans">
                 <span className="text-sm">🗣️</span>
                 <div>
-                  <span className="font-semibold text-slate-300 block mb-0.5">あなたの感想:</span>
+                  <span className="font-semibold text-slate-300 block mb-0.5">あなたの質問:</span>
                   <p className="italic">「{voiceText}」</p>
+                </div>
+              </div>
+            )}
+
+            {/* Guide feedback: one tap, plus a report that can rebuild the guide */}
+            <div className="flex items-center justify-center gap-2 select-none font-sans text-[11px]">
+              <span className="text-slate-500">この解説はいかがでしたか？</span>
+              <button
+                onClick={() => {
+                  setFeedbackKind('good');
+                  setShowReportForm(false);
+                  sendFeedback('good');
+                  triggerToast('ありがとうございます！');
+                }}
+                aria-label="この解説が良かったと伝える"
+                className={`w-8 h-8 rounded-lg border transition-colors active:scale-95 ${
+                  feedbackKind === 'good'
+                    ? 'bg-teal-500/20 border-teal-500/40 text-teal-300'
+                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-teal-300'
+                }`}
+              >
+                👍
+              </button>
+              <button
+                onClick={() => {
+                  setFeedbackKind('bad');
+                  setShowReportForm(true);
+                }}
+                aria-label="気になる点を報告する"
+                className={`w-8 h-8 rounded-lg border transition-colors active:scale-95 ${
+                  feedbackKind === 'bad'
+                    ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-rose-300'
+                }`}
+              >
+                👎
+              </button>
+            </div>
+
+            {showReportForm && (
+              <div className="p-3 bg-slate-950/60 border border-slate-900 rounded-xl space-y-2 select-none font-sans">
+                <textarea
+                  value={reportComment}
+                  onChange={e => setReportComment(e.target.value)}
+                  rows={2}
+                  placeholder="気になった点や不具合（例: 事実が違う、読み上げが不自然、画像が別の作品）"
+                  className="w-full bg-slate-950/60 border border-slate-800 focus:border-teal-500/50 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 outline-none scroll-area"
+                />
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    onClick={() => setShowReportForm(false)}
+                    className="px-3 py-2 text-[11px] text-slate-500 hover:text-slate-300"
+                  >
+                    閉じる
+                  </button>
+                  <button
+                    onClick={handleRegenerateGuide}
+                    disabled={regenerating}
+                    className="px-3 py-2 bg-slate-900/60 border border-slate-800 hover:border-teal-500/40 text-slate-300 rounded-lg text-[11px] font-bold active:scale-95 disabled:opacity-40"
+                  >
+                    {regenerating ? '作り直し中…' : '🔄 解説を作り直す'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      sendFeedback(reportComment.trim() ? 'bug' : 'bad', reportComment.trim());
+                      setReportComment('');
+                      setShowReportForm(false);
+                      triggerToast('ご報告ありがとうございます');
+                    }}
+                    className="px-3 py-2 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-lg text-[11px] font-bold active:scale-95"
+                  >
+                    送信する
+                  </button>
                 </div>
               </div>
             )}
