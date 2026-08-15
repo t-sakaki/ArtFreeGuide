@@ -572,6 +572,7 @@ export default function ArtFreeGuide() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.lang = t.htmlLang;
+    document.title = t.documentTitle;
   }, [t]);
 
   /**
@@ -2178,6 +2179,7 @@ export default function ArtFreeGuide() {
             basis={tasteBasis}
             viewCount={tasteProfile?.viewCount ?? 0}
             favoriteTags={tasteProfile?.favoriteTags ?? []}
+            locale={locale}
             onPick={pick2((title, artistName) => generateGuide(title, artistName))}
           />
         )}
@@ -2964,6 +2966,7 @@ export default function ArtFreeGuide() {
                 basis={recommendationBasis}
                 viewCount={tasteProfile?.viewCount ?? 0}
                 favoriteTags={tasteProfile?.favoriteTags ?? []}
+                locale={locale}
                 onPick={(title, artistName) => generateGuide(title, artistName)}
               />
             </div>
