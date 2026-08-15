@@ -1,9 +1,9 @@
 /**
  * Readable permalinks. The Japanese title stays the canonical key everywhere in
  * the code, but an address bar — and a crawler — wants latin letters, so every
- * curated artwork and tour also answers to an English slug.
+ * named artwork and tour also answers to an English slug.
  */
-import { NAMES } from './names';
+import { ARTWORK_NAMES, NAMES } from './names';
 import { PLAYLISTS } from './playlists';
 
 export interface SlugArtwork {
@@ -24,48 +24,51 @@ export function slugify(value: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-/** Landing-screen artworks that no tour happens to contain. */
-const EXTRA_ARTWORKS: { title: string; artist: string }[] = [
-  { title: 'モナ・リザ', artist: 'レオナルド・ダ・ヴィンチ' },
-  { title: '富嶽三十六景 神奈川沖浪裏', artist: '葛飾北斎' },
-];
-
 const RESERVED = new Set(['admin', 'api', 'robots.txt', 'sitemap.xml', ...PLAYLISTS.map(p => p.id)]);
 
-function build(): SlugArtwork[] {
-  const works = [...PLAYLISTS.flatMap(playlist => playlist.items), ...EXTRA_ARTWORKS];
-  const bySlug = new Map<string, SlugArtwork>();
-  const seen = new Set<string>();
+/** The painter, for the artworks a tour happens to name. */
+const ARTIST_OF = new Map(
+  PLAYLISTS.flatMap(playlist => playlist.items).map(item => [item.title, item.artist])
+);
 
-  for (const { title, artist } of works) {
-    if (seen.has(title)) continue;
-    seen.add(title);
+const BY_SLUG = new Map<string, SlugArtwork>();
+const BY_TITLE = new Map<string, string>();
 
-    const base = slugify(NAMES[title]?.en ?? title);
-    // A slug without latin letters (an untranslated title) is no better than the
-    // query string, so those artworks keep using it.
-    if (!base) continue;
+for (const title of Object.keys(ARTWORK_NAMES)) {
+  const artist = ARTIST_OF.get(title) ?? '';
+  const base = slugify(ARTWORK_NAMES[title].en);
+  // A title with no latin form is no better than the query string, and a tour
+  // owns its own permalink, so those artworks keep the query string.
+  if (!base) continue;
 
-    // Two artists painted Sunflowers; the painter's name settles it.
-    const slug =
-      bySlug.has(base) || RESERVED.has(base)
-        ? `${base}-${slugify(NAMES[artist]?.en ?? artist)}`
-        : base;
-    if (!slug || bySlug.has(slug)) continue;
-    bySlug.set(slug, { slug, title, artist });
+  const taken = BY_SLUG.get(base);
+  if (!taken && !RESERVED.has(base)) {
+    BY_SLUG.set(base, { slug: base, title, artist });
+    BY_TITLE.set(title, base);
+    continue;
   }
 
-  return [...bySlug.values()];
+  // The same English title twice is either two paintings — the painter settles
+  // it — or the same painting under two Japanese spellings, which then share
+  // the permalink, the catalogue's own spelling being the one it opens.
+  if (taken && (!artist || !taken.artist || taken.artist === artist)) {
+    BY_SLUG.set(base, { slug: base, title, artist: artist || taken.artist });
+    BY_TITLE.set(title, base);
+    continue;
+  }
+
+  const painter = slugify(NAMES[artist]?.en ?? artist);
+  const disambiguated = painter ? `${base}-${painter}` : '';
+  if (!disambiguated || BY_SLUG.has(disambiguated)) continue;
+  BY_SLUG.set(disambiguated, { slug: disambiguated, title, artist });
+  BY_TITLE.set(title, disambiguated);
 }
 
-export const SLUG_ARTWORKS: SlugArtwork[] = build();
-
-const BY_SLUG = new Map(SLUG_ARTWORKS.map(work => [work.slug, work]));
-const BY_TITLE = new Map(SLUG_ARTWORKS.map(work => [work.title, work]));
+export const SLUG_ARTWORKS: SlugArtwork[] = [...BY_SLUG.values()];
 
 /** The permalink segment for an artwork, when it has one. */
 export function artworkSlug(title: string): string | null {
-  return BY_TITLE.get(title.trim())?.slug ?? null;
+  return BY_TITLE.get(title.trim()) ?? null;
 }
 
 export function artworkFromSlug(slug: string): SlugArtwork | null {

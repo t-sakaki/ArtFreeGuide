@@ -9,8 +9,7 @@ import { Locale } from './i18n';
  */
 type Translations = Record<Exclude<Locale, 'ja'>, string>;
 
-export const NAMES: Record<string, Translations> = {
-  // Artists
+export const ARTIST_NAMES: Record<string, Translations> = {
   'フィンセント・ファン・ゴッホ': { en: 'Vincent van Gogh', fr: 'Vincent van Gogh', zh: '文森特·梵高', es: 'Vincent van Gogh' },
   'レオナルド・ダ・ヴィンチ': { en: 'Leonardo da Vinci', fr: 'Léonard de Vinci', zh: '列奥纳多·达·芬奇', es: 'Leonardo da Vinci' },
   'クロード・モネ': { en: 'Claude Monet', fr: 'Claude Monet', zh: '克劳德·莫奈', es: 'Claude Monet' },
@@ -33,8 +32,10 @@ export const NAMES: Record<string, Translations> = {
   'レンブラント・ファン・レイン': { en: 'Rembrandt van Rijn', fr: 'Rembrandt van Rijn', zh: '伦勃朗·凡·莱因', es: 'Rembrandt van Rijn' },
   'ラファエロ・サンティ': { en: 'Raphael', fr: 'Raphaël', zh: '拉斐尔', es: 'Rafael Sanzio' },
   'グスタフ・クリムト': { en: 'Gustav Klimt', fr: 'Gustav Klimt', zh: '古斯塔夫·克里姆特', es: 'Gustav Klimt' },
+};
 
-  // Artworks
+/** Kept apart from the artists so that permalinks can be built from titles. */
+export const ARTWORK_NAMES: Record<string, Translations> = {
   'ひまわり': { en: 'Sunflowers', fr: 'Les Tournesols', zh: '向日葵', es: 'Los girasoles' },
   '星月夜': { en: 'The Starry Night', fr: 'La Nuit étoilée', zh: '星月夜', es: 'La noche estrellada' },
   'モナ・リザ': { en: 'Mona Lisa', fr: 'La Joconde', zh: '蒙娜丽莎', es: 'La Gioconda' },
@@ -103,6 +104,8 @@ export function catalogueTitle(title: string): string {
   const trimmed = title.trim();
   return SPOKEN_TITLES[trimmed] ?? trimmed;
 }
+
+export const NAMES: Record<string, Translations> = { ...ARTIST_NAMES, ...ARTWORK_NAMES };
 
 /** The name as the visitor's language writes it, or the original if unknown. */
 export function localizeName(name: string, locale: Locale): string {
