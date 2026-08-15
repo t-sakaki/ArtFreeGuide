@@ -4,6 +4,7 @@ import { parseEmbedding } from '@/lib/artworks';
 
 const MATCH_THRESHOLD = 0.5;
 const MATCH_COUNT = 6;
+const HEARD_LIMIT = 50;
 // Recommendations lean on the artwork the visitor is looking at, nudged by taste.
 const ARTWORK_WEIGHT = 0.6;
 
@@ -14,15 +15,66 @@ interface ArtworkRow {
   embedding: number[] | string | null;
 }
 
+async function preferenceEmbedding(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string
+): Promise<number[] | null> {
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('preference_embedding')
+    .eq('id', userId)
+    .maybeSingle();
+
+  return parseEmbedding(profile?.preference_embedding ?? null);
+}
+
 export async function POST(req: Request) {
   try {
     const { artworkId, title, artist, userId } = await req.json();
 
+    const supabase = createServiceClient();
+
+    // Taste-only mode: no artwork in context (the landing hub), so the visitor's
+    // own preference vector is the query.
     if (!artworkId && !title) {
-      return NextResponse.json({ error: 'artworkId or title is required' }, { status: 400 });
+      if (!userId) {
+        return NextResponse.json({ error: 'artworkId, title or userId is required' }, { status: 400 });
+      }
+
+      const preference = await preferenceEmbedding(supabase, userId);
+      if (!preference) {
+        return NextResponse.json({ recommendations: [], basis: 'none' });
+      }
+
+      const { data: tasteMatches, error: tasteError } = await supabase.rpc('match_artworks', {
+        query_embedding: preference,
+        match_threshold: MATCH_THRESHOLD,
+        // Over-fetch: everything already heard is filtered out below.
+        match_count: MATCH_COUNT + HEARD_LIMIT
+      });
+
+      if (tasteError) {
+        console.error('match_artworks error:', tasteError);
+        return NextResponse.json({ recommendations: [], basis: 'none' });
+      }
+
+      // "What to hear next", so drop what this visitor already listened to.
+      const { data: heard } = await supabase
+        .from('viewing_history')
+        .select('artwork_id')
+        .eq('user_id', userId)
+        .not('artwork_id', 'is', null)
+        .order('viewed_at', { ascending: false })
+        .limit(HEARD_LIMIT);
+
+      const heardIds = new Set((heard ?? []).map(row => row.artwork_id));
+      const fresh = (tasteMatches ?? [])
+        .filter((match: { id: string }) => !heardIds.has(match.id))
+        .slice(0, MATCH_COUNT);
+
+      return NextResponse.json({ recommendations: fresh, basis: 'taste' });
     }
 
-    const supabase = createServiceClient();
     let query = supabase.from('artworks').select('id, title, artist, embedding').limit(1);
     query = artworkId ? query.eq('id', artworkId) : query.eq('title', title);
     if (!artworkId && artist) {
@@ -30,32 +82,30 @@ export async function POST(req: Request) {
     }
 
     const { data: rows, error } = await query;
+
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     const artwork = rows?.[0] as ArtworkRow | undefined;
     if (!artwork) {
-      return NextResponse.json({ recommendations: [], reason: 'artwork_not_found' });
+      return NextResponse.json({ recommendations: [], basis: 'none', reason: 'artwork_not_found' });
     }
 
     let queryEmbedding = parseEmbedding(artwork.embedding);
     if (!queryEmbedding) {
-      return NextResponse.json({ recommendations: [], reason: 'embedding_missing' });
+      return NextResponse.json({ recommendations: [], basis: 'none', reason: 'embedding_missing' });
     }
 
-    if (userId) {
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('preference_embedding')
-        .eq('id', userId)
-        .maybeSingle();
+    let basis: 'artwork' | 'blend' = 'artwork';
 
-      const preference = parseEmbedding(profile?.preference_embedding ?? null);
+    if (userId) {
+      const preference = await preferenceEmbedding(supabase, userId);
       if (preference && preference.length === queryEmbedding.length) {
         queryEmbedding = queryEmbedding.map(
           (value, index) => value * ARTWORK_WEIGHT + preference[index] * (1 - ARTWORK_WEIGHT)
         );
+        basis = 'blend';
       }
     }
 
@@ -67,12 +117,12 @@ export async function POST(req: Request) {
 
     if (matchError) {
       console.error('match_artworks error:', matchError);
-      return NextResponse.json({ recommendations: [] });
+      return NextResponse.json({ recommendations: [], basis: 'none' });
     }
 
     const recommendations = (matches ?? []).filter((match: { id: string }) => match.id !== artwork.id);
 
-    return NextResponse.json({ artworkId: artwork.id, recommendations });
+    return NextResponse.json({ artworkId: artwork.id, recommendations, basis });
   } catch (error: any) {
     console.error('Recommendations API Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
