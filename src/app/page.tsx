@@ -340,7 +340,8 @@ export default function ArtFreeGuide() {
   const heartIdRef = useRef(0);
   const heartBurstRef = useRef(0);
   const heartSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Browsers need a gesture before speech works, so the play button is signposted once.
+  // Browsers need a gesture before speech works, so the play button is signposted
+  // until playback has started, however it started.
   const [hasPlayedOnce, setHasPlayedOnce] = useState(false);
   // Once the narration is over the question chips take turns wobbling to invite a tap.
   const [narrationDone, setNarrationDone] = useState(false);
@@ -392,6 +393,7 @@ export default function ArtFreeGuide() {
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
+    if (isPlaying) setHasPlayedOnce(true);
   }, [isPlaying]);
 
   useEffect(() => {
@@ -1122,7 +1124,7 @@ export default function ArtFreeGuide() {
   }, [artist]);
 
   // Keyboard navigation for Artwork input
-  const handleArtworkKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleArtworkKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, onSubmitted?: () => void) => {
     if (!showArtworkSuggestions || artworkSuggestions.length === 0) return;
 
     if (e.key === 'ArrowDown') {
@@ -1138,7 +1140,7 @@ export default function ArtFreeGuide() {
     } else if (e.key === 'Enter') {
       if (focusedArtworkIndex >= 0 && focusedArtworkIndex < artworkSuggestions.length) {
         e.preventDefault();
-        selectArtworkSuggestion(artworkSuggestions[focusedArtworkIndex]);
+        selectArtworkSuggestion(artworkSuggestions[focusedArtworkIndex], onSubmitted);
       }
     } else if (e.key === 'Escape') {
       setShowArtworkSuggestions(false);
@@ -1169,7 +1171,7 @@ export default function ArtFreeGuide() {
     }
   };
 
-  const selectArtworkSuggestion = (suggestion: ArtworkSuggestion) => {
+  const selectArtworkSuggestion = (suggestion: ArtworkSuggestion, onSubmitted?: () => void) => {
     setArtwork(suggestion.title);
     localStorage.setItem('art_free_guide_draft_artwork', suggestion.title);
     let targetArtist = artist;
@@ -1183,6 +1185,7 @@ export default function ArtFreeGuide() {
     
     // Auto transition to guide generation on select!
     generateGuide(suggestion.title, targetArtist);
+    onSubmitted?.();
   };
 
   const selectArtistSuggestion = (name: string) => {
@@ -2089,7 +2092,7 @@ export default function ArtFreeGuide() {
                 setShowArtworkSuggestions(true);
                 setFocusedArtworkIndex(-1);
               }}
-              onKeyDown={handleArtworkKeyDown}
+              onKeyDown={e => handleArtworkKeyDown(e, onSubmitted)}
               onFocus={() => setShowArtworkSuggestions(true)}
               onBlur={() => setTimeout(() => setShowArtworkSuggestions(false), 200)}
               className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30 transition-all font-medium text-sm"
@@ -2100,7 +2103,7 @@ export default function ArtFreeGuide() {
                 {artworkSuggestions.map((suggestion, index) => (
                   <li
                     key={index}
-                    onMouseDown={() => selectArtworkSuggestion(suggestion)}
+                    onMouseDown={() => selectArtworkSuggestion(suggestion, onSubmitted)}
                     className={`px-4 py-3.5 cursor-pointer text-sm transition-all flex items-center justify-between font-sans ${
                       focusedArtworkIndex === index
                         ? 'bg-teal-500/10 text-teal-400 font-bold'
