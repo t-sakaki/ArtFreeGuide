@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase';
+import { PROFILE_EMBEDDING_COLUMN } from '@/lib/embeddings';
 
 const RECENT_LIMIT = 5;
 
@@ -19,7 +20,7 @@ export async function GET(req: Request) {
 
     const { data: profile, error } = await supabase
       .from('user_profiles')
-      .select('preference_embedding, favorite_tags, view_count')
+      .select(`preference_embedding:${PROFILE_EMBEDDING_COLUMN}, favorite_tags, view_count`)
       .eq('id', userId)
       .maybeSingle();
 

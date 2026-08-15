@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase';
 import { parseEmbedding } from '@/lib/artworks';
+import {
+  ARTWORK_EMBEDDING_COLUMN,
+  MATCH_FUNCTION,
+  MATCH_THRESHOLD,
+  PROFILE_EMBEDDING_COLUMN
+} from '@/lib/embeddings';
 
-const MATCH_THRESHOLD = 0.5;
 const MATCH_COUNT = 6;
 const HEARD_LIMIT = 50;
 // Recommendations lean on the artwork the visitor is looking at, nudged by taste.
@@ -21,7 +26,7 @@ async function preferenceEmbedding(
 ): Promise<number[] | null> {
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('preference_embedding')
+    .select(`preference_embedding:${PROFILE_EMBEDDING_COLUMN}`)
     .eq('id', userId)
     .maybeSingle();
 
@@ -46,7 +51,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ recommendations: [], basis: 'none' });
       }
 
-      const { data: tasteMatches, error: tasteError } = await supabase.rpc('match_artworks', {
+      const { data: tasteMatches, error: tasteError } = await supabase.rpc(MATCH_FUNCTION, {
         query_embedding: preference,
         match_threshold: MATCH_THRESHOLD,
         // Over-fetch: everything already heard is filtered out below.
@@ -54,7 +59,7 @@ export async function POST(req: Request) {
       });
 
       if (tasteError) {
-        console.error('match_artworks error:', tasteError);
+        console.error(`${MATCH_FUNCTION} error:`, tasteError);
         return NextResponse.json({ recommendations: [], basis: 'none' });
       }
 
@@ -75,7 +80,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ recommendations: fresh, basis: 'taste' });
     }
 
-    let query = supabase.from('artworks').select('id, title, artist, embedding').limit(1);
+    let query = supabase
+      .from('artworks')
+      .select(`id, title, artist, embedding:${ARTWORK_EMBEDDING_COLUMN}`)
+      .limit(1);
     query = artworkId ? query.eq('id', artworkId) : query.eq('title', title);
     if (!artworkId && artist) {
       query = query.eq('artist', artist);
@@ -109,14 +117,14 @@ export async function POST(req: Request) {
       }
     }
 
-    const { data: matches, error: matchError } = await supabase.rpc('match_artworks', {
+    const { data: matches, error: matchError } = await supabase.rpc(MATCH_FUNCTION, {
       query_embedding: queryEmbedding,
       match_threshold: MATCH_THRESHOLD,
       match_count: MATCH_COUNT
     });
 
     if (matchError) {
-      console.error('match_artworks error:', matchError);
+      console.error(`${MATCH_FUNCTION} error:`, matchError);
       return NextResponse.json({ recommendations: [], basis: 'none' });
     }
 
