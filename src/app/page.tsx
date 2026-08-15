@@ -29,6 +29,7 @@ import {
 } from '@/lib/i18n';
 import { canonicalName, localizeName } from '@/lib/names';
 import ReadingApprovals from '@/components/ReadingApprovals';
+import GuideCorrections from '@/components/GuideCorrections';
 import AccountPanel from '@/components/AccountPanel';
 import ReactMarkdown from 'react-markdown';
 
@@ -291,6 +292,7 @@ export default function ArtFreeGuide() {
   // until someone opens the app with ?admin=1 once on this device.
   const [adminMode, setAdminMode] = useState(false);
   const [showReadingApprovals, setShowReadingApprovals] = useState(false);
+  const [adminTab, setAdminTab] = useState<'readings' | 'guides'>('readings');
   const [showAccount, setShowAccount] = useState(false);
   const [artwork, setArtwork] = useState('');
   const [artist, setArtist] = useState('');
@@ -1963,6 +1965,7 @@ export default function ArtFreeGuide() {
           kind,
           comment,
           excerpt: (responseStandard || responseShort || '').slice(0, 500),
+          locale: localeRef.current,
           userId
         })
       });
@@ -3254,7 +3257,7 @@ export default function ArtFreeGuide() {
         </div>
       )}
 
-      {/* Reading approval queue, in place so moderation never leaves the guide */}
+      {/* Moderation queues, in place so approving never leaves the guide */}
       {showReadingApprovals && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
           <div
@@ -3264,9 +3267,24 @@ export default function ArtFreeGuide() {
 
           <div className="relative z-50 w-full max-w-lg max-h-[85vh] overflow-y-auto scroll-area bg-slate-950 border border-slate-900 rounded-3xl shadow-2xl p-6">
             <div className="flex items-center justify-between border-b border-slate-900 pb-4 mb-4 font-sans">
-              <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
-                <span>🗣️</span> 読み替え辞書の承認
-              </h3>
+              <div className="flex gap-2">
+                {([
+                  ['readings', '🗣️ 読み'],
+                  ['guides', '📝 解説']
+                ] as const).map(([tab, label]) => (
+                  <button
+                    key={tab}
+                    onClick={() => setAdminTab(tab)}
+                    className={`rounded-lg px-3 py-1.5 text-sm font-bold transition-colors ${
+                      adminTab === tab
+                        ? 'bg-slate-800 text-slate-100'
+                        : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <button
                 onClick={() => setShowReadingApprovals(false)}
                 className="text-slate-500 hover:text-white transition-colors"
@@ -3275,7 +3293,7 @@ export default function ArtFreeGuide() {
               </button>
             </div>
 
-            <ReadingApprovals />
+            {adminTab === 'readings' ? <ReadingApprovals /> : <GuideCorrections />}
           </div>
         </div>
       )}
