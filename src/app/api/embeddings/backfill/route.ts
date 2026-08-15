@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase';
-import { buildArtworkEmbeddingText, embedTexts } from '@/lib/embeddings';
+import {
+  ARTWORK_EMBEDDING_COLUMN,
+  buildArtworkEmbeddingText,
+  embedTexts
+} from '@/lib/embeddings';
 
 const BATCH_SIZE = 20;
 
 /**
- * Generates the Workers AI embeddings for catalogue rows that don't have one yet.
- * Admin only: embeddings can only be produced where the `AI` binding exists,
- * so this runs on the Worker instead of a local seed script.
+ * Generates embeddings for catalogue rows that don't have one in the active
+ * embedding column yet. Admin only: with the Workers AI provider this has to
+ * run on the Worker, where the `AI` binding exists.
  */
 export async function POST(req: Request) {
   try {
@@ -23,7 +27,7 @@ export async function POST(req: Request) {
     const { data: artworks, error } = await supabase
       .from('artworks')
       .select('id, title, artist, description, tags')
-      .is('embedding', null)
+      .is(ARTWORK_EMBEDDING_COLUMN, null)
       .limit(BATCH_SIZE);
 
     if (error) {
@@ -39,7 +43,7 @@ export async function POST(req: Request) {
     for (const [index, artwork] of artworks.entries()) {
       const { error: updateError } = await supabase
         .from('artworks')
-        .update({ embedding: embeddings[index] })
+        .update({ [ARTWORK_EMBEDDING_COLUMN]: embeddings[index] })
         .eq('id', artwork.id);
 
       if (updateError) {
@@ -52,7 +56,7 @@ export async function POST(req: Request) {
     const { count } = await supabase
       .from('artworks')
       .select('id', { count: 'exact', head: true })
-      .is('embedding', null);
+      .is(ARTWORK_EMBEDDING_COLUMN, null);
 
     return NextResponse.json({ updated, remaining: count ?? 0 });
   } catch (error: any) {

@@ -1,5 +1,9 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { buildArtworkEmbeddingText, embedText } from '@/lib/embeddings';
+import {
+  ARTWORK_EMBEDDING_COLUMN,
+  buildArtworkEmbeddingText,
+  embedText
+} from '@/lib/embeddings';
 
 export interface ArtworkRecord {
   id: string;
@@ -9,7 +13,8 @@ export interface ArtworkRecord {
   embedding: number[] | string | null;
 }
 
-const SELECT_COLUMNS = 'id, title, artist, tags, embedding';
+// The active embedding space is aliased to `embedding` so callers stay provider-agnostic.
+const SELECT_COLUMNS = `id, title, artist, tags, embedding:${ARTWORK_EMBEDDING_COLUMN}`;
 
 export function parseEmbedding(embedding: ArtworkRecord['embedding']): number[] | null {
   if (!embedding) return null;
@@ -85,17 +90,17 @@ export async function findOrCreateArtwork(
         description: input.description ?? null,
         image_url: input.imageUrl ?? null,
         search_query: `${input.title} ${input.artist}`.trim(),
-        embedding
+        [ARTWORK_EMBEDDING_COLUMN]: embedding
       },
       { onConflict: 'title,artist' }
     )
     .select(SELECT_COLUMNS)
-    .single();
+    .single<ArtworkRecord>();
 
   if (error) {
     console.error('Failed to add artwork to the catalogue:', error.message);
     return null;
   }
 
-  return data as ArtworkRecord;
+  return data;
 }
