@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase';
+import { Locale } from '../i18n';
 import { ArchivedGuide, GuideStore, StoredGuide, guideKey } from './provider';
 
 interface GuideRow {
@@ -9,11 +10,11 @@ interface GuideRow {
 export class SupabaseGuideStore implements GuideStore {
   readonly name = 'supabase';
 
-  async get(title: string, artist: string): Promise<StoredGuide | null> {
+  async get(title: string, artist: string, locale: Locale = 'ja'): Promise<StoredGuide | null> {
     const { data, error } = await createServiceClient()
       .from('artwork_guides')
       .select('payload, updated_at')
-      .eq('cache_key', guideKey(title, artist))
+      .eq('cache_key', guideKey(title, artist, locale))
       .maybeSingle<GuideRow>();
 
     if (error) throw new Error(error.message);
@@ -22,12 +23,12 @@ export class SupabaseGuideStore implements GuideStore {
     return { payload: data.payload, updatedAt: data.updated_at };
   }
 
-  async put(title: string, artist: string, payload: string): Promise<void> {
+  async put(title: string, artist: string, payload: string, locale: Locale = 'ja'): Promise<void> {
     const { error } = await createServiceClient()
       .from('artwork_guides')
       .upsert(
         {
-          cache_key: guideKey(title, artist),
+          cache_key: guideKey(title, artist, locale),
           title: title.trim(),
           artist: artist.trim(),
           payload,

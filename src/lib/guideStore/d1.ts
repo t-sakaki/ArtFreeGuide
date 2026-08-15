@@ -1,4 +1,5 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
+import { Locale } from '../i18n';
 import { ArchivedGuide, GuideStore, StoredGuide, escapeLike, guideKey } from './provider';
 
 interface D1Result<T> {
@@ -32,17 +33,17 @@ export class D1GuideStore implements GuideStore {
     return db;
   }
 
-  async get(title: string, artist: string): Promise<StoredGuide | null> {
+  async get(title: string, artist: string, locale: Locale = 'ja'): Promise<StoredGuide | null> {
     const db = await this.binding();
     const row = await db
       .prepare('SELECT payload, updated_at FROM artwork_guides WHERE cache_key = ?')
-      .bind(guideKey(title, artist))
+      .bind(guideKey(title, artist, locale))
       .first<{ payload: string; updated_at: string | null }>();
 
     return row ? { payload: row.payload, updatedAt: row.updated_at } : null;
   }
 
-  async put(title: string, artist: string, payload: string): Promise<void> {
+  async put(title: string, artist: string, payload: string, locale: Locale = 'ja'): Promise<void> {
     const db = await this.binding();
     await db
       .prepare(
@@ -54,7 +55,7 @@ export class D1GuideStore implements GuideStore {
            payload = excluded.payload,
            updated_at = excluded.updated_at`
       )
-      .bind(guideKey(title, artist), title.trim(), artist.trim(), payload, new Date().toISOString())
+      .bind(guideKey(title, artist, locale), title.trim(), artist.trim(), payload, new Date().toISOString())
       .run();
   }
 
