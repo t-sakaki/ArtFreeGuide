@@ -10,7 +10,7 @@
  * matching the artist or the title before it is used.
  */
 
-import { NAMES } from './names';
+import { NAMES, catalogueTitle } from './names';
 
 /** Where the picture came from, kept for logs and for judging trust. */
 export type ImageSource = 'catalog' | 'wikidata' | 'commons-category' | 'commons-search';
@@ -390,7 +390,7 @@ export interface ResolveInput {
  * substitute a plausible looking one.
  */
 export async function resolveArtworkImage(input: ResolveInput): Promise<ResolvedImage | null> {
-  const title = input.title.trim();
+  const title = catalogueTitle(input.title);
   const artist = input.artist.trim();
   if (!title) return null;
 
