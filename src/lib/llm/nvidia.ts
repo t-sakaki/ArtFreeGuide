@@ -1,15 +1,16 @@
 import { LLMProvider, Message } from './provider';
+import { parseModelList } from './models';
 
 const BASE_URL = process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1';
 
 // Measured against the curator prompt: nemotron-3-super gives the best mix of
 // natural Japanese, JSON compliance and latency (~46s). gemma-4 is accurate but
 // slow (~110s), llama-3.1-70b is the last resort.
-const FALLBACK_MODELS = (process.env.NVIDIA_MODEL || 'nvidia/nemotron-3-super-120b-a12b')
-  .split(',')
-  .map(model => model.trim())
-  .filter(Boolean)
-  .concat(['google/gemma-4-31b-it', 'meta/llama-3.1-70b-instruct']);
+const DEFAULT_MODELS = [
+  'nvidia/nemotron-3-super-120b-a12b',
+  'google/gemma-4-31b-it',
+  'meta/llama-3.1-70b-instruct'
+];
 
 const MAX_TOKENS = 4096;
 
@@ -23,8 +24,12 @@ interface ChatCompletion {
  */
 export class NvidiaProvider implements LLMProvider {
   private readonly apiKey: string;
+  private readonly models: string[];
 
-  constructor() {
+  constructor(models: string[] = []) {
+    const configured = models.length ? models : parseModelList(process.env.NVIDIA_MODEL);
+    this.models = configured.length ? configured : DEFAULT_MODELS;
+
     const apiKey = process.env.NVIDIA_API_KEY;
     if (!apiKey) {
       throw new Error('NVIDIA_API_KEY environment variable is not set.');
@@ -40,7 +45,7 @@ export class NvidiaProvider implements LLMProvider {
 
     let lastError: unknown = null;
 
-    for (const modelName of FALLBACK_MODELS) {
+    for (const modelName of this.models) {
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           const res = await fetch(`${BASE_URL}/chat/completions`, {

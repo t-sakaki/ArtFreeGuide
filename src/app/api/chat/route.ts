@@ -87,7 +87,7 @@ export async function POST(req: Request) {
       };
     });
 
-    const provider = getLLMProvider();
+    const provider = getLLMProvider('guide');
     const text = await provider.generateResponse(modifiedMessages, { json: true });
 
     // Bulletproof JSON block extractor

@@ -28,7 +28,7 @@ ${excerpt ? `\nこれまでの解説（参考）:\n${excerpt}\n` : ''}
 - 説明文そのものだけを出力してください。前置きや後書きは不要です。`;
 
     const messages: Message[] = [{ role: 'user', content: prompt }];
-    const provider = getLLMProvider();
+    const provider = getLLMProvider('ask');
     const answer = await provider.generateResponse(messages);
 
     return NextResponse.json({ answer: answer.trim() });

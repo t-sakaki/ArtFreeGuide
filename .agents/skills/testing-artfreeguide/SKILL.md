@@ -20,6 +20,13 @@ description: How to run and end-to-end test the ArtFreeGuide Next.js app locally
 - Set `LLM_PROVIDER=workers-ai` in `.env.local` (gitignored) if an old `LLM_PROVIDER=gemini` is present.
   The Gemini key that used to live in git history is revoked — Google returns
   `403 ... Your API key was reported as leaked.` Do not waste time on it.
+- **Known blocker: the Cloudflare account's free Workers AI allocation (10,000 neurons/day) runs out
+  quickly.** When it does, `/api/chat` and `/api/suggest` return 500 after ~10s of retries and the UI
+  shows 「現在、音声ガイドサービスをご利用いただけません。」. Confirm the cause in the dev-server log
+  (`4006: you have used up your daily free allocation of 10,000 neurons`) before blaming the PR.
+  Workarounds: revisit an already-cached guide via the 📜履歴 sidebar, test against production, or ask
+  for a paid-plan token. Everything that does not need the LLM (images, hotspots, Supabase
+  recommendations) still works while the quota is exhausted.
 - `GUIDE_STORE=d1`; the D1 cache read/write failures under `next dev` are caught and generation continues.
 - Production deployment: https://art-free-guide.taira-sakakibara.workers.dev
 - Smoke-test the API without the UI (note the payload shape is `messages`, not `artwork`):
@@ -68,6 +75,28 @@ Prefer either:
 - 🎙️「感想を声で伝える」 only renders when a `SpeechRecognition` instance exists (Chrome).
 - 📜履歴 sidebar (top right) lists generated artworks; clicking an entry reloads that guide (fast way to
   revisit an already-generated work without paying the LLM latency again).
+
+## Recommendations / taste shelf (ForYouShelf, Supabase pgvector)
+- Anonymous user id lives in localStorage under `art_free_guide_user_id` (`src/lib/user.ts`);
+  clear localStorage to simulate a first visit (no taste vector ⇒ the 「✨ あなたのために」 shelf is
+  correctly absent).
+- The shelf only renders when `items.length > 0 && basis !== 'none'`. Headings: `artwork` ⇒
+  「🎨 この作品に近い」, `taste`/`blend` ⇒ 「✨ あなたのために」.
+- Building a taste vector normally requires finishing narration, which is impossible on a headless VM
+  (TTS fails instantly, listened seconds ≈ 0, so `/api/history` never records a completed listen).
+  Accepted workaround (ask first): call the API once from the DevTools console —
+  ```js
+  fetch('/api/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    userId: localStorage.getItem('art_free_guide_user_id'), title:'星月夜',
+    artist:'フィンセント・ファン・ゴッホ', depth:'standard', listenedSeconds:120, completed:true})})
+  ```
+  then reload; the shelf switches to 「✨ あなたのために」 with 「n作品を聴取」 and `#タグ` chips.
+- Supabase env vars in `.env.local` (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+  `SUPABASE_SERVICE_ROLE_KEY`) are live, so recommendations work even when Workers AI is out of quota.
+  Quick smoke test: `curl -s -X POST localhost:3000/api/recommendations -H 'Content-Type: application/json' -d '{"userId":"<uuid>"}'`
+  (taste-only mode) and `GET /api/profile?userId=<uuid>`.
+- Mobile-width checks: `xdotool windowsize` is unreliable while Chrome is maximized — use DevTools
+  device emulation (`Ctrl+Shift+M`) and set the width to 430 in the device toolbar.
 
 ## Hotspots (見どころ) feature
 - Data lives in `src/lib/hotspots.ts` (6 works × 4 hotspots, x/y in 0–1, per-hotspot `zoom`).
