@@ -74,6 +74,8 @@ export interface UIStrings {
   };
   image: {
     loading: string;
+    noImage: string;
+    searchCommons: string;
     zoomHotspots: string;
     zoom: string;
     failed: string;
@@ -179,6 +181,8 @@ const ja: UIStrings = {
     zoomHotspots: '🔍 見どころを拡大',
     zoom: '🔍 拡大',
     failed: '作品画像を取得できませんでした',
+    noImage: '画像なし',
+    searchCommons: 'Wikimedia Commons で画像を探す',
     shareHotspot: 'この見どころを共有',
     close: '閉じる',
     hotspotHint: '見どころをタップすると、その部分を拡大して解説します。',
@@ -287,6 +291,8 @@ const en: UIStrings = {
     zoomHotspots: '🔍 Zoom into the details',
     zoom: '🔍 Zoom',
     failed: 'The image could not be loaded',
+    noImage: 'No image',
+    searchCommons: 'Look for an image on Wikimedia Commons',
     shareHotspot: 'Share this detail',
     close: 'Close',
     hotspotHint: 'Tap a marked detail to zoom in and hear about it.',
@@ -395,6 +401,8 @@ const fr: UIStrings = {
     zoomHotspots: '🔍 Zoomer sur les détails',
     zoom: '🔍 Zoomer',
     failed: 'Impossible de charger l’image',
+    noImage: 'Sans image',
+    searchCommons: 'Chercher une image sur Wikimedia Commons',
     shareHotspot: 'Partager ce détail',
     close: 'Fermer',
     hotspotHint: 'Touchez un détail signalé pour l’agrandir et l’écouter.',
@@ -503,6 +511,8 @@ const zh: UIStrings = {
     zoomHotspots: '🔍 放大看点',
     zoom: '🔍 放大',
     failed: '无法获取作品图片',
+    noImage: '暂无图片',
+    searchCommons: '在 Wikimedia Commons 上查找图片',
     shareHotspot: '分享这个看点',
     close: '关闭',
     hotspotHint: '点击标记的看点，即可放大并听讲解。',
@@ -612,6 +622,8 @@ const es: UIStrings = {
     zoomHotspots: '🔍 Ampliar los detalles',
     zoom: '🔍 Ampliar',
     failed: 'No se ha podido cargar la imagen',
+    noImage: 'Sin imagen',
+    searchCommons: 'Buscar una imagen en Wikimedia Commons',
     shareHotspot: 'Compartir este detalle',
     close: 'Cerrar',
     hotspotHint: 'Toca un detalle marcado para ampliarlo y escucharlo.',
