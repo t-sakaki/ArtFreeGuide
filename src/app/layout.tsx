@@ -23,6 +23,13 @@ export const metadata: Metadata = {
     url: SITE_URL,
     title: 'ArtFreeGuide | 無料のAI美術館音声ガイド',
     description: DESCRIPTION,
+    images: [{ url: '/og-default.png', width: 1200, height: 630, alt: 'ArtFreeGuide' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ArtFreeGuide | 無料のAI美術館音声ガイド',
+    description: DESCRIPTION,
+    images: ['/og-default.png'],
   },
 };
 
