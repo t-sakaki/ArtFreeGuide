@@ -25,8 +25,22 @@ export interface GuideCorrectionRow {
   created_at: string;
 }
 
-/** The parts of a guide payload a report can sensibly change. */
-const TEXT_FIELDS = ['short', 'standard', 'deep'] as const;
+/**
+ * The report only rewrites `standard` — the tier the reader was listening to.
+ *
+ * Rewriting all three tiers took the model over a minute, which left the
+ * listener staring at a spinner; one tier answers in seconds. `short` and `deep`
+ * are left as archived and can be regenerated separately.
+ */
+const REVISED_FIELD = 'standard' as const;
+
+/**
+ * A rewrite this much shorter than the archive is a summary, not a correction.
+ *
+ * The light model that answers in seconds tends to compress the passages it was
+ * not asked to touch, so a shrunken rewrite is dropped rather than queued.
+ */
+const MIN_LENGTH_RATIO = 0.8;
 
 function reviserPrompt(locale: Locale): string {
   const language =
@@ -40,7 +54,9 @@ function reviserPrompt(locale: Locale): string {
 【ルール】
 - 指摘に関係のない箇所は一字も変えないでください。
 - 事実が不確かな場合は、断定を避けた表現に直してください。
-- short / standard / deep の役割と長さの目安、マークダウンの装飾方針は元のままにしてください。
+- 修正後の解説は全文を返してください。指摘に関係のない文を削除・要約・短縮してはいけません（元と同程度の文字数を保つこと）。
+- ※ や （注）のような記号での補足は使わず、読み上げても自然な話し言葉で直してください。
+- マークダウンの装飾方針は変えないでください。
 - 音声ガイドとして読み上げる文章です。記号の羅列や箇条書きの乱用は避けてください。
 - ${language}
 - 指摘が的外れで修正が不要なら、"unchanged": true を返してください。
@@ -48,9 +64,7 @@ function reviserPrompt(locale: Locale): string {
 【出力フォーマット】
 純粋なJSONオブジェクトのみを返してください。前置きやマークダウンのコードブロックは禁止です。
 {
-  "short": "（修正後の short。変更がなければ元の文章をそのまま）",
-  "standard": "（修正後の standard）",
-  "deep": "（修正後の deep）",
+  "standard": "（修正後の解説全文）",
   "note": "（何をどう直したかを日本語1文で）",
   "unchanged": false
 }`;
@@ -100,7 +114,7 @@ export async function proposeGuideCorrection(
   if (!current) return null;
 
   const revision = parseJsonObject(
-    await getLLMProvider('guide').generateResponse(
+    await getLLMProvider('ask').generateResponse(
       [
         {
           role: 'user',
@@ -114,8 +128,8 @@ ${comment}
 【鑑賞者が見ていた箇所】
 ${excerpt || '(未指定)'}
 
-【現在の解説（JSON）】
-${JSON.stringify({ short: current.short, standard: current.standard, deep: current.deep })}`
+【現在の解説】
+${current[REVISED_FIELD]}`
         }
       ],
       { json: true }
@@ -126,18 +140,19 @@ ${JSON.stringify({ short: current.short, standard: current.standard, deep: curre
 
   // Keep everything the report has no business touching (searchQuery, music,
   // recommendations) exactly as archived.
-  const proposal: Record<string, unknown> = { ...current };
-  let changed = false;
-
-  for (const field of TEXT_FIELDS) {
-    const next = revision[field];
-    if (typeof next === 'string' && next.trim() && next !== current[field]) {
-      proposal[field] = next;
-      changed = true;
-    }
+  const archivedText = current[REVISED_FIELD];
+  const revised = revision[REVISED_FIELD];
+  if (typeof revised !== 'string' || !revised.trim() || revised === archivedText) {
+    return null;
+  }
+  if (
+    typeof archivedText === 'string' &&
+    revised.length < archivedText.length * MIN_LENGTH_RATIO
+  ) {
+    return null;
   }
 
-  if (!changed) return null;
+  const proposal: Record<string, unknown> = { ...current, [REVISED_FIELD]: revised };
 
   const { data, error } = await createServiceClient()
     .from(GUIDE_CORRECTIONS_TABLE)
