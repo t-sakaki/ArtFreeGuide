@@ -3444,6 +3444,8 @@ export default function HomeClient({
               <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.nextWork}</span>
             </button>
 
+            <div className="flex-1 min-w-0" aria-hidden="true" />
+
           </div>
         </div>
       )}
