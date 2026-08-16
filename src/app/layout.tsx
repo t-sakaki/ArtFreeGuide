@@ -3,12 +3,14 @@ import type { Metadata } from 'next';
 import { LOCALES } from '@/lib/i18n';
 import { SITE_URL } from '@/lib/site';
 
+const TITLE = 'ArtFreeGuide | 聴くほど賢くなるAI美術館音声ガイド';
+
 const DESCRIPTION =
-  'AIキュレーターが贈る、あなたのための特別な音声ガイド。作品名を入れるか写真を撮るだけで、5言語の解説と見どころ案内が無料で聴けます。';
+  'AIキュレーターが贈る、聴くほど賢くなる音声ガイド。作品名を入れるか写真を撮ると、5言語の解説と見どころ案内が始まります。あなたの質問と指摘は解説に残り、次の来訪者に届きます。';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: 'ArtFreeGuide | 無料のAI美術館音声ガイド',
+  title: TITLE,
   description: DESCRIPTION,
   applicationName: 'ArtFreeGuide',
   keywords: ['音声ガイド', '美術館', '絵画', 'AI', 'アートガイド', 'audio guide', 'museum', 'art'],
@@ -21,13 +23,13 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: 'ArtFreeGuide',
     url: SITE_URL,
-    title: 'ArtFreeGuide | 無料のAI美術館音声ガイド',
+    title: TITLE,
     description: DESCRIPTION,
     images: [{ url: '/og-default.png', width: 1200, height: 630, alt: 'ArtFreeGuide' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ArtFreeGuide | 無料のAI美術館音声ガイド',
+    title: TITLE,
     description: DESCRIPTION,
     images: ['/og-default.png'],
   },
