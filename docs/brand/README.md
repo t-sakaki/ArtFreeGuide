@@ -19,3 +19,18 @@ pngquant --quality 65-90 --strip --force --ext .png docs/images/hero.png docs/im
 ```
 
 `docs/images/ogp.png` と同じ画像を `public/og-default.png`（共有カードの既定画像）にも置いています。
+
+## スライドの作り方
+
+発表用スライドは `docs/slides/*.html` に 1920x1080 の HTML として置き、
+同梱の `docs/slides/render.sh` で Chrome ヘッドレス撮影します。実行すると
+`docs/images/slides/01-title.png` 〜 `08-closing.png` が生成されます。
+
+```bash
+bash docs/slides/render.sh
+```
+
+Chrome の撮影フラグは上記のブランド画像と揃えています。ヘッドレスの実効 viewport は
+1080px に届かないため、`--window-size=1920,1167` で撮って 1920x1080 に切り出しています。
+圧縮は `render.sh` が `pngquant --quality 80-95`（無ければ oxipng / optipng）で行います。
+暗い紺のグラデーションが主体なので、256 色パレット化は階調が飛ぶため使いません。
