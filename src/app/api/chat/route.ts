@@ -103,7 +103,14 @@ function parseGuide(payload: string): { standard: string; deep: string } | null 
 
 export async function POST(req: Request) {
   try {
-    const { messages, title, artist, refresh, locale: rawLocale } = await req.json();
+    const { messages, title, artist, refresh, locale: rawLocale, reason } = await req.json();
+
+    // What the visitor disliked about the guide they just heard, so a rewrite
+    // answers the complaint instead of rolling the dice again.
+    const revisionNote =
+      refresh === true && typeof reason === 'string' && reason.trim()
+        ? reason.trim().slice(0, 500)
+        : '';
     const locale: Locale =
       typeof rawLocale === 'string' && isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
 
@@ -134,7 +141,9 @@ export async function POST(req: Request) {
       if (isFirstUserMessage && msg.role === 'user') {
         return {
           role: 'user',
-          content: `${curatorPrompt(locale)}\n\n対象の美術作品情報：\n${msg.content}`
+          content: `${curatorPrompt(locale)}\n\n対象の美術作品情報：\n${msg.content}${
+            revisionNote ? `\n\n【鑑賞者からの指摘】\n${revisionNote}` : ''
+          }`
         };
       }
       return {
