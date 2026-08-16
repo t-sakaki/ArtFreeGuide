@@ -65,26 +65,28 @@ export async function POST(req: Request) {
     // moderation queue. It never changes the guide on its own, and a failure
     // here must not lose the feedback that was just stored.
     let proposed = false;
+    let note: string | null = null;
     if (kind !== 'good' && entry.comment) {
       try {
         const locale: Locale =
           typeof rawLocale === 'string' && isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
-        proposed = Boolean(
-          await proposeGuideCorrection({
-            title,
-            artist: entry.artist,
-            locale,
-            kind,
-            comment: entry.comment,
-            excerpt: entry.excerpt
-          })
-        );
+        const correction = await proposeGuideCorrection({
+          title,
+          artist: entry.artist,
+          locale,
+          kind,
+          comment: entry.comment,
+          excerpt: entry.excerpt
+        });
+        proposed = Boolean(correction);
+        // The reader hears back what the curator did with the report.
+        note = correction?.note ?? null;
       } catch (error) {
         console.warn('Guide correction proposal failed:', error);
       }
     }
 
-    return NextResponse.json({ ok: true, store: store.name, proposed });
+    return NextResponse.json({ ok: true, store: store.name, proposed, note });
   } catch (error: any) {
     console.error('Feedback API Route Error:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
