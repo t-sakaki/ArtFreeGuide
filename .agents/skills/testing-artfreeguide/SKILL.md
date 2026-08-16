@@ -189,3 +189,19 @@ Prefer either:
 - ken-burns (`.animate-ken-burns`) only applies while `isPlaying` and no hotspot is active. Because TTS
   fails instantly on headless VMs, `isPlaying` never persists, so ken-burns is effectively untestable
   there — say so rather than claiming a pass.
+
+## Recording a demo against production
+- Production (`https://art-free-guide.taira-sakakibara.workers.dev`) is the practical target for demo
+  capture: guide caches are warm there, so the flows take seconds instead of the ~60s a cold generation
+  needs locally.
+- Warm per locale AND per tier before rolling: open `?lang=ja&mode=standard`, `?lang=en&mode=standard`,
+  then press 「🔍 裏話・エピソード」 once. Warm timings measured on production: guide ~4s, EN switch ~6s,
+  deep ~2s, question answer ~13s, 「事実が違う」 correction reply ~15s.
+- Real UI paths that differ from what people assume: language switching lives in the hamburger menu's
+  flag row; there is no 👎 button — the feedback path is 「気になる点」 → reason chip → 「送信する」.
+- Asking a question flips the guide into deep mode and appends the answer at the very end of the body,
+  which fights the narration auto-scroll: pause first, then scroll to the end to show it.
+- Anything done on production persists: ♡ counts, the appended Q&A (visible to the next visitor via the
+  D1 cache) and the moderation-queue entry. Decide the exact actions before recording.
+- Some cached deep bodies contain raw LLM output (a `{"short": ...}` JSON blob and reasoning notes).
+  It is stored in D1, so reloading does not clear it — scroll the deep body to the end before recording.
