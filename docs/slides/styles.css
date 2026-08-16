@@ -1,0 +1,99 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; width: 1920px; height: 1080px; overflow: hidden; }
+body {
+  color: #f8fafc;
+  background: #020617;
+  font-family: "Noto Sans CJK JP", "Noto Sans JP", sans-serif;
+}
+.slide {
+  position: relative; width: 1920px; height: 1080px; overflow: hidden;
+  background:
+    radial-gradient(680px 520px at 50% 112%, rgba(253,230,138,.14), transparent 68%),
+    linear-gradient(155deg, #0f172a 0%, #020617 72%);
+}
+.device {
+  overflow: hidden; background: linear-gradient(160deg, #334155, #0b1220 60%);
+}
+.screen {
+  position: relative; width: 100%; height: 100%; overflow: hidden;
+  border-radius: 30px; background: #020617;
+}
+.screen img { width: 100%; height: 100%; display: block; object-fit: cover; object-position: top; }
+.notch {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  width: 108px; height: 22px; border-radius: 999px; background: #020617;
+}
+.slide::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(90deg, rgba(2,6,23,.22), transparent 35%, transparent 65%, rgba(2,6,23,.28));
+}
+.serif { font-family: "Noto Serif CJK JP", "Noto Serif JP", serif; }
+.eyebrow { color: #fde68a; letter-spacing: .28em; font-size: 20px; }
+.heading {
+  position: relative; z-index: 3; margin: 0; color: #fef3c7;
+  font-family: "Noto Serif CJK JP", "Noto Serif JP", serif;
+  font-weight: 500; letter-spacing: .04em; line-height: 1.28;
+  text-shadow: 0 0 48px rgba(253,230,138,.18);
+}
+.muted { color: #cbd5e1; }
+.gold { color: #fde68a; }
+.light-cone {
+  position: absolute; z-index: 1; bottom: -200px; left: 50%; width: 0; height: 0;
+  border-left: 310px solid transparent; border-right: 310px solid transparent;
+  border-bottom: 1280px solid rgba(253,230,138,.075);
+  transform: translateX(-50%); filter: blur(25px);
+}
+.light-core {
+  position: absolute; z-index: 1; bottom: -90px; left: 50%; width: 520px; height: 900px;
+  transform: translateX(-50%);
+  background: linear-gradient(to top, rgba(253,230,138,.2), rgba(253,230,138,.05) 58%, transparent);
+  clip-path: polygon(42% 100%, 58% 100%, 84% 0, 16% 0);
+  filter: blur(22px);
+}
+.floor-glow {
+  position: absolute; z-index: 1; bottom: 0; left: 50%; width: 980px; height: 220px;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse, rgba(253,230,138,.25), transparent 68%);
+  filter: blur(18px);
+}
+.frame {
+  position: absolute; z-index: 2; border: 14px solid #b89548;
+  box-shadow: inset 0 0 0 5px #30250e, 0 0 0 2px rgba(253,230,138,.3), 0 28px 70px rgba(0,0,0,.7);
+  background: #080b15;
+}
+.frame::after { content:""; position:absolute; inset: 18px; border: 1px solid rgba(253,230,138,.55); }
+.abstract {
+  position: absolute; inset: 32px; overflow: hidden;
+  background:
+    radial-gradient(ellipse at 28% 42%, #243d77 0 18%, transparent 42%),
+    radial-gradient(ellipse at 67% 64%, #c28a39 0 11%, transparent 36%),
+    linear-gradient(148deg, #0b183c 10%, #1e3a8a 42%, #d6a746 43%, #142451 71%, #050914);
+  filter: blur(1px); opacity: .88;
+}
+.abstract::before, .abstract::after {
+  content:""; position:absolute; border-radius: 50%; filter: blur(12px);
+  background: rgba(253,230,138,.65);
+}
+.abstract::before { width: 190px; height: 72px; left: 20%; top: 28%; transform: rotate(-12deg); }
+.abstract::after { width: 230px; height: 90px; right: 12%; bottom: 18%; transform: rotate(18deg); }
+.badge {
+  border: 1px solid rgba(253,230,138,.42); color: #fde68a; padding: 9px 18px;
+  border-radius: 999px; letter-spacing: .12em; font-size: 17px;
+  background: rgba(253,230,138,.06);
+}
+.label {
+  color: #e2e8f0; border-left: 2px solid #fde68a; padding-left: 18px;
+  font-size: 22px; letter-spacing: .08em;
+}
+.node {
+  position: absolute; z-index: 3; width: 330px; color: #f8fafc;
+  font-size: 22px; line-height: 1.55; text-align: center;
+}
+.node b { display: block; color: #fde68a; font-family: "Noto Serif CJK JP", serif; font-size: 31px; font-weight: 500; margin-bottom: 8px; }
+.arch-box {
+  position: absolute; z-index: 3; border: 1px solid rgba(253,230,138,.55);
+  border-radius: 10px; background: rgba(15,23,42,.88); color: #e2e8f0;
+  padding: 16px 18px; text-align: center; line-height: 1.45;
+}
+.arch-box .gold { display: inline-block; margin-top: 4px; font-size: 16px; }
+.arch-lines { position: absolute; z-index: 2; inset: 0; pointer-events: none; }

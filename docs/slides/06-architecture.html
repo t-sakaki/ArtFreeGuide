@@ -1,0 +1,23 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><link rel="stylesheet" href="styles.css"></head><body>
+<main class="slide"><div class="light-cone" style="left:50%;opacity:.45"></div>
+  <div style="position:absolute;z-index:4;top:58px;left:120px"><div class="eyebrow">05 / ARCHITECTURE</div><h1 class="heading" style="font-size:53px;margin-top:16px">静かな体験を支える、軽い構成</h1></div>
+  <svg class="arch-lines" viewBox="0 0 1920 1080" preserveAspectRatio="none" aria-hidden="true">
+    <g fill="none" stroke="#b89548" stroke-width="2" opacity=".8">
+      <path d="M960 242 V320 M960 448 V475"/>
+      <path d="M200 475 H1720"/>
+      <path d="M200 475 V500 M580 475 V500 M960 475 V500 M1340 475 V500 M1720 475 V500"/>
+      <path d="M200 690 V748 H380 V790 M580 690 V730 H380 V790"/>
+      <path d="M1340 690 V790 H960 M1720 690 V790 H1720"/>
+    </g>
+  </svg>
+  <div class="arch-box" style="left:735px;top:188px;width:450px;font-size:25px">ブラウザ / Web Speech API<br>読み上げ</div>
+  <div class="arch-box" style="left:460px;top:340px;width:1000px;font-size:24px">Next.js 16 App Router on Cloudflare Workers (OpenNext)</div>
+  <div class="arch-box" style="left:20px;top:500px;width:360px;height:190px;font-size:16px">/api/chat<br><span class="gold">nvidia/nemotron-3-super-120b-a12b<br>→ google/gemma-4-31b-it</span><br>解説生成・アーカイブ</div>
+  <div class="arch-box" style="left:400px;top:500px;width:360px;height:190px;font-size:16px">/api/ask<br><span class="gold">nvidia/nemotron-3-nano-30b-a3b<br>→ meta/llama-3.1-70b-instruct</span><br>質問・深掘り<br><small>追記: /api/guide/augment</small></div>
+  <div class="arch-box" style="left:780px;top:500px;width:360px;height:190px;font-size:16px">/api/identify<br><span class="gold">nvidia/nemotron-nano-12b-v2-vl<br>→ meta/llama-3.2-11b-vision-instruct</span><br>写真から作品特定</div>
+  <div class="arch-box" style="left:1160px;top:500px;width:360px;height:190px;font-size:16px">/api/recommendations<br><span class="gold">類似作品の推薦</span><br><small>pgvector の近傍検索</small></div>
+  <div class="arch-box" style="left:1540px;top:500px;width:360px;height:190px;font-size:16px">/api/artwork-image<br><span class="gold">画像解決</span><br><small>Wikidata / Commons</small></div>
+  <div class="arch-box" style="left:180px;top:790px;width:400px;font-size:18px">Cloudflare D1<br><span class="gold">artfreeguide_db_trial</span><br><small>解説アーカイブ・♡・指摘</small></div>
+  <div class="arch-box" style="left:760px;top:790px;width:400px;font-size:18px">Supabase pgvector<br><span class="gold">embedding_nv</span><br><small>match_artworks_nv</small></div>
+  <div class="arch-box" style="left:1520px;top:790px;width:400px;font-size:18px">Wikimedia Commons・Wikidata<br><small>作品画像</small></div>
+</main></body></html>
