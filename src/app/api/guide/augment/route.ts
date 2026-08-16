@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getGuideStore } from '@/lib/guideStore';
 import { DEFAULT_LOCALE, Locale, isLocale } from '@/lib/i18n';
+import { looksLikeModelScaffolding } from '@/lib/guideText';
 
 /**
  * A ceiling for the archived deep tier, so a popular artwork cannot grow an
@@ -27,6 +28,12 @@ export async function POST(req: Request) {
     const addition = typeof block === 'string' ? block.trim().slice(0, MAX_BLOCK_LENGTH) : '';
     if (!addition) {
       return NextResponse.json({ error: 'block is required' }, { status: 400 });
+    }
+
+    // An archived guide outlives the visit that produced it, so a model that
+    // answered with JSON or with its own reasoning must not be written down.
+    if (looksLikeModelScaffolding(addition)) {
+      return NextResponse.json({ ok: false, reason: 'not_prose' });
     }
 
     const store = getGuideStore();
