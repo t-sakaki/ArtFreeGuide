@@ -46,6 +46,8 @@ function writeDone(done: readonly FirstRunStep[]): void {
 export interface FirstRunHints {
   /** The one hint to show, or null when the visitor needs no help. */
   step: FirstRunStep | null;
+  /** Every step is done or dismissed: the walkthrough is over for good. */
+  finished: boolean;
   /** The visitor did the thing: never offer this hint again, on any visit. */
   complete: (step: FirstRunStep) => void;
   /** The visitor tapped ✕: stop the whole walkthrough. */
@@ -114,5 +116,7 @@ export function useFirstRunHints(candidates: readonly HintCandidate[]): FirstRun
     });
   }, []);
 
-  return { step, complete, dismiss, restart };
+  const finished = done !== null && FIRST_RUN_STEPS.every(candidate => done.includes(candidate));
+
+  return { step, finished, complete, dismiss, restart };
 }

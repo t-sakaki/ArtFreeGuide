@@ -5,6 +5,8 @@ interface HintBubbleProps {
   text: string;
   /** Where the bubble sits relative to the button it points at. */
   placement?: 'above' | 'below';
+  /** Anchor the bubble's right edge instead of its centre, near a screen edge. */
+  align?: 'center' | 'right';
   dismissLabel: string;
   onDismiss: () => void;
 }
@@ -19,6 +21,7 @@ export default function HintBubble({
   show,
   text,
   placement = 'above',
+  align = 'center',
   dismissLabel,
   onDismiss
 }: HintBubbleProps) {
@@ -26,9 +29,9 @@ export default function HintBubble({
 
   return (
     <span
-      className={`animate-bounce pointer-events-none absolute left-1/2 z-40 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-teal-500 px-3 py-1 font-sans text-[10px] font-bold text-slate-950 shadow-lg ${
+      className={`animate-bounce pointer-events-none absolute z-40 flex max-w-[min(16rem,calc(100vw-2rem))] items-center gap-1.5 rounded-2xl bg-teal-500 px-3 py-1 text-center font-sans text-[10px] font-bold text-slate-950 shadow-lg ${
         placement === 'above' ? 'bottom-full mb-2' : 'top-full mt-2'
-      }`}
+      } ${align === 'right' ? 'right-0' : 'left-1/2 -translate-x-1/2'}`}
     >
       {text}
       <button
