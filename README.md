@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/hero.png" alt="ArtFreeGuide - 美術館のAI音声ガイド" width="100%">
+  <img src="docs/images/v2/hero.png" alt="ArtFreeGuide - 美術館のAI音声ガイド" width="100%">
 </p>
 
 <h1 align="center">ArtFreeGuide</h1>
@@ -29,7 +29,7 @@
 - リポジトリ: https://github.com/t-sakaki/ArtFreeGuide
 
 <p align="center">
-  <img src="docs/images/ogp.png" alt="ArtFreeGuide の共有カード" width="600">
+  <img src="docs/images/v2/ogp.png" alt="ArtFreeGuide の共有カード" width="600">
 </p>
 
 ## 聴くほど賢くなる、とは
@@ -97,37 +97,37 @@
 
 作品名を入れると解説が生成され、読み上げ中の文がハイライトされます。速度、文の戻し／送り、質問、次の作品への導線は 1 画面に収めています。
 
-![AI 音声ガイドの画面](docs/images/01-guide.png)
+![AI 音声ガイドの画面](docs/images/v2/01-guide.png)
 
 ### 見どころを絵の上でポイントする
 
 普段はほぼ透明な点で、いま語っている 1 点だけがゆっくり明滅します。拡大表示では見どころごとに絵をズームし、その部分だけを解説します。
 
-![見どころの一覧](docs/images/03-hotspots.png)
+![見どころの一覧](docs/images/v2/03-hotspots.png)
 
-![見どころの拡大](docs/images/02-hotspot-zoom.png)
+![見どころの拡大](docs/images/v2/02-hotspot-zoom.png)
 
 ### ベクトル検索によるおすすめ
 
 「この作品に近い」は pgvector の近傍検索の結果で、数値は類似度です。聴くほど好みベクトルが更新され、並びが変わります。
 
-![ベクトル検索によるおすすめ](docs/images/04-recommendations.png)
+![ベクトル検索によるおすすめ](docs/images/v2/04-recommendations.png)
 
 ### テーマ別ツアーと作品検索
 
-![テーマ別ツアー](docs/images/05-tours.png)
+![テーマ別ツアー](docs/images/v2/05-tours.png)
 
 ### 多言語（日本語 / 英語 / フランス語 / スペイン語 / 中国語）
 
 UI だけでなく、解説の生成と読み上げも切り替わります。
 
-![英語表示](docs/images/06-english.png)
+![英語表示](docs/images/v2/06-english.png)
 
 ### 匿名のまま使えて、ログインすると引き継げる
 
 Supabase Auth のマジックリンクでログインすると、匿名で溜めた履歴と好みが同じアカウントに移ります。
 
-![アカウント](docs/images/07-account.png)
+![アカウント](docs/images/v2/07-account.png)
 
 ## できること
 
