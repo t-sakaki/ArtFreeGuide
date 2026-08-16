@@ -2717,6 +2717,7 @@ export default function HomeClient({
                   show={hints.step === 'hotspot'}
                   text={t.hints.hotspot}
                   placement="below"
+                  align="right"
                   dismissLabel={t.hints.dismiss}
                   onDismiss={hints.dismiss}
                 />
@@ -3388,9 +3389,15 @@ export default function HomeClient({
             
             {/* Central Play/Pause button (Enlarged circle) */}
             <div className="relative shrink-0 mx-2">
-              {/* Browsers block autoplay, so point at the button until the first tap. */}
+              {/* Browsers block autoplay, so point at the button until the first tap.
+                  It stands down while another hint is up, and for good once the
+                  walkthrough is finished or dismissed. */}
               <HintBubble
-                show={!hasPlayedOnce}
+                show={
+                  !hasPlayedOnce &&
+                  !hints.finished &&
+                  (hints.step === 'play' || hints.step === null)
+                }
                 text={t.player.playHere}
                 dismissLabel={t.hints.dismiss}
                 onDismiss={hints.dismiss}
