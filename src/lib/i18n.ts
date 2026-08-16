@@ -181,6 +181,16 @@ export interface UIStrings {
     nextWork: string;
     playHere: string;
   };
+  /** The bubbles that walk a first-time visitor through the buttons. */
+  hints: {
+    artwork: string;
+    hotspot: string;
+    deepDive: string;
+    ask: string;
+    language: string;
+    dismiss: string;
+    restart: string;
+  };
   history: {
     title: string;
     empty: string;
@@ -324,6 +334,15 @@ const ja: UIStrings = {
     forwardSentence: '1文進む',
     nextWork: '次作品',
     playHere: '🎧 ここから再生',
+  },
+  hints: {
+    artwork: '作品名を入れてみてください',
+    hotspot: '絵の上の光る点が「見どころ」です',
+    deepDive: 'もっと知りたければ、裏話もあります',
+    ask: '疑問はその場で訊けます。答えは解説に残ります',
+    language: '5言語で聴けます',
+    dismiss: '案内を閉じる',
+    restart: '操作ガイドをもう一度',
   },
   history: {
     title: '閲覧履歴',
@@ -474,6 +493,15 @@ const en: UIStrings = {
     nextWork: 'Next',
     playHere: '🎧 Start here',
   },
+  hints: {
+    artwork: 'Try typing an artwork title',
+    hotspot: 'The glowing dots are the details to look at',
+    deepDive: 'Want more? There are untold stories too',
+    ask: 'Ask anything — your answer stays in the guide',
+    language: 'Listen in five languages',
+    dismiss: 'Dismiss tip',
+    restart: 'Show the walkthrough again',
+  },
   history: {
     title: 'Listening history',
     empty: 'Nothing here yet. Guides you create are saved here.',
@@ -622,6 +650,15 @@ const fr: UIStrings = {
     forwardSentence: 'Avancer',
     nextWork: 'Suivant',
     playHere: '🎧 Écouter ici',
+  },
+  hints: {
+    artwork: 'Saisissez le titre d’une œuvre',
+    hotspot: 'Les points dorés sont les détails à regarder',
+    deepDive: 'Envie de plus ? Il y a aussi les coulisses',
+    ask: 'Posez vos questions — la réponse reste dans le guide',
+    language: 'Écoutez en cinq langues',
+    dismiss: 'Fermer l’astuce',
+    restart: 'Revoir la visite guidée',
   },
   history: {
     title: 'Historique d’écoute',
@@ -773,6 +810,15 @@ const zh: UIStrings = {
     nextWork: '下一件',
     playHere: '🎧 从这里播放',
   },
+  hints: {
+    artwork: '试着输入一件作品的名称',
+    hotspot: '画面上发光的圆点就是看点',
+    deepDive: '想了解更多？还有幕后故事',
+    ask: '随时提问，答案会留在解说里',
+    language: '支持五种语言收听',
+    dismiss: '关闭提示',
+    restart: '再看一次操作引导',
+  },
   history: {
     title: '收听记录',
     empty: '还没有记录。生成导览后会保存在这里。',
@@ -922,6 +968,15 @@ const es: UIStrings = {
     forwardSentence: 'Adelante',
     nextWork: 'Siguiente',
     playHere: '🎧 Empezar aquí',
+  },
+  hints: {
+    artwork: 'Escribe el título de una obra',
+    hotspot: 'Los puntos dorados son los detalles a mirar',
+    deepDive: '¿Quieres más? También hay historias ocultas',
+    ask: 'Pregunta lo que quieras: la respuesta queda en la guía',
+    language: 'Escucha en cinco idiomas',
+    dismiss: 'Cerrar el aviso',
+    restart: 'Ver de nuevo la guía de uso',
   },
   history: {
     title: 'Historial de escucha',
