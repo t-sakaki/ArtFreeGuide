@@ -202,7 +202,7 @@ export interface UIStrings {
 
 const ja: UIStrings = {
   htmlLang: 'ja',
-  documentTitle: 'ArtFreeGuide | 無料のAI美術館音声ガイド',
+  documentTitle: 'ArtFreeGuide | 聴くほど賢くなるAI美術館音声ガイド',
   tagline: 'AIキュレーターが贈る、あなたのための特別な音声ガイド。美術作品をもっと深く、もっと身近に。',
   hub: {
     tours: 'テーマで巡るツアー',
@@ -351,7 +351,7 @@ const ja: UIStrings = {
 
 const en: UIStrings = {
   htmlLang: 'en',
-  documentTitle: 'ArtFreeGuide | Free AI museum audio guide',
+  documentTitle: 'ArtFreeGuide | The AI museum guide that learns as you listen',
   tagline: 'A personal audio guide written for you by an AI curator. Art, closer and deeper.',
   hub: {
     tours: 'Guided tours by theme',
@@ -500,7 +500,7 @@ const en: UIStrings = {
 
 const fr: UIStrings = {
   htmlLang: 'fr',
-  documentTitle: 'ArtFreeGuide | Audioguide de musée IA gratuit',
+  documentTitle: 'ArtFreeGuide | L’audioguide IA qui s’enrichit à chaque écoute',
   tagline: 'Un audioguide personnel écrit pour vous par un conservateur IA. L’art, de plus près.',
   hub: {
     tours: 'Parcours thématiques',
@@ -650,7 +650,7 @@ const fr: UIStrings = {
 
 const zh: UIStrings = {
   htmlLang: 'zh',
-  documentTitle: 'ArtFreeGuide | 免费的 AI 美术馆语音导览',
+  documentTitle: 'ArtFreeGuide | 越听越聪明的 AI 美术馆语音导览',
   tagline: 'AI 策展人为你写的专属语音导览，让艺术更近一点。',
   hub: {
     tours: '主题导览路线',
@@ -799,7 +799,7 @@ const zh: UIStrings = {
 
 const es: UIStrings = {
   htmlLang: 'es',
-  documentTitle: 'ArtFreeGuide | Audioguía de museo con IA, gratis',
+  documentTitle: 'ArtFreeGuide | La audioguía con IA que aprende mientras escuchas',
   tagline:
     'Una audioguía personal escrita para ti por un conservador con IA. El arte, más cerca y más hondo.',
   hub: {
