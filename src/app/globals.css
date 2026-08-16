@@ -25,7 +25,10 @@
   letter-spacing: 0.01em;
 }
 
-/* The gallery spotlight of the share card: gold light falling on the wordmark. */
+/*
+ * The gallery spotlight of the share card: a gold beam thrown up at the
+ * wordmark from below, plus the halo it leaves on the letters.
+ */
 .spotlight {
   position: relative;
 }
@@ -34,11 +37,30 @@
   content: '';
   position: absolute;
   left: 50%;
-  top: -60%;
-  width: 140%;
-  height: 220%;
+  top: -55%;
+  width: min(150%, 100vw);
+  height: 210%;
   transform: translateX(-50%);
-  background: radial-gradient(ellipse at 50% 35%, rgb(253 230 138 / 0.13), transparent 62%);
+  background: radial-gradient(ellipse 42% 46% at 50% 80%, rgb(253 230 138 / 0.22), transparent 70%);
+  filter: blur(6px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.spotlight::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -95%;
+  width: min(150%, 100vw);
+  height: 230%;
+  transform: translateX(-50%);
+  background: linear-gradient(to top, rgb(253 230 138 / 0.24), rgb(253 230 138 / 0.11) 45%, transparent 80%);
+  clip-path: polygon(46% 100%, 54% 100%, 88% 0%, 12% 0%);
+  -webkit-mask-image: linear-gradient(to top, transparent 6%, rgb(0 0 0 / 0.8) 32%, rgb(0 0 0 / 0.45) 64%, transparent 96%);
+  mask-image: linear-gradient(to top, transparent 6%, rgb(0 0 0 / 0.8) 32%, rgb(0 0 0 / 0.45) 64%, transparent 96%);
+  filter: blur(52px);
+  mix-blend-mode: screen;
   pointer-events: none;
   z-index: -1;
 }
