@@ -3324,10 +3324,10 @@ export default function HomeClient({
             </div>
           </div>
 
-          <div className="relative grid grid-cols-5 items-center w-full max-w-lg mx-auto px-1 font-sans">
+          <div className="relative grid grid-cols-5 items-center w-full max-w-lg mx-auto px-8 font-sans">
             
             {/* Playback Speed Popover (Leftmost) */}
-            <div className="absolute -left-6 top-1/2 z-40 -translate-y-1/2">
+            <div className="absolute left-0 top-1/2 z-40 -translate-y-1/2">
               <button
                 onClick={() => setShowSpeedMenu(!showSpeedMenu)}
                 className="flex flex-col items-center justify-center gap-1 text-teal-400 hover:text-teal-350 transition-all active:scale-90"
