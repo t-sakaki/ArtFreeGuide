@@ -8,14 +8,14 @@
 
 # 2. HTML を撮影（Chrome のヘッドレス。日本語は Noto Sans/Serif CJK JP を使用）
 google-chrome --headless=new --disable-gpu --no-sandbox --hide-scrollbars \
-  --window-size=1200,675 --screenshot=docs/images/hero.png docs/brand/hero.html
+  --window-size=1200,675 --screenshot=docs/images/v2/hero.png docs/brand/hero.html
 google-chrome --headless=new --disable-gpu --no-sandbox --hide-scrollbars \
-  --window-size=1200,630 --screenshot=docs/images/ogp.png docs/brand/ogp.html
+  --window-size=1200,630 --screenshot=docs/images/v2/ogp.png docs/brand/ogp.html
 google-chrome --headless=new --disable-gpu --no-sandbox --hide-scrollbars \
   --window-size=512,512 --screenshot=src/app/icon.png docs/brand/icon.html
 
 # 3. 圧縮（500KB 以下に収める）
-pngquant --quality 65-90 --strip --force --ext .png docs/images/hero.png docs/images/ogp.png
+pngquant --quality 65-90 --strip --force --ext .png docs/images/v2/hero.png docs/images/v2/ogp.png
 ```
 
-`docs/images/ogp.png` と同じ画像を `public/og-default.png`（共有カードの既定画像）にも置いています。
+`docs/images/v2/ogp.png` と同じ画像を `public/og-default.png`（共有カードの既定画像）にも置いています。
