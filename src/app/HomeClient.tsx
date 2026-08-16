@@ -3307,7 +3307,45 @@ export default function HomeClient({
           <div className="w-full max-w-lg mx-auto px-1 font-sans">
             <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono mb-1">
               <span>{Math.max(activeSegmentIndex + 1, 0)} / {speakableSegments.length}</span>
-              <span>{Math.round(narrationProgress * 100)}%</span>
+              <div className="flex items-center gap-2">
+                <span>{Math.round(narrationProgress * 100)}%</span>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowSpeedMenu(!showSpeedMenu)}
+                    className="flex flex-col items-center justify-center gap-1 text-teal-400 hover:text-teal-350 transition-all active:scale-90"
+                    title={t.player.speed}
+                  >
+                    <span className="text-lg leading-none">⚡</span>
+                    <span className="text-[8px] sm:text-[9px] font-mono font-bold truncate max-w-full">{playbackSpeed.toFixed(1)}x</span>
+                  </button>
+
+                  {/* Smart Speed Selector Popover */}
+                  {showSpeedMenu && (
+                    <div className="absolute bottom-9 right-0 bg-slate-950 border border-slate-850 rounded-2xl p-2 flex flex-col gap-1 shadow-2xl z-50 min-w-[70px] animate-fade-in">
+                      {[1.0, 1.2, 1.5, 1.7, 2.0, 2.5].map(sp => {
+                        const isSelected = playbackSpeed === sp;
+                        return (
+                          <button
+                            key={sp}
+                            onClick={() => {
+                              setPlaybackSpeed(sp);
+                              localStorage.setItem('art_free_guide_playback_speed', String(sp));
+                              setShowSpeedMenu(false);
+                            }}
+                            className={`py-2 text-[11px] font-mono font-bold rounded-lg transition-all text-center active:scale-95 ${
+                              isSelected
+                                ? 'bg-teal-500 text-slate-950 font-black'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                            }`}
+                          >
+                            {sp.toFixed(1)}x
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
             <div
               className="h-1 w-full bg-slate-900 rounded-full overflow-hidden"
@@ -3324,46 +3362,7 @@ export default function HomeClient({
             </div>
           </div>
 
-          <div className="relative grid grid-cols-5 items-center w-full max-w-lg mx-auto px-8 font-sans">
-            
-            {/* Playback Speed Popover (Leftmost) */}
-            <div className="absolute left-0 top-1/2 z-40 -translate-y-1/2">
-              <button
-                onClick={() => setShowSpeedMenu(!showSpeedMenu)}
-                className="flex flex-col items-center justify-center gap-1 text-teal-400 hover:text-teal-350 transition-all active:scale-90"
-                title={t.player.speed}
-              >
-                <span className="text-lg">⚡</span>
-                <span className="text-[8px] sm:text-[9px] font-mono font-bold truncate max-w-full">{playbackSpeed.toFixed(1)}x</span>
-              </button>
-
-              {/* Smart Speed Selector Popover */}
-              {showSpeedMenu && (
-                <div className="absolute bottom-12 left-0 bg-slate-950 border border-slate-850 rounded-2xl p-2 flex flex-col gap-1 shadow-2xl z-50 min-w-[70px] animate-fade-in">
-                  {[1.0, 1.2, 1.5, 1.7, 2.0, 2.5].map(sp => {
-                    const isSelected = playbackSpeed === sp;
-                    return (
-                      <button
-                        key={sp}
-                        onClick={() => {
-                          setPlaybackSpeed(sp);
-                          localStorage.setItem('art_free_guide_playback_speed', String(sp));
-                          setShowSpeedMenu(false);
-                        }}
-                        className={`py-2 text-[11px] font-mono font-bold rounded-lg transition-all text-center active:scale-95 ${
-                          isSelected
-                            ? 'bg-teal-500 text-slate-950 font-black'
-                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-                        }`}
-                      >
-                        {sp.toFixed(1)}x
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
+          <div className="flex items-center justify-between w-full max-w-lg mx-auto px-1 font-sans">
             {/* Prev Artwork in History */}
             <button
               onClick={() => loadHistoryEntry(historyIndex - 1)}
@@ -3387,7 +3386,7 @@ export default function HomeClient({
             </button>
             
             {/* Central Play/Pause button (Enlarged circle) */}
-            <div className="relative shrink-0 mx-2 flex justify-center">
+            <div className="relative flex-1 min-w-0 mx-2 flex justify-center">
               {/* Browsers block autoplay, so point at the button until the first tap. */}
               <HintBubble
                 show={!hasPlayedOnce}
