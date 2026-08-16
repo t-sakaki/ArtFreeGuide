@@ -3324,10 +3324,10 @@ export default function HomeClient({
             </div>
           </div>
 
-          <div className="flex items-center justify-between w-full max-w-lg mx-auto px-1 font-sans">
+          <div className="relative grid grid-cols-5 items-center w-full max-w-lg mx-auto px-1 font-sans">
             
             {/* Playback Speed Popover (Leftmost) */}
-            <div className="flex-1 min-w-0 relative flex justify-center">
+            <div className="absolute -left-6 top-1/2 z-40 -translate-y-1/2">
               <button
                 onClick={() => setShowSpeedMenu(!showSpeedMenu)}
                 className="flex flex-col items-center justify-center gap-1 text-teal-400 hover:text-teal-350 transition-all active:scale-90"
@@ -3387,7 +3387,7 @@ export default function HomeClient({
             </button>
             
             {/* Central Play/Pause button (Enlarged circle) */}
-            <div className="relative shrink-0 mx-2">
+            <div className="relative shrink-0 mx-2 flex justify-center">
               {/* Browsers block autoplay, so point at the button until the first tap. */}
               <HintBubble
                 show={!hasPlayedOnce}
@@ -3443,8 +3443,6 @@ export default function HomeClient({
               <span className="text-xl">⏭️</span>
               <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.nextWork}</span>
             </button>
-
-            <div className="flex-1 min-w-0" aria-hidden="true" />
 
           </div>
         </div>
