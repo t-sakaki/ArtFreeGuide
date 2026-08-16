@@ -153,6 +153,13 @@ export interface UIStrings {
     send: string;
     thanks: string;
     regenerateToast: string;
+    /** The one-tap reasons a visitor can hand the curator instead of typing. */
+    reasonPrompt: string;
+    reasons: { id: string; label: string; instruction: string }[];
+    reading: string;
+    curatorReplied: string;
+    noChange: string;
+    pendingReview: string;
   };
   recommendations: string;
   /** The pgvector recommendation shelf (ForYouShelf). */
@@ -286,6 +293,18 @@ const ja: UIStrings = {
     send: '送信する',
     thanks: 'ご報告ありがとうございます',
     regenerateToast: '解説を作り直しています…',
+    reasonPrompt: '気になる点を選ぶと、AIがその理由に沿って直します',
+    reasons: [
+      { id: 'wrong', label: '事実が違う', instruction: '前回の解説には事実の誤りがあると指摘されました。不確かな内容は断定せず、確かなことだけを述べてください。' },
+      { id: 'long', label: '長すぎる', instruction: '前回の解説は長すぎると指摘されました。要点を絞り、冗長な繰り返しを削ってください。' },
+      { id: 'hard', label: '難しい', instruction: '前回の解説は専門的で難しいと指摘されました。専門用語には短い言い換えを添え、平易な言葉で語ってください。' },
+      { id: 'boring', label: '退屈', instruction: '前回の解説は退屈だと指摘されました。逸話や制作の背景を具体的に語り、聴き手を引き込んでください。' },
+      { id: 'narration', label: '読み上げが不自然', instruction: '前回の解説は読み上げに向かないと指摘されました。記号や括弧を避け、声に出して自然な一文の長さにしてください。' },
+    ],
+    reading: 'AIキュレーターが指摘を読んでいます…',
+    curatorReplied: 'AIキュレーターの回答',
+    noChange: 'AIが確認しましたが、この指摘で直すべき点は見つかりませんでした。解説を作り直すこともできます。',
+    pendingReview: 'この修正案は確認のうえ、次の来訪者の解説に反映されます。',
   },
   recommendations: '💡 次におすすめの作品',
   shelf: {
@@ -423,6 +442,18 @@ const en: UIStrings = {
     send: 'Send',
     thanks: 'Thank you for the report',
     regenerateToast: 'Rewriting the guide…',
+    reasonPrompt: 'Pick what bothered you and the AI rewrites for that reason',
+    reasons: [
+      { id: 'wrong', label: 'A wrong fact', instruction: 'The previous guide was reported to contain a factual error. State only what is certain and avoid asserting anything doubtful.' },
+      { id: 'long', label: 'Too long', instruction: 'The previous guide was reported as too long. Keep the essentials and cut the repetition.' },
+      { id: 'hard', label: 'Too difficult', instruction: 'The previous guide was reported as too technical. Gloss every specialist term and speak plainly.' },
+      { id: 'boring', label: 'Boring', instruction: 'The previous guide was reported as boring. Tell concrete anecdotes and the story behind the work.' },
+      { id: 'narration', label: 'Odd narration', instruction: 'The previous guide was reported as awkward to read aloud. Avoid symbols and brackets, and keep sentences short enough to speak.' },
+    ],
+    reading: 'The AI curator is reading your report…',
+    curatorReplied: 'The AI curator replies',
+    noChange: 'The AI read your report but found nothing to change. You can still have the guide rewritten.',
+    pendingReview: 'This edit will reach the next visitors once it is reviewed.',
   },
   recommendations: '💡 Listen to these next',
   shelf: {
@@ -560,6 +591,18 @@ const fr: UIStrings = {
     send: 'Envoyer',
     thanks: 'Merci pour votre signalement',
     regenerateToast: 'Réécriture du commentaire…',
+    reasonPrompt: 'Choisissez ce qui vous a gêné : l’IA réécrira en conséquence',
+    reasons: [
+      { id: 'wrong', label: 'Fait erroné', instruction: 'Le commentaire précédent contiendrait une erreur factuelle. N’affirmez que ce qui est certain.' },
+      { id: 'long', label: 'Trop long', instruction: 'Le commentaire précédent a été jugé trop long. Gardez l’essentiel et supprimez les répétitions.' },
+      { id: 'hard', label: 'Trop difficile', instruction: 'Le commentaire précédent a été jugé trop technique. Expliquez chaque terme spécialisé et parlez simplement.' },
+      { id: 'boring', label: 'Ennuyeux', instruction: 'Le commentaire précédent a été jugé ennuyeux. Racontez des anecdotes concrètes et l’histoire de l’œuvre.' },
+      { id: 'narration', label: 'Lecture étrange', instruction: 'Le commentaire précédent se lit mal à voix haute. Évitez les symboles et gardez des phrases courtes.' },
+    ],
+    reading: 'Le conservateur IA lit votre signalement…',
+    curatorReplied: 'Réponse du conservateur IA',
+    noChange: 'L’IA a lu votre signalement sans trouver de correction à faire. Vous pouvez tout de même faire réécrire le commentaire.',
+    pendingReview: 'Cette correction sera transmise aux prochains visiteurs après vérification.',
   },
   recommendations: '💡 À écouter ensuite',
   shelf: {
@@ -698,6 +741,18 @@ const zh: UIStrings = {
     send: '发送',
     thanks: '感谢你的反馈',
     regenerateToast: '正在重新生成讲解…',
+    reasonPrompt: '选择你在意的地方，AI 会据此重写',
+    reasons: [
+      { id: 'wrong', label: '事实有误', instruction: '此前的讲解被指出存在事实错误。只讲确定的内容，不要断言不确定的说法。' },
+      { id: 'long', label: '太长', instruction: '此前的讲解被指出太长。保留要点，删去重复。' },
+      { id: 'hard', label: '太难懂', instruction: '此前的讲解被指出过于专业。为专业术语加上简短解释，用平实的语言讲述。' },
+      { id: 'boring', label: '枯燥', instruction: '此前的讲解被指出枯燥。多讲具体的轶事与创作背景，吸引听众。' },
+      { id: 'narration', label: '朗读不自然', instruction: '此前的讲解被指出不适合朗读。避免符号与括号，使用便于朗读的短句。' },
+    ],
+    reading: 'AI 讲解员正在阅读你的反馈…',
+    curatorReplied: 'AI 讲解员的回应',
+    noChange: 'AI 已阅读你的反馈，但没有找到需要修改的地方。你仍然可以重新生成讲解。',
+    pendingReview: '该修改经确认后会呈现给下一位访客。',
   },
   recommendations: '💡 接下来推荐',
   shelf: {
@@ -836,6 +891,18 @@ const es: UIStrings = {
     send: 'Enviar',
     thanks: 'Gracias por avisar',
     regenerateToast: 'Rehaciendo la guía…',
+    reasonPrompt: 'Elige qué te ha chirriado y la IA reescribirá por ese motivo',
+    reasons: [
+      { id: 'wrong', label: 'Dato erróneo', instruction: 'Se ha señalado un error factual en la guía anterior. Afirma solo lo que sea seguro.' },
+      { id: 'long', label: 'Demasiado larga', instruction: 'La guía anterior se consideró demasiado larga. Conserva lo esencial y elimina las repeticiones.' },
+      { id: 'hard', label: 'Difícil', instruction: 'La guía anterior se consideró demasiado técnica. Explica cada término especializado y habla con sencillez.' },
+      { id: 'boring', label: 'Aburrida', instruction: 'La guía anterior se consideró aburrida. Cuenta anécdotas concretas y la historia de la obra.' },
+      { id: 'narration', label: 'Locución rara', instruction: 'La guía anterior no se lee bien en voz alta. Evita símbolos y paréntesis y usa frases cortas.' },
+    ],
+    reading: 'El curador de IA está leyendo tu aviso…',
+    curatorReplied: 'Responde el curador de IA',
+    noChange: 'La IA ha leído tu aviso y no ha encontrado nada que corregir. Aun así puedes rehacer la guía.',
+    pendingReview: 'Esta corrección llegará a las próximas visitas tras revisarse.',
   },
   recommendations: '💡 Escucha estas a continuación',
   shelf: {

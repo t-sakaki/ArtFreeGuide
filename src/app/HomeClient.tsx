@@ -416,6 +416,11 @@ export default function HomeClient({
   const [showReportForm, setShowReportForm] = useState(false);
   const [reportComment, setReportComment] = useState('');
   const [regenerating, setRegenerating] = useState(false);
+  /** The one-tap reason the visitor picked, which also steers a rewrite. */
+  const [reportReason, setReportReason] = useState<string | null>(null);
+  const [reportSending, setReportSending] = useState(false);
+  /** What the curator answered: its own line, or the "nothing to change" note. */
+  const [curatorReply, setCuratorReply] = useState<string | null>(null);
   // Live-stream style hearts: each tap spawns one that drifts up and is then dropped.
   const [hearts, setHearts] = useState<
     { id: number; drift: number; scale: number; tilt: number; duration: number; emoji: string }[]
@@ -1557,7 +1562,9 @@ export default function HomeClient({
     customArtist?: string,
     customMode?: 'short' | 'standard' | 'deep',
     /** Skip both caches and overwrite the archive, after a visitor reported a problem. */
-    refresh = false
+    refresh = false,
+    /** What the visitor disliked, handed to the model when rewriting. */
+    reason = ''
   ) => {
     const targetArtwork = canonicalName(customArtwork ?? artwork);
     const targetArtist = canonicalName(customArtist ?? artist);
@@ -1688,6 +1695,7 @@ export default function HomeClient({
           title: targetArtwork,
           artist: targetArtist,
           refresh,
+          reason,
           locale: activeLocale,
           messages: [
             {
@@ -2051,13 +2059,14 @@ export default function HomeClient({
     }
   };
 
+  /** Returns the curator's own line on the report, when it made an edit. */
   const sendFeedback = async (
     kind: 'good' | 'bad' | 'bug',
     comment = ''
-  ) => {
-    if (!artwork.trim()) return;
+  ): Promise<string | null> => {
+    if (!artwork.trim()) return null;
     try {
-      await fetch('/api/feedback', {
+      const res = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2070,9 +2079,33 @@ export default function HomeClient({
           userId
         })
       });
+      const data = await res.json();
+      return typeof data?.note === 'string' && data.note.trim() ? data.note.trim() : null;
     } catch (e) {
       // Feedback must never interrupt the visit.
       console.warn('Feedback submission failed:', e);
+      return null;
+    }
+  };
+
+  /**
+   * The report is answered by the curator itself: it reads the complaint, edits
+   * the archived guide for the moderation queue, and says what it changed.
+   */
+  const handleSendReport = async () => {
+    if (reportSending) return;
+    const reason = t.feedback.reasons.find(r => r.id === reportReason);
+    const comment = [reason?.label, reportComment.trim()].filter(Boolean).join(' / ');
+    if (!comment) return;
+
+    setReportSending(true);
+    setCuratorReply(null);
+    try {
+      const note = await sendFeedback(reportComment.trim() ? 'bug' : 'bad', comment);
+      setCuratorReply(note ?? t.feedback.noChange);
+      setReportComment('');
+    } finally {
+      setReportSending(false);
     }
   };
 
@@ -2115,8 +2148,11 @@ export default function HomeClient({
     setRegenerating(true);
     setShowReportForm(false);
     triggerToast(t.feedback.regenerateToast);
+    // The picked reason and anything typed become the brief for the rewrite.
+    const reason = t.feedback.reasons.find(r => r.id === reportReason);
+    const brief = [reason?.instruction, reportComment.trim()].filter(Boolean).join('\n');
     try {
-      await generateGuide(canonicalArtwork, canonicalArtist, 'standard', true);
+      await generateGuide(canonicalArtwork, canonicalArtist, 'standard', true, brief);
     } finally {
       setRegenerating(false);
     }
@@ -3065,6 +3101,23 @@ export default function HomeClient({
 
             {showReportForm && (
               <div className="p-3 bg-slate-950/60 border border-slate-900 rounded-xl space-y-2 select-none font-sans">
+                <p className="text-[11px] text-slate-500">{t.feedback.reasonPrompt}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {t.feedback.reasons.map(reason => (
+                    <button
+                      key={reason.id}
+                      onClick={() => setReportReason(prev => (prev === reason.id ? null : reason.id))}
+                      aria-pressed={reportReason === reason.id}
+                      className={`rounded-full border px-3 py-1.5 text-[11px] transition-colors active:scale-95 ${
+                        reportReason === reason.id
+                          ? 'border-teal-400/70 bg-teal-500/15 text-teal-200'
+                          : 'border-slate-800 text-slate-400 hover:border-teal-500/40 hover:text-slate-200'
+                      }`}
+                    >
+                      {reason.label}
+                    </button>
+                  ))}
+                </div>
                 <textarea
                   value={reportComment}
                   onChange={e => setReportComment(e.target.value)}
@@ -3072,9 +3125,32 @@ export default function HomeClient({
                   placeholder={t.feedback.reportPlaceholder}
                   className="w-full bg-slate-950/60 border border-slate-800 focus:border-teal-500/50 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 outline-none scroll-area"
                 />
+
+                {/* The curator answers the report itself, rather than a canned thank-you. */}
+                {(reportSending || curatorReply) && (
+                  <div className="rounded-lg border border-amber-300/25 bg-amber-300/5 px-3 py-2 space-y-1">
+                    <p className="text-[10px] tracking-wider uppercase text-amber-200/70">
+                      {reportSending ? t.feedback.reading : t.feedback.curatorReplied}
+                    </p>
+                    {reportSending ? (
+                      <span className="animate-dig inline-block text-sm">🔍</span>
+                    ) : (
+                      <>
+                        <p className="text-xs text-slate-200 leading-relaxed">{curatorReply}</p>
+                        {curatorReply !== t.feedback.noChange && (
+                          <p className="text-[10px] text-slate-500">{t.feedback.pendingReview}</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <button
-                    onClick={() => setShowReportForm(false)}
+                    onClick={() => {
+                      setShowReportForm(false);
+                      setCuratorReply(null);
+                    }}
                     className="px-3 py-2 text-[11px] text-slate-500 hover:text-slate-300"
                   >
                     {t.feedback.close}
@@ -3087,13 +3163,9 @@ export default function HomeClient({
                     {regenerating ? t.feedback.regenerating : t.feedback.regenerate}
                   </button>
                   <button
-                    onClick={() => {
-                      sendFeedback(reportComment.trim() ? 'bug' : 'bad', reportComment.trim());
-                      setReportComment('');
-                      setShowReportForm(false);
-                      triggerToast(t.feedback.thanks);
-                    }}
-                    className="px-3 py-2 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-lg text-[11px] font-bold active:scale-95"
+                    onClick={handleSendReport}
+                    disabled={reportSending || (!reportReason && !reportComment.trim())}
+                    className="px-3 py-2 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-lg text-[11px] font-bold active:scale-95 disabled:opacity-40"
                   >
                     {t.feedback.send}
                   </button>
