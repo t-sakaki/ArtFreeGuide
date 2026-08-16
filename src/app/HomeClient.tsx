@@ -35,6 +35,8 @@ import GuideCorrections from '@/components/GuideCorrections';
 import AppMenu, { type MenuItem } from '@/components/AppMenu';
 import AccountPanel from '@/components/AccountPanel';
 import PhotoIdentify from '@/components/PhotoIdentify';
+import HintBubble from '@/components/HintBubble';
+import { useFirstRunHints, type HintCandidate } from '@/hooks/useFirstRunHints';
 import ReactMarkdown from 'react-markdown';
 
 interface ArtworkSuggestion {
@@ -644,6 +646,7 @@ export default function HomeClient({
    */
   const changeLocale = (next: Locale) => {
     if (next === locale) return;
+    hints.complete('language');
     localeRef.current = next;
     setLocale(next);
     localStorage.setItem('artfreeguide-locale', next);
@@ -1026,7 +1029,25 @@ export default function HomeClient({
   const selectHotspot = (id: string | null) => {
     setActiveHotspotId(id);
     setHotspotPinned(id !== null);
+    if (id) hints.complete('hotspot');
   };
+
+  /**
+   * Which buttons a first-time visitor could be pointed at right now. Order is
+   * the order of the walkthrough; a step whose button is off screen is skipped.
+   */
+  const hintCandidates = useMemo<HintCandidate[]>(
+    () => [
+      ['artwork', !responseShort && !loading],
+      ['play', Boolean(responseShort) && !hasPlayedOnce],
+      ['hotspot', Boolean(responseShort) && hotspots.length > 0],
+      ['deepDive', Boolean(responseShort)],
+      ['ask', Boolean(responseShort)],
+      ['language', Boolean(responseShort)]
+    ],
+    [responseShort, loading, hasPlayedOnce, hotspots.length]
+  );
+  const hints = useFirstRunHints(hintCandidates);
 
   // A tour keeps going on its own: once narration ends, walk to the next artwork.
   const scheduleTourAdvance = () => {
@@ -1572,6 +1593,8 @@ export default function HomeClient({
 
     if (!targetArtwork.trim()) return;
 
+    hints.complete('artwork');
+
     // Any artwork the tour did not ask for means the visitor stepped off the tour.
     if (tourTargetRef.current && tourTargetRef.current !== `${targetArtwork}::${targetArtist}`) {
       exitTour();
@@ -1907,6 +1930,8 @@ export default function HomeClient({
   const handleDeepDive = async () => {
     if (!artwork.trim() || deepDiveLoading) return;
 
+    hints.complete('deepDive');
+
     setDeepDiveLoading(true);
     // Temporarily pause guide
     setIsPlaying(false);
@@ -2004,6 +2029,8 @@ export default function HomeClient({
   const askQuestion = async (question: string) => {
     const trimmed = question.trim();
     if (!trimmed || !artwork.trim() || askLoading) return;
+
+    hints.complete('ask');
 
     setAskLoading(true);
     setVoiceText(trimmed);
@@ -2162,6 +2189,7 @@ export default function HomeClient({
   const handlePlayPause = () => {
     console.log('[AUDIO] Button Clicked');
     setHasPlayedOnce(true);
+    hints.complete('play');
     
     // 1. Force unlock on user gesture
     AudioController.forceUnlock();
@@ -2297,6 +2325,7 @@ export default function HomeClient({
       onSelect: () => setShowHistorySidebar(true)
     });
     items.push({ id: 'account', icon: '👤', label: t.header.account, onSelect: () => setShowAccount(true) });
+    items.push({ id: 'hints', icon: '💡', label: t.hints.restart, onSelect: hints.restart });
 
     if (adminMode) {
       items.push({
@@ -2482,6 +2511,12 @@ export default function HomeClient({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
           {/* Artwork Input with Autocomplete */}
           <div className="relative space-y-2">
+            <HintBubble
+              show={hints.step === 'artwork'}
+              text={t.hints.artwork}
+              dismissLabel={t.hints.dismiss}
+              onDismiss={hints.dismiss}
+            />
             <label htmlFor="artwork" className="text-sm font-medium text-slate-400 block text-left select-none">{t.form.artworkLabel} <span className="text-rose-500">*</span></label>
             <input
               id="artwork"
@@ -2631,7 +2666,16 @@ export default function HomeClient({
               </button>
             </h1>
 
-            {renderMenu(true)}
+            <div className="relative">
+              <HintBubble
+                show={hints.step === 'language'}
+                text={t.hints.language}
+                placement="below"
+                dismissLabel={t.hints.dismiss}
+                onDismiss={hints.dismiss}
+              />
+              {renderMenu(true)}
+            </div>
           </div>
 
           {/* Large Artwork Thumbnail (fixed) */}
@@ -2668,12 +2712,21 @@ export default function HomeClient({
             )}
 
             {displayImageUrl && (
+              <div className="absolute top-2 right-2">
+                <HintBubble
+                  show={hints.step === 'hotspot'}
+                  text={t.hints.hotspot}
+                  placement="below"
+                  dismissLabel={t.hints.dismiss}
+                  onDismiss={hints.dismiss}
+                />
               <button
                 onClick={() => setShowArtworkViewer(true)}
-                className="absolute top-2 right-2 bg-slate-950/70 hover:bg-slate-950 border border-slate-700 hover:border-teal-500/60 text-slate-300 hover:text-teal-400 rounded-lg px-2 py-1 text-[10px] font-bold font-sans transition-colors"
+                className="bg-slate-950/70 hover:bg-slate-950 border border-slate-700 hover:border-teal-500/60 text-slate-300 hover:text-teal-400 rounded-lg px-2 py-1 text-[10px] font-bold font-sans transition-colors"
               >
                 {hotspots.length > 0 ? t.image.zoomHotspots : t.image.zoom}
               </button>
+              </div>
             )}
 
             {/* Now-playing equaliser overlay */}
@@ -2973,7 +3026,13 @@ export default function HomeClient({
                 ))}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="relative flex items-center gap-2">
+                <HintBubble
+                  show={hints.step === 'ask'}
+                  text={t.hints.ask}
+                  dismissLabel={t.hints.dismiss}
+                  onDismiss={hints.dismiss}
+                />
                 <input
                   value={questionInput}
                   onChange={e => setQuestionInput(e.target.value)}
@@ -3064,10 +3123,17 @@ export default function HomeClient({
                   {heartCount}
                 </span>
               )}
-              <div className="ml-auto flex items-center gap-3">
+              <div className="relative ml-auto flex items-center gap-3">
+                <HintBubble
+                  show={hints.step === 'deepDive'}
+                  text={t.hints.deepDive}
+                  dismissLabel={t.hints.dismiss}
+                  onDismiss={hints.dismiss}
+                />
                 <button
                   key={deepDivePress}
                   onClick={() => {
+                    hints.complete('deepDive');
                     setDeepDivePress(prev => prev + 1);
                     if (explanationMode === 'deep') handleDeepDive();
                     else setExplanationMode('deep');
@@ -3323,11 +3389,12 @@ export default function HomeClient({
             {/* Central Play/Pause button (Enlarged circle) */}
             <div className="relative shrink-0 mx-2">
               {/* Browsers block autoplay, so point at the button until the first tap. */}
-              {!hasPlayedOnce && (
-                <span className="animate-bounce pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap rounded-full bg-teal-500 px-3 py-1 text-[10px] font-bold text-slate-950 shadow-lg font-sans">
-                  {t.player.playHere}
-                </span>
-              )}
+              <HintBubble
+                show={!hasPlayedOnce}
+                text={t.player.playHere}
+                dismissLabel={t.hints.dismiss}
+                onDismiss={hints.dismiss}
+              />
               {/* Halo lives outside the button so it can grow past its edge. */}
               {isPlaying && (
                 <span
