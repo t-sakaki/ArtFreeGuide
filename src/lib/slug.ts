@@ -36,7 +36,7 @@ const BY_TITLE = new Map<string, string>();
 
 for (const title of Object.keys(ARTWORK_NAMES)) {
   const artist = ARTIST_OF.get(title) ?? '';
-  const base = slugify(ARTWORK_NAMES[title].en);
+  const base = slugify(ARTWORK_NAMES[title].en ?? '');
   // A title with no latin form is no better than the query string, and a tour
   // owns its own permalink, so those artworks keep the query string.
   if (!base) continue;

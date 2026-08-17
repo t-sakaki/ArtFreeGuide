@@ -1,10 +1,10 @@
 import { Locale } from './i18n';
 
 /** Copy for the card a shared link unfurls into, in the sharer's language. */
-export const SHARE_META: Record<
+export const SHARE_META: Partial<Record<
   Locale,
   { siteName: string; tagline: string; guide: (artwork: string) => string }
-> = {
+>> = {
   ja: {
     siteName: 'ArtFreeGuide',
     tagline: 'AIキュレーターが贈る、あなたのための特別な音声ガイド。',

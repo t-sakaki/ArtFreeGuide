@@ -14,7 +14,7 @@ import data from './names.data.json';
  * Row order is meaningful: for two spellings of one work the catalogue's own
  * comes last, so a translated name resolves back to it.
  */
-type Translations = Record<Exclude<Locale, 'ja'>, string>;
+type Translations = Partial<Record<Exclude<Locale, 'ja'>, string>>;
 
 interface NameRow extends Translations {
   ja: string;
@@ -28,7 +28,7 @@ interface NameData {
 
 function toMap(rows: NameRow[]): Record<string, Translations> {
   return Object.fromEntries(
-    rows.map(({ ja, en, fr, zh, es }) => [ja, { en, fr, zh, es }])
+    rows.map(({ ja, ...translations }) => [ja, translations])
   );
 }
 
