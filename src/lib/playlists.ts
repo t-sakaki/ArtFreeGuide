@@ -14,7 +14,7 @@ export interface PlaylistItem {
 }
 
 /** Tour wording per language; the `cues` array follows `items` in order. */
-type PlaylistText = Record<Exclude<Locale, 'ja'>, { title: string; subtitle: string; cues: string[] }>;
+type PlaylistText = Partial<Record<Exclude<Locale, 'ja'>, { title: string; subtitle: string; cues: string[] }>>;
 
 export interface Playlist {
   id: string;
@@ -498,7 +498,11 @@ export const PLAYLISTS: Playlist[] = [
 /** A tour with its wording, titles and artists in the visitor's language. */
 export function localizePlaylist(playlist: Playlist, locale: Locale): Playlist {
   if (locale === 'ja') return playlist;
-  const text = playlist.i18n[locale];
+  const text = playlist.i18n[locale] ?? playlist.i18n['en'] ?? {
+    title: playlist.title,
+    subtitle: playlist.subtitle,
+    cues: playlist.items.map(i => i.cue),
+  };
 
   return {
     ...playlist,

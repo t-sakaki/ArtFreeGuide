@@ -402,7 +402,7 @@ export default function HomeClient({
   const [speakableSegments, setSpeakableSegments] = useState<string[]>([]);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState<number>(-1);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState<number>(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE]);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE] ?? 1.0);
   const [speechSupported, setSpeechSupported] = useState(false);
   const [voiceUnavailable, setVoiceUnavailable] = useState(false);
 
@@ -652,7 +652,7 @@ export default function HomeClient({
     localStorage.setItem('artfreeguide-locale', next);
     // Until the visitor picks a speed themselves, follow the language's default.
     if (!localStorage.getItem('art_free_guide_playback_speed')) {
-      setPlaybackSpeed(DEFAULT_PLAYBACK_SPEED[next]);
+      setPlaybackSpeed(DEFAULT_PLAYBACK_SPEED[next] ?? 1.0);
     }
     setGuideCache({});
     if (typeof window !== 'undefined') {
@@ -774,7 +774,7 @@ export default function HomeClient({
     if (!linkSpeed) {
       const savedSpeed = localStorage.getItem('art_free_guide_playback_speed');
       setPlaybackSpeed(
-        savedSpeed ? parseFloat(savedSpeed) : DEFAULT_PLAYBACK_SPEED[localeRef.current]
+        savedSpeed ? parseFloat(savedSpeed) : (DEFAULT_PLAYBACK_SPEED[localeRef.current] ?? 1.0)
       );
     }
 
@@ -1221,7 +1221,7 @@ export default function HomeClient({
     AudioController.speak(
       index,
       cleanText,
-      speedRef.current,
+      speedRef.current ?? 1.0,
       SPEECH_LANG[localeRef.current],
       () => {
         setVoiceUnavailable(false);
