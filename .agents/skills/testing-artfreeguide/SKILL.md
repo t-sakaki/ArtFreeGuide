@@ -123,6 +123,28 @@ Prefer either:
   must depend on `speakableSegments`, since autoplay sets `isPlaying` one render before the segments
   exist. Never judge playback by the icon alone.
 
+## First-run walkthrough hints (HintBubble / useFirstRunHints)
+- Progress is a JSON array of completed step names in `localStorage['afg.hints.v1']`; steps are
+  `['artwork','play','hotspot','deepDive','ask','language']` and only the first on-screen,
+  not-done, not-expired step renders. Reset from the UI: hamburger → 💡「操作ガイドをもう一度」
+  (fr `Revoir la visite guidée`, zh `再看一次操作引导`) — this writes `[]`, no devtools needed.
+- Count bubbles from the DOM instead of by eye; the dismiss button is localized, so query by
+  `aria-label` per locale (ja `案内を閉じる`, fr `Fermer l’astuce`, zh `关闭提示`):
+  `[...document.querySelectorAll('[aria-label="案内を閉じる"]')].map(b=>b.parentElement.textContent)`.
+- Each bubble expires after 60s (`HINT_LIFETIME_MS`). Waiting while writing notes silently advances
+  the walkthrough, and an expired step lets a *later* bubble appear alongside another one — always
+  re-check with 💡 restart before asserting "only one bubble".
+- The play bubble is rendered from `show={!hasPlayedOnce}`, i.e. it is NOT gated on the hint state.
+  Expect it to reappear after any reload (even when all steps are stored as done) until the visitor
+  taps play in that page session. Verify this explicitly; it is the likeliest regression here.
+- Bubbles are `absolute left-1/2 -translate-x-1/2 whitespace-nowrap`, so long locales (fr) clip at the
+  right edge of the image stage for the 見どころ hint and the ✕ can leave the viewport. Prove it
+  numerically rather than visually: compare `el.getBoundingClientRect().right` with
+  `document.documentElement.clientWidth`; `scrollWidth === clientWidth` stays true because the parent
+  hides overflow, so a no-horizontal-scroll check alone does NOT catch clipping.
+- Mobile-width check: DevTools device toolbar (Ctrl+Shift+M) then type the width (375) into the
+  Dimensions field — fine for layout/clipping, but avoid it for rapid-click tests (clicks get swallowed).
+
 ## Useful UI landmarks
 - There is one 「さがす」 hub (`renderBrowseHub`) shared by the landing page and the drawer opened from
   the header 「🔍 さがす」 button: ツアー中バッジ / テーマで巡るツアー / 1作品だけ聴く / 名前で探す / 閲覧履歴.
