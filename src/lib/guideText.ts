@@ -4,7 +4,7 @@
 // screen verbatim. Emphasis the renderer would honour is kept; everything else
 // loses its markers.
 const OUTSIDE_SAFE_BEFORE = /[\s([{"'\u2018\u201c\u2014-]/;
-const OUTSIDE_SAFE_AFTER = /[\s)\]}"'.,;:!?\u2019\u201d\u2014-]/;
+const OUTSIDE_SAFE_AFTER = /[\s)\]}\"'.,;:!?\u2019\u201d\u2014-]/;
 
 const PLACEHOLDER = '\u0000';
 
@@ -42,43 +42,41 @@ export function looksLikeModelScaffolding(text: string): boolean {
   return SCAFFOLDING_PATTERNS.some(pattern => pattern.test(text));
 }
 
+import { sanitizeText } from './sanitizer';
+import type { SanitizeRule } from './ruleManager';
+import L1_RULES from '@/config/sanitizeRules.json';
+
+/** L1 ルール配列を sanitizeText 向けに正規化して返す（パース失敗時は空配列）。 */
+function defaultRules(): SanitizeRule[] {
+  try {
+    const parsed = JSON.parse(JSON.stringify(L1_RULES));
+    if (Array.isArray(parsed.rules)) return parsed.rules as SanitizeRule[];
+  } catch {
+    // ファイル破損時は空配列 — アプリが落ちないようにする
+  }
+  return [];
+}
+
 /**
  * Makes a stored guide safe to display. Models leak JSON escapes (a literal
  * `\n`, sometimes double-escaped) and markdown the renderer cannot honour, and
  * guides written before a prompt fix keep those artefacts forever — so the
  * repair runs on the way to the screen rather than at generation time.
+ *
+ * 実際の除去ロジックは `sanitizer.sanitizeText` に委譲する（ハードコーディングしない）。
  */
 export function sanitizeGuideText(text: string): string {
-  const withoutEscapes = text
-    .replace(/\\{1,2}r\\{1,2}n|\\{1,2}[rn]/g, '\n')
-    .replace(/\\{1,2}t/g, ' ')
-    .replace(/\\{1,2}"/g, '"')
-    .replace(/\\{2,}/g, '\\')
-    .replace(/\\+[ \t]*$/gm, '')
-    .replace(/\r\n?/g, '\n')
-    .replace(/\u0000/g, '');
+  return sanitizeText(text, defaultRules(), { tier: 'standard' });
+}
 
-  const kept: string[] = [];
-  const stripped = protectRenderableEmphasis(withoutEscapes, kept)
-    .split('\n')
-    // Unpaired markers are left over, and they can only render as themselves.
-    // A leading `* ` is a list bullet, so it stays.
-    .map(line => {
-      const bullet = /^([ \t]*)\*[ \t]/.exec(line);
-      const body = bullet ? line.slice(bullet[0].length) : line;
-      return `${bullet ? bullet[0] : ''}${body.replace(/\*+/g, '')}`;
-    })
-    .join('\n');
-
-  return kept
-    .reduce(
-      (current, emphasis, index) =>
-        current.replace(`${PLACEHOLDER}${index}${PLACEHOLDER}`, emphasis),
-      stripped
-    )
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/[ \t]{2,}/g, ' ')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/^[\s"']+|[\s"']+$/g, '')
-    .trim();
+/**
+ * Removes leading greetings that should only appear in the short tier, so
+ * standard and deep guides start directly with the heading and body.
+ *
+ * 実際の除去ロジックは `sanitizer.sanitizeText` の `remove_leading_greeting`
+ * ハンドラに委譲し、挨拶信号語も sanitizeRules.json から動的に受け取る
+ *（ハードコーディングしない）。
+ */
+export function stripLeadingGreeting(text: string): string {
+  return sanitizeText(text, defaultRules().filter(r => r.action === 'remove_leading_greeting'), { tier: 'standard' });
 }

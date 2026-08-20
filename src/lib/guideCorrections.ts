@@ -2,6 +2,8 @@ import { getGuideStore } from '@/lib/guideStore';
 import { DEFAULT_LOCALE, Locale, OUTPUT_LANGUAGE_INSTRUCTION } from '@/lib/i18n';
 import { getLLMProvider } from '@/lib/llm';
 import { createServiceClient } from '@/lib/supabase';
+import { sanitizeText } from '@/lib/sanitizer';
+import { getDefaultRules } from '@/lib/ruleManager';
 
 export const GUIDE_CORRECTIONS_TABLE = 'guide_corrections';
 
@@ -25,23 +27,7 @@ export interface GuideCorrectionRow {
   created_at: string;
 }
 
-/**
- * The report only rewrites `standard` — the tier the reader was listening to.
- *
- * Rewriting all three tiers took the model over a minute, which left the
- * listener staring at a spinner; one tier answers in seconds. `short` and `deep`
- * are left as archived and can be regenerated separately.
- */
-const REVISED_FIELD = 'standard' as const;
-
-/**
- * A rewrite this much shorter than the archive is a summary, not a correction.
- *
- * The light model that answers in seconds tends to compress the passages it was
- * not asked to touch, so a shrunken rewrite is dropped rather than queued.
- */
-const MIN_LENGTH_RATIO = 0.8;
-
+/** 音声ガイドの編集者プロンプト（文化圏別に言語指示を注入）。 */
 function reviserPrompt(locale: Locale): string {
   const language =
     locale === DEFAULT_LOCALE
@@ -70,6 +56,9 @@ function reviserPrompt(locale: Locale): string {
 }`;
 }
 
+/** JSON オブジェクト文字列をパースして Record<string, unknown> を返す。
+ * 前後のノイズに埋もれた JSON でも、最初の { から最後の } までを抽出して解釈する。
+ */
 function parseJsonObject(text: string): Record<string, unknown> | null {
   const first = text.indexOf('{');
   const last = text.lastIndexOf('}');
@@ -92,15 +81,14 @@ export interface ProposalRequest {
   excerpt: string;
 }
 
-/**
- * Turn a reader's complaint into a concrete edit waiting for approval.
+/** 鑑賞者の指摘を元に、音声ガイドの修正案を生成して承認キューに積む。
  *
- * The archived guide is rewritten by the model, but nothing is published here:
- * the rewrite is queued in `guide_corrections`, and only an approval in the
- * admin queue writes it back over the archived guide.
+ * 修正対象は読み手が聴いていたティア（standard）のみ。short/deep は
+ * 別途再生性可能なため、ここでは触らない。修正案は guide_corrections
+ * に pending で保存され、管理画面で承認されるまでアーカイブは変更されない。
  *
- * Returns the queued row, or null when there is nothing to propose (no archived
- * guide, or the model judged the report not actionable).
+ * LLM が JSON フォーマットを壊した場合や、指摘が的外れで変更が必要ない
+ * 場合は null を返す（フィードバック自体は feedback ストア側に保存済み）。
  */
 export async function proposeGuideCorrection(
   request: ProposalRequest
@@ -129,7 +117,7 @@ ${comment}
 ${excerpt || '(未指定)'}
 
 【現在の解説】
-${current[REVISED_FIELD]}`
+${current.standard}`
         }
       ],
       { json: true }
@@ -138,21 +126,30 @@ ${current[REVISED_FIELD]}`
 
   if (!revision || revision.unchanged === true) return null;
 
-  // Keep everything the report has no business touching (searchQuery, music,
-  // recommendations) exactly as archived.
-  const archivedText = current[REVISED_FIELD];
-  const revised = revision[REVISED_FIELD];
-  if (typeof revised !== 'string' || !revised.trim() || revised === archivedText) {
-    return null;
-  }
-  if (
-    typeof archivedText === 'string' &&
-    revised.length < archivedText.length * MIN_LENGTH_RATIO
-  ) {
+  const revised = revision.standard;
+  if (typeof revised !== 'string' || !revised.trim()) {
     return null;
   }
 
-  const proposal: Record<string, unknown> = { ...current, [REVISED_FIELD]: revised };
+  // 標準解説として確定する前に、サニタイザーでテキストを整える。
+  // 除去ロジックは sanitizer.sanitizeText に委譲（ハードコーディングしない）。
+  const rules = getDefaultRules().filter(r => r.action === 'remove_leading_greeting');
+  const sanitized = sanitizeText(revised, rules, { tier: 'standard' });
+
+  // 修正前と全く同じなら提案しない
+  if (sanitized === current.standard) {
+    return null;
+  }
+
+  if (
+    typeof current.standard === 'string' &&
+    sanitized.length < current.standard.length * 0.8
+  ) {
+    // 80% を下回る短縮は要約扱いとし、ガイド修正としては却下
+    return null;
+  }
+
+  const proposal: Record<string, unknown> = { ...current, standard: sanitized };
 
   const { data, error } = await createServiceClient()
     .from(GUIDE_CORRECTIONS_TABLE)

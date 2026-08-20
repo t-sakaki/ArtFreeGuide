@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase';
 import { CORRECTIONS_TABLE } from '@/lib/readingCorrections';
 import { proposeGuideCorrection } from '@/lib/guideCorrections';
 import { DEFAULT_LOCALE, Locale, isLocale } from '@/lib/i18n';
+import { proposeSanitizeRuleFromFeedback } from '@/lib/feedbackRuleProposals';
 
 const KINDS: FeedbackKind[] = ['good', 'bad', 'bug'];
 
@@ -86,7 +87,24 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, store: store.name, proposed, note });
+    // Independent of the guide-correction path, a complaint can also seed a new
+    // sanitize rule proposal (L3). Failures here must not touch the feedback
+    // that was already stored or the guide-correction proposal above.
+    let ruleProposed = false;
+    try {
+      ruleProposed = await proposeSanitizeRuleFromFeedback({
+        title,
+        artist: entry.artist,
+        kind,
+        comment: entry.comment,
+        excerpt: entry.excerpt,
+        locale: typeof rawLocale === 'string' && isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE,
+      });
+    } catch (error) {
+      console.warn('Sanitize rule proposal from feedback failed:', error);
+    }
+
+    return NextResponse.json({ ok: true, store: store.name, proposed, note, ruleProposed });
   } catch (error: any) {
     console.error('Feedback API Route Error:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

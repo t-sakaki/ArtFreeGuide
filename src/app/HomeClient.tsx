@@ -16,7 +16,9 @@ import {
   specFromLegacyMood,
 } from '@/lib/ambient';
 import { PLAYLISTS, Playlist, localizePlaylist } from '@/lib/playlists';
-import { looksLikeModelScaffolding, sanitizeGuideText } from '@/lib/guideText';
+import { looksLikeModelScaffolding } from '@/lib/guideText';
+import { sanitizeText } from '@/lib/sanitizer';
+import { getDefaultRules } from '@/lib/ruleManager';
 import { suggestedQuestions } from '@/lib/questions';
 import { loadDynamicReadings, toSpokenText } from '@/lib/pronunciation';
 import {
@@ -470,6 +472,8 @@ export default function HomeClient({
   /** Artwork the tour expects next; anything else means the visitor left the tour. */
   const tourTargetRef = useRef<string | null>(null);
 
+  const allRules = useMemo(() => () => getDefaultRules(), []);
+
   const narrationProgress =
     speakableSegments.length > 0
       ? Math.min(Math.max(activeSegmentIndex + 1, 0) / speakableSegments.length, 1)
@@ -805,9 +809,9 @@ export default function HomeClient({
               if (!draftArtist) setArtist(entry.artist);
 
               // Restore output states
-              setResponseShort(sanitizeGuideText(entry.short || ''));
-              setResponseStandard(sanitizeGuideText(entry.standard || ''));
-              setResponseDeep(sanitizeGuideText(entry.deep || ''));
+              setResponseShort(sanitizeText(entry.short || '', allRules(), { tier: 'short' }));
+              setResponseStandard(sanitizeText(entry.standard || '', allRules(), { tier: 'standard' }));
+              setResponseDeep(sanitizeText(entry.deep || '', allRules(), { tier: 'deep' }));
               musicSpecRef.current = resolveMusicSpec(entry.music, entry.mood, `${entry.title} ${entry.artist}`);
               setExplanationMode('standard');
               setImageUrl(entry.imageUrl);
@@ -860,9 +864,9 @@ export default function HomeClient({
     localStorage.setItem('art_free_guide_draft_artwork', entry.title);
     localStorage.setItem('art_free_guide_draft_artist', entry.artist);
 
-    setResponseShort(sanitizeGuideText(entry.short || ''));
-    setResponseStandard(sanitizeGuideText(entry.standard || ''));
-    setResponseDeep(sanitizeGuideText(entry.deep || ''));
+    setResponseShort(sanitizeText(entry.short || '', allRules(), { tier: 'short' }));
+    setResponseStandard(sanitizeText(entry.standard || '', allRules(), { tier: 'standard' }));
+    setResponseDeep(sanitizeText(entry.deep || '', allRules(), { tier: 'deep' }));
     musicSpecRef.current = resolveMusicSpec(entry.music, entry.mood, `${entry.title} ${entry.artist}`);
     setExplanationMode('standard');
     setImageUrl(entry.imageUrl);
@@ -1660,9 +1664,9 @@ export default function HomeClient({
     // CHECK CLIENT-SIDE CACHE
     if (guideCache[cacheKey] && !refresh) {
       const cached = guideCache[cacheKey];
-      setResponseShort(sanitizeGuideText(cached.short));
-      setResponseStandard(sanitizeGuideText(cached.standard));
-      setResponseDeep(sanitizeGuideText(cached.deep));
+      setResponseShort(sanitizeText(cached.short, allRules(), { tier: 'short' }));
+      setResponseStandard(sanitizeText(cached.standard, allRules(), { tier: 'standard' }));
+      setResponseDeep(sanitizeText(cached.deep, allRules(), { tier: 'deep' }));
       setExplanationMode(targetMode);
       setImageUrl(cached.imageUrl);
       setImageError(cached.imageError);
@@ -1805,9 +1809,9 @@ export default function HomeClient({
           }
         }
 
-        shortText = sanitizeGuideText(shortText);
-        standardText = sanitizeGuideText(standardText);
-        deepText = sanitizeGuideText(deepText);
+        shortText = sanitizeText(shortText, allRules(), { tier: 'short' });
+        standardText = sanitizeText(standardText, allRules(), { tier: 'standard' });
+        deepText = sanitizeText(deepText, allRules(), { tier: 'deep' });
 
         const resolvedSpec = resolveMusicSpec(music, null, `${targetArtwork} ${targetArtist}`);
         musicSpecRef.current = resolvedSpec;
@@ -1961,7 +1965,7 @@ export default function HomeClient({
         return;
       }
 
-      const episode = sanitizeGuideText(data.answer || '');
+      const episode = sanitizeText(data.answer || '', allRules(), { tier: 'deep' });
       if (!episode || looksLikeModelScaffolding(episode)) {
         triggerToast(t.ask.failed);
         return;
@@ -2057,7 +2061,7 @@ export default function HomeClient({
         return;
       }
 
-      const answer = sanitizeGuideText(data.answer || '');
+      const answer = sanitizeText(data.answer || '', allRules(), { tier: 'deep' });
       if (!answer || looksLikeModelScaffolding(answer)) {
         triggerToast(t.ask.failed);
         return;

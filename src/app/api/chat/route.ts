@@ -2,12 +2,14 @@ import { NextResponse } from 'next/server';
 import { getGuideStore } from '@/lib/guideStore';
 import { DEFAULT_LOCALE, Locale, OUTPUT_LANGUAGE_INSTRUCTION, isLocale } from '@/lib/i18n';
 import { getLLMProvider, Message } from '@/lib/llm';
+import { sanitizeText } from '@/lib/sanitizer';
+import { getDefaultRules } from '@/lib/ruleManager';
 
 const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富な音声ガイド・キュレーターです。
 ユーザーから入力された美術作品（およびその作者）に対して、親しみやすくかつ知的なトーンで、以下の要件を満たす素晴らしい音声ガイドを提供してください。
 
-【ガイドの構成案】
-1. **作品への歓迎と導入**: 作品を目の前にした時のような臨場感のある語りかけから始めます。（例：「こんにちは。今、私たちの目の前にあるのは…」）
+| 【ガイドの構成案】
+1. **作品への導入**: 作品を目の前にした時のような臨場感をもって、作品の概要を簡潔に導入します。
 2. **基本情報**: 作品名、作者、制作年代、使用された技法や素材など。
 3. **視覚的な解説（描写）**: 何が描かれているのか、色彩の使い方、光と影のコントラスト、構図など、ユーザーが作品を見る際の視覚的ポイントを案内します。
 4. **画家の想いや背景**: 画家がこの作品を制作した時の状況、心情、歴史的背景、芸術的意図など。
@@ -22,15 +24,15 @@ short・standard・deep はいずれも指定の文字数を守ってくださ�
 - 専門用語を使う場合は、必ず簡単な補足説明を添えてください。
 
 【出力フォーマットの厳格化】
-必ず指定のJSON構造のみを返してください。会話形式の挨拶、マークダウン記法、余計な前文・後文は一切含めず、純粋なJSONオブジェクト単体としてパース可能なテキストのみを出力してください。
+注意: 出力する解説は、JSON構造のみで構成してください。会話形式の挨拶、マークダウン記法、余計な前文・後文は一切含めず、純粋なJSONオブジェクト単体としてパース可能なテキストのみを出力してください。
 解説本文の装飾は見出し（## 見出し）だけにしてください。** や * による太字・斜体は、日本語のように単語の区切りが空白でない言語では記号がそのまま画面に出てしまうため、使用しないでください。
-改行は実際の改行文字で表し、\\n のようなエスケープ文字列を本文に書かないでください。
+改行は実際の改行文字で表し、\n のようなエスケープ文字列を本文に書かないでください。
 
 【出力スキーマ】
 {
-  "short": "（作品名、作者、制作年などの基本情報を交えた、100〜150文字程度の極めて簡潔な概要解説テキスト。マークダウン記号は含めないでください）",
-  "standard": "（構成案の 1〜5 をすべて含む、600〜900文字程度の標準的な解説テキスト。作品の魅力や構図、色彩、画家の想いを、耳で聴いて2〜3分になる分量で語ってください。見出し（## 見出し）で2〜4節に区切ってください。太字・斜体は使わないでください）",
-  "deep": "（技法、歴史的背景、知られざるエピソードや詳細な裏話を交えた、1000〜1500文字程度の詳細な解説テキスト。standard の繰り返しではなく、そこで触れなかった話題を掘り下げてください。見出し（## 見出し）で3節以上に区切ってください。太字・斜体は使わないでください）",
+  "short": "（作品名、作家、制作年などの基本情報を交え、100〜150文字程度の概要解説テキスト。マークダウン記号は含めないでください）"
+  "standard": "（構成案の 2〜5 を含む、600〜900文字程度の標準的な解説テキスト。作品の魅力や構図、色彩、画家の想いを、耳で聴いて2〜3分になる分量で語ってください。見出し（## 見出し）で2〜4節に区切ってください。太字・斜体は使わないでください）",
+  "deep": "（技法、歴史的背景、知られざるエピソードや詳細な裏話を交えた、1000〜1500文字程度の詳細な解説テキスト。標準解説で触れなかった話題を掘り下げてください。見出し（## 見出し）で3節以上に区切ってください。太字・斜体は使わないでください）"
   "searchQuery": "（Wikimedia Commonsでこの作品の画像を検索するための英語のキーワード。例：'Vincent van Gogh Sunflowers'、'Mona Lisa'）",
   "music": {
     "tonic": "（主音。C, C#, D, D#, E, F, F#, G, G#, A, A#, B のいずれか）",
@@ -95,7 +97,11 @@ function parseGuide(payload: string): { standard: string; deep: string } | null 
   try {
     const parsed = JSON.parse(payload);
     if (!parsed?.short || !parsed?.standard || !parsed?.deep) return null;
-    return { standard: String(parsed.standard), deep: String(parsed.deep) };
+    const rules = getDefaultRules().filter(r => r.action === 'remove_leading_greeting');
+    return {
+      standard: sanitizeText(String(parsed.standard), rules, { tier: 'standard' }),
+      deep: sanitizeText(String(parsed.deep), rules, { tier: 'deep' })
+    };
   } catch {
     return null;
   }
@@ -164,6 +170,35 @@ export async function POST(req: Request) {
       console.warn(`Guide unusable or too short on attempt ${attempt + 1} for "${title}"`);
     }
 
+    // Clean up standard/deep in cleanText so stored and returned JSON has no duplicate leading greetings
+    try {
+      const parsed = JSON.parse(cleanText);
+      if (parsed && typeof parsed === 'object') {
+        let modified = false;
+        if (parsed.standard && typeof parsed.standard === 'string') {
+          const rules = getDefaultRules().filter(r => r.action === 'remove_leading_greeting');
+          const cleaned = sanitizeText(parsed.standard, rules, { tier: 'standard' });
+          if (cleaned !== parsed.standard) {
+            parsed.standard = cleaned;
+            modified = true;
+          }
+        }
+        if (parsed.deep && typeof parsed.deep === 'string') {
+          const rules = getDefaultRules().filter(r => r.action === 'remove_leading_greeting');
+          const cleaned = sanitizeText(parsed.deep, rules, { tier: 'deep' });
+          if (cleaned !== parsed.deep) {
+            parsed.deep = cleaned;
+            modified = true;
+          }
+        }
+        if (modified) {
+          cleanText = JSON.stringify(parsed);
+        }
+      }
+    } catch {
+      // ignore JSON parse failure here
+    }
+
     // A broken payload is still returned — the client salvages what it can —
     // but archiving it would serve the same broken guide to everyone after.
     if (store && isUsableGuide(cleanText)) {
@@ -180,3 +215,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+

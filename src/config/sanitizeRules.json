@@ -1,0 +1,63 @@
+{
+  "$schema": "https://artfreeguide.local/config/sanitizeRules.json",
+  "version": 1,
+  "description": "L1 既定値: アプリケーションの最低限の品質保証を担うコアルール。壊れては困るルールのみをここに置き、削除には明示的なレビューを要する。",
+  "rules": [
+    {
+      "id": "normalize_escape_sequences",
+      "tiers": ["short", "standard", "deep"],
+      "action": "normalize_escapes",
+      "description": "LLM が出力したエスケープ文字列（\\n, \\t, \\\" など）を実際の文字に戻す。JSON 出力が壊れないよう、制御文字は除去する。",
+      "order": 10
+    },
+    {
+      "id": "remove_thinking_blocks",
+      "tiers": ["short", "standard", "deep"],
+      "action": "remove_thinking_blocks",
+      "description": "モデルが思考過程をタグや英語の前置き（'Let's count...' など）で出力するのを防ぐ。",
+      "patterns": [
+        "<\\/?think>",
+        "\\b(Let's|Let us|We need to|Now we need|I need to|Let me)\\b"
+      ],
+      "order": 20
+    },
+    {
+      "id": "remove_leading_double_greeting",
+      "tiers": ["standard", "deep"],
+      "action": "remove_leading_greeting",
+      "description": "standard・deepの冒頭に挨拶が二重に出現するのを防ぐ。shortで既に挨拶しているため、standard・deepの冒頭では挨拶・歓迎の言葉を繰り返さない。",
+      "greeting_signals": [
+        "こんにちは",
+        "こんばんは",
+        "おはようございます",
+        "ようこそ",
+        "Hello",
+        "Welcome",
+        "Bonjour",
+        "Bienvenue",
+        "Hola",
+        "Bienvenidos",
+        "你好",
+        "欢迎",
+        "歡迎"
+      ],
+      "order": 30
+    },
+    {
+      "id": "clean_markdown_unpaired_markers",
+      "tiers": ["short", "standard", "deep"],
+      "action": "clean_markdown",
+      "description": "レンダリングできないマークダウンマーカー（**・*・__・_）を除去する。ただし実際に強調としてレンダリングされるものは保護する。リスト頭の '* ' は維持する。",
+      "protect_renderable_emphasis": true,
+      "order": 50
+    },
+    {
+      "id": "collapse_excessive_newlines",
+      "tiers": ["short", "standard", "deep"],
+      "action": "collapse_whitespace",
+      "description": "連続する空行・空白を整理する。",
+      "max_consecutive_newlines": 2,
+      "order": 90
+    }
+  ]
+}
