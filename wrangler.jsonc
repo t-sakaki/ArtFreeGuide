@@ -28,7 +28,9 @@
 		// one-word change: both column sets are kept populated side by side.
 		"EMBEDDING_PROVIDER": "nvidia",
 		// Where generated guides are archived: "d1" | "supabase" | "memory"
-		"GUIDE_STORE": "d1"
+		"GUIDE_STORE": "d1",
+		// Optional override for the system prompt used in /api/chat
+		"GUIDE_SYSTEM_PROMPT": ""
 	},
 	"d1_databases": [
 		{

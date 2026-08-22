@@ -3,11 +3,11 @@ import { getGuideStore } from '@/lib/guideStore';
 import { DEFAULT_LOCALE, Locale, OUTPUT_LANGUAGE_INSTRUCTION, isLocale } from '@/lib/i18n';
 import { getLLMProvider, Message } from '@/lib/llm';
 
-const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富な音声ガイド・キュレーターです。
+const DEFAULT_CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富な音声ガイド・キュレーターです。
 ユーザーから入力された美術作品（およびその作者）に対して、親しみやすくかつ知的なトーンで、以下の要件を満たす素晴らしい音声ガイドを提供してください。
 
 【ガイドの構成案】
-1. **作品への歓迎と導入**: 作品を目の前にした時のような臨場感のある語りかけから始めます。（例：「こんにちは。今、私たちの目の前にあるのは…」）
+1. **作品の導入と視覚的描写**: 冒頭は作品そのものの描写や、惹きつける導入から始めること。「こんにちは」「ようこそ」「皆様」「視聴者の皆様」「初めまして」などの挨拶は絶対に入れないこと。
 2. **基本情報**: 作品名、作者、制作年代、使用された技法や素材など。
 3. **視覚的な解説（描写）**: 何が描かれているのか、色彩の使い方、光と影のコントラスト、構図など、ユーザーが作品を見る際の視覚的ポイントを案内します。
 4. **画家の想いや背景**: 画家がこの作品を制作した時の状況、心情、歴史的背景、芸術的意図など。
@@ -52,6 +52,9 @@ short・standard・deep はいずれも指定の文字数を守ってくださ�
   ]
 }
 `;
+
+const CURATOR_SYSTEM_PROMPT =
+  process.env.GUIDE_SYSTEM_PROMPT ?? DEFAULT_CURATOR_SYSTEM_PROMPT;
 
 /**
  * The schema instructions stay in Japanese — they are the same for everyone —
@@ -142,7 +145,9 @@ export async function POST(req: Request) {
         return {
           role: 'user',
           content: `${curatorPrompt(locale)}\n\n対象の美術作品情報：\n${msg.content}${
-            revisionNote ? `\n\n【鑑賞者からの指摘】\n${revisionNote}` : ''
+            revisionNote
+              ? `\n\n【鑑賞者からの指摘】\n${revisionNote}\n※【鑑賞者からの指摘】が与えられた場合は、その指摘を確実に反映して再生成すること。特に「挨拶の削除」が指摘されたら、冒頭の挨拶を完全に除くこと。`
+              : ''
           }`
         };
       }
