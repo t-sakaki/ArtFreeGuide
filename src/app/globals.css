@@ -235,20 +235,41 @@
   animation: chipNudge 0.7s ease-in-out;
 }
 
-/* Slow breathing halo around the play button while the guide is speaking */
+/* Dual-layer horizontal audio wave ripples around the play button while speaking */
 @keyframes playPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: scaleX(1.75) scaleY(1.25);
+    opacity: 0;
+  }
+}
+
+@keyframes playPulseDelayed {
   0% {
     transform: scale(1);
     opacity: 0.5;
   }
+  50% {
+    opacity: 0.35;
+  }
   100% {
-    transform: scale(1.45);
+    transform: scaleX(1.9) scaleY(1.35);
     opacity: 0;
   }
 }
 
 .animate-play-pulse {
-  animation: playPulse 2s ease-out infinite;
+  animation: playPulse 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+.animate-play-pulse-delayed {
+  animation: playPulseDelayed 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite 1.1s;
 }
 
 /* Gold gallery light sweeping across the deep-dive chip while it is fetched */
@@ -334,7 +355,8 @@
   .animate-dive-flash,
   .animate-shimmer,
   .animate-dig,
-  .animate-play-pulse {
+  .animate-play-pulse,
+  .animate-play-pulse-delayed {
     animation: none;
   }
 
