@@ -3318,23 +3318,6 @@ export default function HomeClient({
               <span>{Math.max(activeSegmentIndex + 1, 0)} / {speakableSegments.length}</span>
               <div className="flex items-center gap-2">
                 <span>{Math.round(narrationProgress * 100)}%</span>
-              </div>
-            </div>
-            <div
-              className="h-1 w-full bg-slate-900 rounded-full overflow-hidden"
-              role="progressbar"
-              aria-valuenow={Math.round(narrationProgress * 100)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={t.player.position}
-            >
-              <div
-                className="h-full bg-gradient-to-r from-teal-500 to-blue-500 transition-all duration-500"
-                style={{ width: `${narrationProgress * 100}%` }}
-              />
-            </div>
-          </div>
-            {/* 2. ⚡ マグネティック・アナログ倍速スライダー ＆ ポップアップ（右側） */}
             <div className="relative shrink-0 flex items-center">
               <button
                 type="button"
@@ -3481,6 +3464,23 @@ export default function HomeClient({
                 })()
               )}
             </div>
+              </div>
+            </div>
+            <div
+              className="h-1 w-full bg-slate-900 rounded-full overflow-hidden"
+              role="progressbar"
+              aria-valuenow={Math.round(narrationProgress * 100)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={t.player.position}
+            >
+              <div
+                className="h-full bg-gradient-to-r from-teal-500 to-blue-500 transition-all duration-500"
+                style={{ width: `${narrationProgress * 100}%` }}
+              />
+            </div>
+          </div>
+            {/* 2. ⚡ マグネティック・アナログ倍速スライダー ＆ ポップアップ（右側） */}
 
           <div className="flex items-center justify-between w-full max-w-lg mx-auto px-1 font-sans">
             {/* Prev Artwork in History */}
