@@ -28,6 +28,24 @@ describe('sanitizeGuideText and stripLeadingGreeting', () => {
     expect(sanitizeGuideText(text)).toBe(text);
   });
 
+  it('strips prompt scaffolding section titles and repeated greetings across sections', () => {
+    const raw = `こんにちは。
+今、私たちの目の前にあるのは、ラファエロ・サンティが1512年から1513年に油彩で描いた『システィーナの聖母』です。
+聖母マリアと幼いイエス、そして下部に二人並ぶ天使が描かれています。
+作品への歓迎と導入
+こんにちは。
+今、私たちの目の前にあるのは、ラファエロ・サンティが1512年から1513年に油彩で描いた『システィーナの聖母』です。
+聖母マリアが青いマントをまとい、幼いイエスを抱きしめながら、柔らかな微笑みを浮かべています。
+基本情報と視覚的解説
+作品名は『システィーナの聖母』、作者はラファエロ・サンティ。`;
+
+    const cleaned = sanitizeGuideText(raw);
+    expect(cleaned).not.toContain('こんにちは');
+    expect(cleaned).not.toContain('作品への歓迎と導入');
+    expect(cleaned).not.toContain('基本情報と視覚的解説');
+    expect(cleaned).toContain('今、私たちの目の前にあるのは、ラファエロ・サンティが1512年から1513年に油彩で描いた『システィーナの聖母』です。');
+  });
+
   it('strips English greetings', () => {
     expect(sanitizeGuideText('Hello, this guide explores Starry Night.', 'en')).toBe(
       'this guide explores Starry Night.'

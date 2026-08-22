@@ -56,6 +56,10 @@ const GREETING_PATTERNS: Record<string, RegExp> = {
 const COMBINED_GREETING_PATTERN =
   /^[　\s]*(こんにちは|こんばんは|ようこそ|皆様|視聴者の皆様|初めまして|はじめまして|hello|hi|welcome|dear listeners|greetings|bonjour|bonsoir|bienvenue|salut|你好|欢迎|您好|hola|bienvenido|hallo|guten tag|willkommen|ciao|buongiorno|benvenuto|안녕하세요|환영합니다)[。、，,.!！?？]?[　\s]*/i;
 
+// Scaffolding section header titles from the system prompt template that models occasionally leak
+const PROMPT_SECTION_TITLES =
+  /^[　\s]*(?:[0-9]+[.\s]*)?(?:##\s*)?(?:\*\*)?(?:作品への歓迎と導入|作品の導入と視覚的描写|基本情報と視覚的解説|基本情報|視覚的な解説(?:（描写）)?|画家の想いや背景|鑑賞のヒント)(?:\*\*)?[：:]?[　\s]*$/gm;
+
 export function stripLeadingGreeting(text: string, locale?: string): string {
   if (!text) return text;
   const pattern = (locale && GREETING_PATTERNS[locale]) || COMBINED_GREETING_PATTERN;
@@ -64,10 +68,10 @@ export function stripLeadingGreeting(text: string, locale?: string): string {
 
 /**
  * Makes a stored guide safe to display. Models leak JSON escapes (a literal
- * `\n`, sometimes double-escaped), introductory greetings ("こんにちは"), and
- * markdown the renderer cannot honour, and guides written before a prompt fix
- * keep those artefacts forever — so the repair runs on the way to the screen
- * rather than at generation time.
+ * `\n`, sometimes double-escaped), introductory greetings ("こんにちは"),
+ * prompt scaffolding section titles, and markdown the renderer cannot honour.
+ * Guides written before a prompt fix keep those artefacts forever — so the
+ * repair runs on the way to the screen rather than at generation time.
  */
 export function sanitizeGuideText(text: string, locale?: string): string {
   const withoutEscapes = text
@@ -79,7 +83,16 @@ export function sanitizeGuideText(text: string, locale?: string): string {
     .replace(/\r\n?/g, '\n')
     .replace(/\u0000/g, '');
 
-  const withoutGreeting = stripLeadingGreeting(withoutEscapes, locale);
+  // 1. Remove prompt scaffolding section headers if leaked into the text
+  const withoutScaffolding = withoutEscapes.replace(PROMPT_SECTION_TITLES, '');
+
+  // 2. Strip greetings at line/paragraph starts as well as text start
+  const greetingPattern = (locale && GREETING_PATTERNS[locale]) || COMBINED_GREETING_PATTERN;
+  const flags = new Set(greetingPattern.flags.split(''));
+  flags.add('g');
+  flags.add('m');
+  const multilineGreeting = new RegExp(greetingPattern.source, Array.from(flags).join(''));
+  const withoutGreeting = withoutScaffolding.replace(multilineGreeting, '');
 
   const kept: string[] = [];
   const stripped = protectRenderableEmphasis(withoutGreeting, kept)
