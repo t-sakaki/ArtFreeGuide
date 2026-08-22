@@ -434,6 +434,14 @@ export default function HomeClient({
   const heartIdRef = useRef(0);
   const heartBurstRef = useRef(0);
   const heartSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Playback speed popover auto-dismiss timer on idle (数秒後に自動で閉じるタイマー)
+  const speedMenuTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resetSpeedMenuTimer = () => {
+    if (speedMenuTimerRef.current) clearTimeout(speedMenuTimerRef.current);
+    speedMenuTimerRef.current = setTimeout(() => {
+      setShowSpeedMenu(false);
+    }, 1800);
+  };
   // Browsers need a gesture before speech works, so the play button is signposted
   // until playback has started, however it started.
   const [hasPlayedOnce, setHasPlayedOnce] = useState(false);
@@ -3310,42 +3318,6 @@ export default function HomeClient({
               <span>{Math.max(activeSegmentIndex + 1, 0)} / {speakableSegments.length}</span>
               <div className="flex items-center gap-2">
                 <span>{Math.round(narrationProgress * 100)}%</span>
-                <div className="relative">
-                  <button
-                    onClick={() => setShowSpeedMenu(!showSpeedMenu)}
-                    className="flex flex-col items-center justify-center gap-1 text-teal-400 hover:text-teal-350 transition-all active:scale-90"
-                    title={t.player.speed}
-                  >
-                    <span className="text-lg leading-none">⚡</span>
-                    <span className="text-[8px] sm:text-[9px] font-mono font-bold truncate max-w-full">{playbackSpeed.toFixed(1)}x</span>
-                  </button>
-
-                  {/* Smart Speed Selector Popover */}
-                  {showSpeedMenu && (
-                    <div className="absolute bottom-9 right-0 bg-slate-950 border border-slate-850 rounded-2xl p-2 flex flex-col gap-1 shadow-2xl z-50 min-w-[70px] animate-fade-in">
-                      {[1.0, 1.2, 1.5, 1.7, 2.0, 2.5].map(sp => {
-                        const isSelected = playbackSpeed === sp;
-                        return (
-                          <button
-                            key={sp}
-                            onClick={() => {
-                              setPlaybackSpeed(sp);
-                              localStorage.setItem('art_free_guide_playback_speed', String(sp));
-                              setShowSpeedMenu(false);
-                            }}
-                            className={`py-2 text-[11px] font-mono font-bold rounded-lg transition-all text-center active:scale-95 ${
-                              isSelected
-                                ? 'bg-teal-500 text-slate-950 font-black'
-                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-                            }`}
-                          >
-                            {sp.toFixed(1)}x
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
             <div
@@ -3362,6 +3334,153 @@ export default function HomeClient({
               />
             </div>
           </div>
+            {/* 2. ⚡ マグネティック・アナログ倍速スライダー ＆ ポップアップ（右側） */}
+            <div className="relative shrink-0 flex items-center">
+              <button
+                type="button"
+                onClick={() => setShowSpeedMenu(!showSpeedMenu)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900/80 hover:bg-slate-900 text-teal-400 hover:text-teal-350 transition-all active:scale-90 border border-slate-800/60"
+                title={t.player.speed}
+              >
+                <span className="text-xs">⚡</span>
+                <span className="text-[10px] font-mono font-bold">{playbackSpeed.toFixed(1)}x</span>
+              </button>
+
+              {/* 🎚️ ウルトラミニマル縦型マグネティック・アナログ倍速スライダー */}
+              {showSpeedMenu && (
+                (() => {
+                  const recommendedSpeed = locale === 'ja' ? 1.7 : 1.2;
+                  const snapNotches = [2.5, 2.0, 1.7, 1.5, 1.2, 1.0, 0.8]; // 逆順（上が高速2.5x、下が低速0.8x）
+
+                  const snapSpeed = (rawVal: number): number => {
+                    const clamped = Math.max(0.8, Math.min(2.5, rawVal));
+                    // おすすめ速度付近（±0.10）は強力に吸い付く
+                    if (Math.abs(clamped - recommendedSpeed) <= 0.10) {
+                      return recommendedSpeed;
+                    }
+                    // 各目盛り付近（±0.055）に吸い付く
+                    for (const notch of snapNotches) {
+                      if (Math.abs(clamped - notch) <= 0.055) {
+                        return notch;
+                      }
+                    }
+                    // 途中の値は0.05刻みのアナログ
+                    return Math.round(clamped * 20) / 20;
+                  };
+
+                  // 0.8x〜2.5x における現在の高さパーセンテージ（0%〜100%）
+                  const currentPercent = Math.max(0, Math.min(100, ((playbackSpeed - 0.8) / (2.5 - 0.8)) * 100));
+
+                  const updateSpeedFromPointerY = (clientY: number, trackEl: HTMLDivElement) => {
+                    const rect = trackEl.getBoundingClientRect();
+                    const clampedY = Math.max(0, Math.min(rect.height, rect.bottom - clientY));
+                    const ratio = clampedY / rect.height; // 0.0 (bottom) to 1.0 (top)
+                    const raw = 0.8 + ratio * (2.5 - 0.8);
+                    const snapped = snapSpeed(raw);
+                    setPlaybackSpeed(snapped);
+                    localStorage.setItem('art_free_guide_playback_speed', String(snapped));
+                  };
+
+                  return (
+                    <>
+                      {/* 枠外タップで閉じる透明バックドロップ */}
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowSpeedMenu(false)}
+                        aria-hidden="true"
+                      />
+
+                      <div className="absolute bottom-full mb-2.5 right-0 bg-slate-950/95 backdrop-blur-md border border-slate-800/90 rounded-2xl p-3 shadow-2xl z-50 w-36 animate-fade-in font-sans select-none space-y-2.5">
+                        {/* ヘッダー */}
+                        <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5 px-0.5">
+                          <span className="font-bold text-[11px] text-teal-300 flex items-center gap-1">
+                            <span>⚡</span> {t.player.speed}
+                          </span>
+                          <span className="font-mono font-black text-amber-300 text-xs bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded-lg">
+                            {playbackSpeed.toFixed(2)}x
+                          </span>
+                        </div>
+
+                        {/* 縦型スライダー ＆ 目盛り線エリア */}
+                        <div className="flex items-center justify-between px-1 py-0.5">
+                          {/* 左側：目盛り線と数値（クリックで即ジャンプして閉じる） */}
+                          <div className="flex flex-col justify-between h-40 py-0.5 pr-1.5">
+                            {snapNotches.map(notch => {
+                              const isSelected = Math.abs(playbackSpeed - notch) < 0.03;
+                              const isRecommended = Math.abs(notch - recommendedSpeed) < 0.01;
+                              return (
+                                <button
+                                  key={notch}
+                                  type="button"
+                                  onClick={() => {
+                                    setPlaybackSpeed(notch);
+                                    localStorage.setItem('art_free_guide_playback_speed', String(notch));
+                                    setShowSpeedMenu(false);
+                                  }}
+                                  className={`flex items-center gap-1.5 text-left text-[11px] font-mono transition-all active:scale-95 ${
+                                    isSelected
+                                      ? 'text-teal-300 font-black'
+                                      : isRecommended
+                                        ? 'text-amber-300 font-bold'
+                                        : 'text-slate-500 hover:text-slate-300'
+                                  }`}
+                                >
+                                  <span className={`w-1.5 h-0.5 rounded-full ${isSelected ? 'bg-teal-400' : isRecommended ? 'bg-amber-400' : 'bg-slate-700'}`} />
+                                  <span>{notch.toFixed(1)}x</span>
+                                  {isRecommended && (
+                                    <span className="text-[9px] text-amber-400 font-bold leading-none">★</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* 右側：縦型トラックレール ＆ スライドノブ */}
+                          <div
+                            className="relative h-40 w-8 flex items-center justify-center cursor-pointer touch-none"
+                            onPointerDown={e => {
+                              if (speedMenuTimerRef.current) clearTimeout(speedMenuTimerRef.current);
+                              const track = e.currentTarget;
+                              track.setPointerCapture(e.pointerId);
+                              updateSpeedFromPointerY(e.clientY, track);
+                            }}
+                            onPointerMove={e => {
+                              if (e.buttons === 1) {
+                                updateSpeedFromPointerY(e.clientY, e.currentTarget);
+                                resetSpeedMenuTimer();
+                              }
+                            }}
+                            onPointerUp={() => {
+                              resetSpeedMenuTimer();
+                            }}
+                            onPointerCancel={() => {
+                              resetSpeedMenuTimer();
+                            }}
+                          >
+                            {/* 縦レール背景 */}
+                            <div className="relative w-2 h-full bg-slate-900 border border-slate-800 rounded-full overflow-hidden">
+                              {/* 塗りつぶしグラデーション */}
+                              <div
+                                className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-teal-600 to-teal-400 rounded-full transition-all duration-75"
+                                style={{ height: `${currentPercent}%` }}
+                              />
+                            </div>
+
+                            {/* スライドノブ（ツマミ） */}
+                            <div
+                              className="absolute left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-slate-950 border-2 border-teal-400 shadow-[0_0_10px_rgba(45,212,191,0.7)] flex items-center justify-center pointer-events-none transition-all duration-75"
+                              style={{ bottom: `calc(${currentPercent}% - 12px)` }}
+                            >
+                              <div className="w-1.5 h-1.5 rounded-full bg-teal-300 animate-pulse" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()
+              )}
+            </div>
 
           <div className="flex items-center justify-between w-full max-w-lg mx-auto px-1 font-sans">
             {/* Prev Artwork in History */}
