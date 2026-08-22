@@ -306,6 +306,27 @@
   animation: digWiggle 0.75s ease-in-out infinite;
 }
 
+/* Seamless infinite ticker marquee for question suggestions */
+@keyframes tickerMarquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-ticker-marquee {
+  display: flex;
+  width: max-content;
+  animation: tickerMarquee 26s linear infinite;
+}
+
+.animate-ticker-marquee:hover,
+.animate-ticker-marquee:active {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-ken-burns,
   .animate-equalizer,

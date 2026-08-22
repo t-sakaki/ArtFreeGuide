@@ -212,7 +212,7 @@ class AudioController {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         try {
           window.speechSynthesis.resume(); // Ensure speaking state is active
-        } catch (e) {}
+        } catch (e) { }
       }
 
       // The reading dictionary is Japanese-only; it only affects what is spoken,
@@ -402,7 +402,7 @@ export default function HomeClient({
   const [speakableSegments, setSpeakableSegments] = useState<string[]>([]);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState<number>(-1);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState<number>(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE] ?? 1.0);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE] ?? 1.7);
   const [speechSupported, setSpeechSupported] = useState(false);
   const [voiceUnavailable, setVoiceUnavailable] = useState(false);
 
@@ -434,6 +434,42 @@ export default function HomeClient({
   const heartIdRef = useRef(0);
   const heartBurstRef = useRef(0);
   const heartSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Browsers need a gesture before speech works, so the play button is signposted
+  // until playback has started, however it started.
+  const [hasPlayedOnce, setHasPlayedOnce] = useState(false);
+  // Once the narration is over the question chips take turns wobbling to invite a tap.
+  const [narrationDone, setNarrationDone] = useState(false);
+  const [nudgedChip, setNudgedChip] = useState(-1);
+  const [showQuestionSuggestions, setShowQuestionSuggestions] = useState(false);
+
+  // Marquee drag state to distinguish tap from drag on PC
+  const isDraggingMarqueeRef = useRef(false);
+  const marqueeStartXRef = useRef(0);
+  const marqueeScrollLeftRef = useRef(0);
+  const marqueeHasMovedRef = useRef(false);
+  const marqueeTrackRef = useRef<HTMLDivElement | null>(null);
+
+  const handleMarqueePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!marqueeTrackRef.current) return;
+    isDraggingMarqueeRef.current = true;
+    marqueeStartXRef.current = e.clientX;
+    marqueeScrollLeftRef.current = marqueeTrackRef.current.scrollLeft;
+    marqueeHasMovedRef.current = false;
+  };
+
+  const handleMarqueePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingMarqueeRef.current || !marqueeTrackRef.current) return;
+    const dx = e.clientX - marqueeStartXRef.current;
+    if (Math.abs(dx) > 5) {
+      marqueeHasMovedRef.current = true;
+      marqueeTrackRef.current.scrollLeft = marqueeScrollLeftRef.current - dx;
+    }
+  };
+
+  const handleMarqueePointerUp = () => {
+    isDraggingMarqueeRef.current = false;
+  };
+
   // Playback speed popover auto-dismiss timer on idle (数秒後に自動で閉じるタイマー)
   const speedMenuTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resetSpeedMenuTimer = () => {
@@ -442,12 +478,6 @@ export default function HomeClient({
       setShowSpeedMenu(false);
     }, 1800);
   };
-  // Browsers need a gesture before speech works, so the play button is signposted
-  // until playback has started, however it started.
-  const [hasPlayedOnce, setHasPlayedOnce] = useState(false);
-  // Once the narration is over the question chips take turns wobbling to invite a tap.
-  const [narrationDone, setNarrationDone] = useState(false);
-  const [nudgedChip, setNudgedChip] = useState(-1);
 
   // Ambient Sound States
   const [ambientName, setAmbientName] = useState<string | null>(null);
@@ -478,6 +508,7 @@ export default function HomeClient({
   /** Artwork the tour expects next; anything else means the visitor left the tour. */
   const tourTargetRef = useRef<string | null>(null);
 
+
   const narrationProgress =
     speakableSegments.length > 0
       ? Math.min(Math.max(activeSegmentIndex + 1, 0) / speakableSegments.length, 1)
@@ -500,7 +531,7 @@ export default function HomeClient({
   const localeRef = useRef<Locale>(DEFAULT_LOCALE);
   localeRef.current = locale;
   const isPlayingRef = useRef(false);
-  const speedRef = useRef(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE]);
+  const speedRef = useRef(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE] ?? 1.7);
   const activeIndexRef = useRef(-1);
   const speakableSegmentsRef = useRef<string[]>([]);
   /** `index::text` of the segment already handed to the speech engine. */
@@ -660,7 +691,7 @@ export default function HomeClient({
     localStorage.setItem('artfreeguide-locale', next);
     // Until the visitor picks a speed themselves, follow the language's default.
     if (!localStorage.getItem('art_free_guide_playback_speed')) {
-      setPlaybackSpeed(DEFAULT_PLAYBACK_SPEED[next] ?? 1.0);
+      setPlaybackSpeed(DEFAULT_PLAYBACK_SPEED[next] ?? 1.2);
     }
     setGuideCache({});
     if (typeof window !== 'undefined') {
@@ -782,7 +813,7 @@ export default function HomeClient({
     if (!linkSpeed) {
       const savedSpeed = localStorage.getItem('art_free_guide_playback_speed');
       setPlaybackSpeed(
-        savedSpeed ? parseFloat(savedSpeed) : (DEFAULT_PLAYBACK_SPEED[localeRef.current] ?? 1.0)
+        savedSpeed ? parseFloat(savedSpeed) : (DEFAULT_PLAYBACK_SPEED[localeRef.current] ?? 1.7)
       );
     }
 
@@ -834,7 +865,7 @@ export default function HomeClient({
         try {
           const parsedHistory = JSON.parse(savedHistoryStr) as HistoryEntry[];
           setHistory(parsedHistory);
-        } catch (e) {}
+        } catch (e) { }
       }
     }
   }, []);
@@ -863,7 +894,7 @@ export default function HomeClient({
     const entry = history[index];
     setArtwork(entry.title);
     setArtist(entry.artist);
-    
+
     // Save draft artwork/artist as well so session state is consistent
     localStorage.setItem('art_free_guide_draft_artwork', entry.title);
     localStorage.setItem('art_free_guide_draft_artist', entry.artist);
@@ -901,7 +932,7 @@ export default function HomeClient({
     if (!text) return [];
     const splitList: string[] = [];
     let current = '';
-    
+
     for (let i = 0; i < text.length; i++) {
       const char = text[i];
       current += char;
@@ -983,29 +1014,32 @@ export default function HomeClient({
     [canonicalArtwork, canonicalArtist, locale]
   );
 
-  // After the guide falls silent, nudge each chip in turn a couple of rounds and stop.
+  // 💡サジェスト展開時、または解説終了後に質問チップを順番にゆらゆら揺らす
   useEffect(() => {
-    // A tour is already moving on to the next artwork, so stay out of the way.
-    if (!narrationDone || isPlaying || askLoading || nextUpCue || questionChips.length === 0) {
+    if (askLoading || nextUpCue || questionChips.length === 0) {
       setNudgedChip(-1);
       return;
     }
+
+    // 展開中、またはナレーション完了後のアイドル時に揺らす
+    const shouldNudge = showQuestionSuggestions || (narrationDone && !isPlaying);
+    if (!shouldNudge) {
+      setNudgedChip(-1);
+      return;
+    }
+
     let step = 0;
-    const total = questionChips.length * 2;
+    // 順番にゆらゆら揺らすタイマー
     const timer = setInterval(() => {
-      if (step >= total) {
-        setNudgedChip(-1);
-        clearInterval(timer);
-        return;
-      }
       setNudgedChip(step % questionChips.length);
       step += 1;
-    }, 900);
+    }, 800);
+
     return () => {
       clearInterval(timer);
       setNudgedChip(-1);
     };
-  }, [narrationDone, isPlaying, askLoading, nextUpCue, questionChips]);
+  }, [showQuestionSuggestions, narrationDone, isPlaying, askLoading, nextUpCue, questionChips]);
 
   // Curated viewing points for the artwork on screen, if we have measured any.
   const hotspotSet = useMemo(() => {
@@ -1229,7 +1263,7 @@ export default function HomeClient({
     AudioController.speak(
       index,
       cleanText,
-      speedRef.current ?? 1.0,
+      speedRef.current,
       SPEECH_LANG[localeRef.current],
       () => {
         setVoiceUnavailable(false);
@@ -1451,7 +1485,7 @@ export default function HomeClient({
     }
     setShowArtworkSuggestions(false);
     setFocusedArtworkIndex(-1);
-    
+
     // Auto transition to guide generation on select!
     generateGuide(suggestion.title, targetArtist);
     onSubmitted?.();
@@ -1696,7 +1730,7 @@ export default function HomeClient({
       // Synced Navigation State in History
       const idx = history.findIndex(
         h => h.title.trim().toLowerCase() === targetArtwork.trim().toLowerCase() &&
-             (h.artist || '').trim().toLowerCase() === (targetArtist || '').trim().toLowerCase()
+          (h.artist || '').trim().toLowerCase() === (targetArtist || '').trim().toLowerCase()
       );
       if (idx !== -1) {
         setHistoryIndex(idx);
@@ -1732,9 +1766,8 @@ export default function HomeClient({
             {
               role: 'user',
               // The model is given the name as its own language writes it.
-              content: `作品名: ${localizeName(targetArtwork, activeLocale)}${
-                targetArtist ? `, 作者: ${localizeName(targetArtist, activeLocale)}` : ''
-              }。この作品について詳しく解説してください。`
+              content: `作品名: ${localizeName(targetArtwork, activeLocale)}${targetArtist ? `, 作者: ${localizeName(targetArtist, activeLocale)}` : ''
+                }。この作品について詳しく解説してください。`
             }
           ]
         }),
@@ -1803,7 +1836,7 @@ export default function HomeClient({
           if (matchDeep && matchDeep[1]) {
             deepText = matchDeep[1];
           }
-          
+
           if (!shortText) {
             if (data.text.trim().startsWith('{')) {
               shortText = UI[activeLocale].guide.parseError;
@@ -1836,7 +1869,7 @@ export default function HomeClient({
           recommendations: recs,
           music: resolvedSpec
         };
-        
+
         setGuideCache(prev => ({ ...prev, [cacheKey]: newEntry }));
 
         // Append to/update History
@@ -1856,7 +1889,7 @@ export default function HomeClient({
 
         const existingIndex = history.findIndex(
           h => h.title.trim().toLowerCase() === targetArtwork.trim().toLowerCase() &&
-               (h.artist || '').trim().toLowerCase() === (targetArtist || '').trim().toLowerCase()
+            (h.artist || '').trim().toLowerCase() === (targetArtist || '').trim().toLowerCase()
         );
 
         if (existingIndex !== -1) {
@@ -2005,7 +2038,7 @@ export default function HomeClient({
     if (!recognition) return;
     setIsListening(true);
     setVoiceText('');
-    
+
     // Pause BGM & Guide Synthesis
     setIsPlaying(false);
     AudioController.clearQueue();
@@ -2198,7 +2231,7 @@ export default function HomeClient({
     console.log('[AUDIO] Button Clicked');
     setHasPlayedOnce(true);
     hints.complete('play');
-    
+
     // 1. Force unlock on user gesture
     AudioController.forceUnlock();
 
@@ -2211,7 +2244,7 @@ export default function HomeClient({
           tempCtx.resume();
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     if (!speechSupported || speakableSegments.length === 0) return;
 
@@ -2357,11 +2390,10 @@ export default function HomeClient({
           aria-label={entry.label}
           aria-current={entry.locale === locale}
           title={entry.label}
-          className={`flex-1 py-1.5 rounded-lg text-sm transition-colors ${
-            entry.locale === locale
-              ? 'bg-teal-500/15 border border-teal-500/40'
-              : 'border border-transparent hover:bg-slate-900 opacity-60 hover:opacity-100'
-          }`}
+          className={`flex-1 py-1.5 rounded-lg text-sm transition-colors ${entry.locale === locale
+            ? 'bg-teal-500/15 border border-teal-500/40'
+            : 'border border-transparent hover:bg-slate-900 opacity-60 hover:opacity-100'
+            }`}
         >
           {entry.flag}
         </button>
@@ -2425,22 +2457,22 @@ export default function HomeClient({
             {PLAYLISTS.map(canonicalTour => {
               const tour = localizePlaylist(canonicalTour, locale);
               return (
-              <button
-                key={tour.id}
-                onClick={pick(() => startTour(canonicalTour))}
-                className="bg-slate-900/40 border border-slate-800 hover:border-teal-500/40 hover:bg-slate-900/70 rounded-2xl px-4 py-3 text-left active:scale-95 transition-all shadow-md font-sans group"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl shrink-0">{tour.emoji}</span>
-                  <div className="min-w-0">
-                    <span className="block text-sm font-bold text-slate-100 truncate group-hover:text-teal-400 transition-colors">
-                      {tour.title}
-                    </span>
-                    <span className="block text-[11px] text-slate-500 truncate">{tour.subtitle}</span>
-                    <span className="block text-[10px] text-teal-500/80 mt-1">{t.hub.tourItems(tour.items.length)}</span>
+                <button
+                  key={tour.id}
+                  onClick={pick(() => startTour(canonicalTour))}
+                  className="bg-slate-900/40 border border-slate-800 hover:border-teal-500/40 hover:bg-slate-900/70 rounded-2xl px-4 py-3 text-left active:scale-95 transition-all shadow-md font-sans group"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl shrink-0">{tour.emoji}</span>
+                    <div className="min-w-0">
+                      <span className="block text-sm font-bold text-slate-100 truncate group-hover:text-teal-400 transition-colors">
+                        {tour.title}
+                      </span>
+                      <span className="block text-[11px] text-slate-500 truncate">{tour.subtitle}</span>
+                      <span className="block text-[10px] text-teal-500/80 mt-1">{t.hub.tourItems(tour.items.length)}</span>
+                    </div>
                   </div>
-                </div>
-              </button>
+                </button>
               );
             })}
           </div>
@@ -2549,11 +2581,10 @@ export default function HomeClient({
                   <li
                     key={index}
                     onMouseDown={() => selectArtworkSuggestion(suggestion, onSubmitted)}
-                    className={`px-4 py-3.5 cursor-pointer text-sm transition-all flex items-center justify-between font-sans ${
-                      focusedArtworkIndex === index
-                        ? 'bg-teal-500/10 text-teal-400 font-bold'
-                        : 'hover:bg-slate-900/80 text-slate-300'
-                    }`}
+                    className={`px-4 py-3.5 cursor-pointer text-sm transition-all flex items-center justify-between font-sans ${focusedArtworkIndex === index
+                      ? 'bg-teal-500/10 text-teal-400 font-bold'
+                      : 'hover:bg-slate-900/80 text-slate-300'
+                      }`}
                   >
                     <div className="text-left flex items-center gap-2">
                       {suggestion.isInstant && (
@@ -2607,11 +2638,10 @@ export default function HomeClient({
                   <li
                     key={index}
                     onMouseDown={() => selectArtistSuggestion(name)}
-                    className={`px-4 py-3 cursor-pointer text-sm transition-all text-left ${
-                      focusedArtistIndex === index
-                        ? 'bg-teal-500/10 text-teal-400'
-                        : 'hover:bg-slate-900/80 text-slate-300'
-                    }`}
+                    className={`px-4 py-3 cursor-pointer text-sm transition-all text-left ${focusedArtistIndex === index
+                      ? 'bg-teal-500/10 text-teal-400'
+                      : 'hover:bg-slate-900/80 text-slate-300'
+                      }`}
                   >
                     {renderHighlightedText(name, artist)}
                   </li>
@@ -2712,9 +2742,8 @@ export default function HomeClient({
                 <img
                   src={displayImageUrl}
                   alt={artwork}
-                  className={`w-full h-full object-contain transition-all duration-700 ease-out ${
-                    isPlaying ? 'animate-ken-burns' : ''
-                  }`}
+                  className={`w-full h-full object-contain transition-all duration-700 ease-out ${isPlaying ? 'animate-ken-burns' : ''
+                    }`}
                 />
               )
             )}
@@ -2725,16 +2754,15 @@ export default function HomeClient({
                   show={hints.step === 'hotspot'}
                   text={t.hints.hotspot}
                   placement="below"
-                  align="right"
                   dismissLabel={t.hints.dismiss}
                   onDismiss={hints.dismiss}
                 />
-              <button
-                onClick={() => setShowArtworkViewer(true)}
-                className="bg-slate-950/70 hover:bg-slate-950 border border-slate-700 hover:border-teal-500/60 text-slate-300 hover:text-teal-400 rounded-lg px-2 py-1 text-[10px] font-bold font-sans transition-colors"
-              >
-                {hotspots.length > 0 ? t.image.zoomHotspots : t.image.zoom}
-              </button>
+                <button
+                  onClick={() => setShowArtworkViewer(true)}
+                  className="bg-slate-950/70 hover:bg-slate-950 border border-slate-700 hover:border-teal-500/60 text-slate-300 hover:text-teal-400 rounded-lg px-2 py-1 text-[10px] font-bold font-sans transition-colors"
+                >
+                  {hotspots.length > 0 ? t.image.zoomHotspots : t.image.zoom}
+                </button>
               </div>
             )}
 
@@ -2809,11 +2837,10 @@ export default function HomeClient({
                   <button
                     key={hotspot.id}
                     onClick={() => selectHotspot(activeHotspotId === hotspot.id ? null : hotspot.id)}
-                    className={`shrink-0 snap-start whitespace-nowrap px-3 py-1.5 rounded-full text-[11px] font-bold font-sans border transition-colors ${
-                      activeHotspotId === hotspot.id
-                        ? 'bg-teal-500 text-slate-950 border-teal-400'
-                        : 'bg-slate-900/60 text-slate-300 border-slate-800 hover:border-teal-500/50'
-                    }`}
+                    className={`shrink-0 snap-start whitespace-nowrap px-3 py-1.5 rounded-full text-[11px] font-bold font-sans border transition-colors ${activeHotspotId === hotspot.id
+                      ? 'bg-teal-500 text-slate-950 border-teal-400'
+                      : 'bg-slate-900/60 text-slate-300 border-slate-800 hover:border-teal-500/50'
+                      }`}
                   >
                     {hotspot.label}
                   </button>
@@ -2833,7 +2860,7 @@ export default function HomeClient({
 
       {/* Scrollable Center Content */}
       <div className={`w-full max-w-2xl px-4 mx-auto ${responseShort || loading ? 'pt-[19rem] sm:pt-[22rem] pb-44' : 'py-12 md:py-20 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]'}`}>
-        
+
         {/* Empty state: Hero landing / initial search card */}
         {!responseShort && !loading && (
           <div className="w-full space-y-8 animate-fade-in flex flex-col items-center">
@@ -2920,13 +2947,12 @@ export default function HomeClient({
                       onClick={() => startTour(activePlaylist, i)}
                       title={item.title}
                       aria-label={`${i + 1}. ${item.title}`}
-                      className={`h-1.5 flex-1 rounded-full transition-colors ${
-                        i === playlistIndex
-                          ? 'bg-teal-400'
-                          : i < playlistIndex
-                            ? 'bg-teal-800'
-                            : 'bg-slate-800 hover:bg-slate-700'
-                      }`}
+                      className={`h-1.5 flex-1 rounded-full transition-colors ${i === playlistIndex
+                        ? 'bg-teal-400'
+                        : i < playlistIndex
+                          ? 'bg-teal-800'
+                          : 'bg-slate-800 hover:bg-slate-700'
+                        }`}
                     />
                   ))}
                 </div>
@@ -2959,83 +2985,360 @@ export default function HomeClient({
 
             {/* Highlights Segment Box */}
             <div className="relative">
-            <div
-              ref={guideBoxRef}
-              onScroll={updateScrollHint}
-              onPointerDown={handleGuidePointerDown}
-              onPointerMove={handleGuidePointerMove}
-              onPointerUp={endGuideDrag}
-              onPointerCancel={endGuideDrag}
-              className={`bg-slate-900/20 border border-slate-900 rounded-2xl p-3.5 md:p-5 max-h-[300px] overflow-y-auto scroll-area space-y-2 font-serif leading-7 text-base selection:bg-teal-500/20 shadow-inner ${
-                isDraggingGuide ? 'cursor-grabbing select-none' : ''
-              }`}
-            >
-              {segments.length > 0 ? (
-                segments.map((seg, index) => {
-                  const isSpeakable = speakableSegments.includes(seg);
-                  const speakableIndex = speakableSegments.indexOf(seg);
-                  const isActive = isPlaying && speakableIndex === activeSegmentIndex;
+              <div
+                ref={guideBoxRef}
+                onScroll={updateScrollHint}
+                onPointerDown={handleGuidePointerDown}
+                onPointerMove={handleGuidePointerMove}
+                onPointerUp={endGuideDrag}
+                onPointerCancel={endGuideDrag}
+                className={`bg-slate-900/20 border border-slate-900 rounded-2xl p-3.5 md:p-5 max-h-[300px] overflow-y-auto scroll-area space-y-2 font-serif leading-7 text-base selection:bg-teal-500/20 shadow-inner ${isDraggingGuide ? 'cursor-grabbing select-none' : ''
+                  }`}
+              >
+                {segments.length > 0 ? (
+                  segments.map((seg, index) => {
+                    const isSpeakable = speakableSegments.includes(seg);
+                    const speakableIndex = speakableSegments.indexOf(seg);
+                    const isActive = isPlaying && speakableIndex === activeSegmentIndex;
 
-                  if (seg.startsWith('\n>')) {
+                    if (seg.startsWith('\n>')) {
+                      return (
+                        <div key={index} className="py-1">
+                          <ReactMarkdown>{seg}</ReactMarkdown>
+                        </div>
+                      );
+                    }
+
                     return (
-                      <div key={index} className="py-1">
-                        <ReactMarkdown>{seg}</ReactMarkdown>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={index}
-                      id={`seg-${speakableIndex}`}
-                      className={`transition-all duration-500 rounded-xl px-3 py-1.5 border-l-3 ${
-                        isActive
+                      <div
+                        key={index}
+                        id={`seg-${speakableIndex}`}
+                        className={`transition-all duration-500 rounded-xl px-3 py-1.5 border-l-3 ${isActive
                           ? 'bg-teal-500/10 text-teal-300 border-teal-500 font-medium pl-4 scale-[1.01] shadow-sm'
                           : 'text-slate-350 border-transparent hover:bg-slate-900/10 hover:text-slate-200'
-                      }`}
-                    >
-                      <ReactMarkdown
-                        components={{
-                          p: ({node, ...props}) => <span {...props} />,
-                          h1: ({node, ...props}) => <h1 className="text-lg font-bold text-slate-100 mt-2 mb-1" {...props} />,
-                          h2: ({node, ...props}) => <h2 className="text-base font-bold text-slate-100 mt-2 mb-1" {...props} />,
-                          strong: ({node, ...props}) => <strong className="font-bold text-teal-400" {...props} />,
-                          blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-teal-500/40 pl-4 py-1 italic text-slate-400" {...props} />,
-                        }}
+                          }`}
                       >
-                        {seg}
-                      </ReactMarkdown>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-slate-350">{t.guide.loading}</div>
-              )}
+                        <ReactMarkdown
+                          components={{
+                            p: ({ node, ...props }) => <span {...props} />,
+                            h1: ({ node, ...props }) => <h1 className="text-lg font-bold text-slate-100 mt-2 mb-1" {...props} />,
+                            h2: ({ node, ...props }) => <h2 className="text-base font-bold text-slate-100 mt-2 mb-1" {...props} />,
+                            strong: ({ node, ...props }) => <strong className="font-bold text-teal-400" {...props} />,
+                            blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-teal-500/40 pl-4 py-1 italic text-slate-400" {...props} />,
+                          }}
+                        >
+                          {seg}
+                        </ReactMarkdown>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-slate-350">{t.guide.loading}</div>
+                )}
 
-            </div>
-            {showScrollHint && <div className="scroll-hint rounded-b-2xl" aria-hidden="true" />}
+              </div>
+              {showScrollHint && <div className="scroll-hint rounded-b-2xl" aria-hidden="true" />}
             </div>
 
-            {/* Ask the curator: suggested questions, free text and voice */}
-            <div className="space-y-2.5 select-none font-sans">
-              <div className="scroll-area flex gap-2 overflow-x-auto snap-x snap-mandatory -mx-1 px-1">
-                {questionChips.map((question, index) => (
-                  <button
-                    key={question}
-                    onClick={() => askQuestion(question)}
-                    disabled={askLoading}
-                    className={`shrink-0 snap-start whitespace-nowrap px-3 py-1.5 bg-slate-900/50 border rounded-full text-[11px] transition-colors active:scale-95 disabled:opacity-40 ${
-                      nudgedChip === index
-                        ? 'animate-chip-nudge border-teal-500/50 text-teal-300'
-                        : 'border-slate-800 hover:border-teal-500/40 hover:text-teal-300 text-slate-300'
+
+            {/* Voice question transcription indicator */}
+        {voiceText && (
+          <div className="p-3 bg-slate-950/40 border border-slate-900 rounded-xl text-xs text-slate-400 flex items-start gap-2 select-text font-sans">
+            <span className="text-sm">🗣️</span>
+            <div>
+              <span className="font-semibold text-slate-300 block mb-0.5">{t.ask.yourQuestion}</span>
+              <p className="italic">「{voiceText}」</p>
+            </div>
+          </div>
+        )}
+
+
+        {showReportForm && (
+          <div className="p-3 bg-slate-950/60 border border-slate-900 rounded-xl space-y-2 select-none font-sans">
+            <p className="text-[11px] text-slate-500">{t.feedback.reasonPrompt}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {t.feedback.reasons.map(reason => (
+                <button
+                  key={reason.id}
+                  onClick={() => setReportReason(prev => (prev === reason.id ? null : reason.id))}
+                  aria-pressed={reportReason === reason.id}
+                  className={`rounded-full border px-3 py-1.5 text-[11px] transition-colors active:scale-95 ${reportReason === reason.id
+                    ? 'border-teal-400/70 bg-teal-500/15 text-teal-200'
+                    : 'border-slate-800 text-slate-400 hover:border-teal-500/40 hover:text-slate-200'
                     }`}
+                >
+                  {reason.label}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={reportComment}
+              onChange={e => setReportComment(e.target.value)}
+              rows={2}
+              placeholder={t.feedback.reportPlaceholder}
+              className="w-full bg-slate-950/60 border border-slate-800 focus:border-teal-500/50 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 outline-none scroll-area"
+            />
+
+            {/* The curator answers the report itself, rather than a canned thank-you. */}
+            {(reportSending || curatorReply) && (
+              <div className="rounded-lg border border-amber-300/25 bg-amber-300/5 px-3 py-2 space-y-1">
+                <p className="text-[10px] tracking-wider uppercase text-amber-200/70">
+                  {reportSending ? t.feedback.reading : t.feedback.curatorReplied}
+                </p>
+                {reportSending ? (
+                  <span className="animate-dig inline-block text-sm">🔍</span>
+                ) : (
+                  <>
+                    <p className="text-xs text-slate-200 leading-relaxed">{curatorReply}</p>
+                    {curatorReply !== t.feedback.noChange && (
+                      <p className="text-[10px] text-slate-500">{t.feedback.pendingReview}</p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowReportForm(false);
+                  setCuratorReply(null);
+                }}
+                className="px-3 py-2 text-[11px] text-slate-500 hover:text-slate-300"
+              >
+                {t.feedback.close}
+              </button>
+              <button
+                onClick={handleRegenerateGuide}
+                disabled={regenerating}
+                className="px-3 py-2 bg-slate-900/60 border border-slate-800 hover:border-teal-500/40 text-slate-300 rounded-lg text-[11px] font-bold active:scale-95 disabled:opacity-40"
+              >
+                {regenerating ? t.feedback.regenerating : t.feedback.regenerate}
+              </button>
+              <button
+                onClick={handleSendReport}
+                disabled={reportSending || (!reportReason && !reportComment.trim())}
+                className="px-3 py-2 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-lg text-[11px] font-bold active:scale-95 disabled:opacity-40"
+              >
+                {t.feedback.send}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Recommendations Grid */}
+        {recommendations.length > 0 && (
+          <div className="pt-4 space-y-4 select-none">
+            <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase font-sans">
+              {t.recommendations}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {recommendations.map((rec, index) => (
+                <div
+                  key={index}
+                  onClick={() => generateGuide(rec.title, rec.artist)}
+                  className="bg-slate-900/30 border border-slate-900 hover:border-teal-500/40 hover:bg-slate-900/50 rounded-2xl p-3 flex gap-3 cursor-pointer transition-all duration-300 group shadow-md"
+                >
+                  {/* Mini Thumbnail */}
+                  <div className="relative w-28 h-24 rounded-xl overflow-hidden bg-slate-950 border border-slate-850 shrink-0 flex items-center justify-center">
+                    {rec.imageLoading ? (
+                      <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">
+                        <div className="animate-pulse w-1.5 h-1.5 bg-slate-600 rounded-full"></div>
+                      </div>
+                    ) : rec.imageUrl ? (
+                      <img src={rec.imageUrl} alt={rec.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-xl">🖼️</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 text-left flex flex-col justify-between py-0.5 font-sans">
+                    <div>
+                      <h4 className="font-semibold text-slate-200 text-xs truncate group-hover:text-teal-400 transition-colors">
+                        {localizeName(rec.title, locale)}
+                      </h4>
+                      <p className="text-[10px] text-slate-500 truncate">{localizeName(rec.artist, locale)}</p>
+                    </div>
+                    <p className="text-[10px] text-slate-400 line-clamp-1 italic">{rec.reason}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Catalogue similarity recommendations (Supabase pgvector) */}
+        <div className="pt-4">
+          <ForYouShelf
+            items={similarArtworks}
+            basis={recommendationBasis}
+            viewCount={tasteProfile?.viewCount ?? 0}
+            favoriteTags={tasteProfile?.favoriteTags ?? []}
+            locale={locale}
+            onPick={(title, artistName) => generateGuide(title, artistName)}
+          />
+        </div>
+
+      </div>
+        )}
+    </div>
+
+      {/* 画面下部 固定コントローラーパネル（案1：3段コンパクト統合UI） */}
+      {responseShort && (
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 backdrop-blur-md border-t border-slate-800 px-4 pt-2.5 pb-5 shadow-[0_-12px_32px_rgba(2,6,23,0.9)] flex flex-col justify-center gap-2 select-none">
+          {voiceUnavailable && (
+            <div className="w-full max-w-lg mx-auto px-1 text-[10px] leading-tight text-amber-300/80 font-sans">
+              {t.voiceUnavailable}
+            </div>
+          )}
+
+          {/* 【1段目：対話・フィードバック統合バー】 ❤️いいね ＋ 💬質問・裏話入力 ＋ 🎙️マイク ＋ 送信 */}
+          <div className="w-full max-w-lg mx-auto px-1 font-sans relative">
+            {/* 💡 質問サジェストポップアップ（シームレス無限ティッカースクロール ＆ ドラッグ対応 ＆ ヘッダー固定） */}
+            {showQuestionSuggestions && questionChips.length > 0 && (
+              <div className="absolute bottom-full mb-2.5 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-md border border-slate-800 rounded-2xl p-2.5 shadow-2xl animate-fade-in space-y-2 select-none overflow-hidden">
+                {/* 固定ヘッダー行 */}
+                <div className="flex items-center justify-between text-[11px] text-slate-400 font-sans px-1">
+                  <span className="flex items-center gap-1.5 font-bold text-teal-400">
+                    <span>💡</span> 質問のヒント ＆ 裏話
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowQuestionSuggestions(false)}
+                    className="text-slate-500 hover:text-slate-300 text-xs px-1"
                   >
-                    {question}
+                    ✕ 閉じる
                   </button>
-                ))}
+                </div>
+
+                {/* 無限ティッカースクロール ＆ マウスドラッグ対応エリア */}
+                <div
+                  ref={marqueeTrackRef}
+                  onPointerDown={handleMarqueePointerDown}
+                  onPointerMove={handleMarqueePointerMove}
+                  onPointerUp={handleMarqueePointerUp}
+                  onPointerCancel={handleMarqueePointerUp}
+                  className="w-full overflow-x-auto no-scrollbar cursor-grab active:cursor-grabbing pb-0.5"
+                >
+                  <div className="animate-ticker-marquee flex gap-2 w-max pr-4">
+                    {/* ループ用に2組シームレスに連続展開 */}
+                    {[0, 1].map(loopIdx => (
+                      <div key={loopIdx} className="flex gap-2 shrink-0 items-center">
+                        {/* 1. 先頭固定：✨ 🔍 裏話・エピソードを深掘りボタン（ゴールドプレミアムバッジ） */}
+                        <button
+                          key={`deep-dive-${loopIdx}`}
+                          type="button"
+                          onClick={() => {
+                            if (marqueeHasMovedRef.current) return;
+                            hints.complete('deepDive');
+                            setDeepDivePress(prev => prev + 1);
+                            if (explanationMode === 'deep') handleDeepDive();
+                            else setExplanationMode('deep');
+                            setShowQuestionSuggestions(false);
+                          }}
+                          disabled={deepDiveLoading}
+                          className={`shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 border ${
+                            deepDiveLoading
+                              ? 'border-amber-300/80 bg-amber-300/20 text-amber-200 shadow-[0_0_15px_rgba(251,191,36,0.4)]'
+                              : 'border-amber-400/60 bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.25)]'
+                          }`}
+                        >
+                          <span className={deepDiveLoading ? 'animate-dig inline-block' : 'inline-block'}>
+                            🔍
+                          </span>
+                          <span>
+                            {deepDiveLoading
+                              ? '深掘り中...'
+                              : (explanationMode === 'deep' ? '🔍 深掘り解説中' : '✨ 裏話・深掘りを聞く')}
+                          </span>
+                        </button>
+
+                        {/* 2. 各質問サジェストチップス */}
+                        {questionChips.map((question, index) => (
+                          <button
+                            key={`${loopIdx}-${question}`}
+                            type="button"
+                            onClick={() => {
+                              if (marqueeHasMovedRef.current) return;
+                              askQuestion(question);
+                              setShowQuestionSuggestions(false);
+                            }}
+                            disabled={askLoading}
+                            className={`shrink-0 whitespace-nowrap px-3 py-1.5 bg-slate-900/90 border rounded-full text-[11px] font-medium transition-all active:scale-95 disabled:opacity-40 ${
+                              nudgedChip === index
+                                ? 'animate-chip-nudge border-teal-400 text-teal-200 bg-teal-500/20 shadow-[0_0_12px_rgba(45,212,191,0.35)]'
+                                : 'border-slate-800 hover:border-teal-500/50 hover:text-teal-300 text-slate-300 hover:bg-slate-850'
+                            }`}
+                          >
+                            {question}
+                          </button>
+                        ))}
+
+                        {/* 3. 🚩 問題報告ボタン（サジェスト末尾に内包） */}
+                        <button
+                          key={`report-${loopIdx}`}
+                          type="button"
+                          onClick={() => {
+                            if (marqueeHasMovedRef.current) return;
+                            setShowReportForm(true);
+                            setShowQuestionSuggestions(false);
+                          }}
+                          className="shrink-0 flex items-center gap-1 whitespace-nowrap px-3 py-1.5 bg-slate-900/80 border border-rose-500/30 text-rose-300/80 hover:text-rose-200 hover:border-rose-500/60 rounded-full text-[11px] font-medium transition-all active:scale-95"
+                        >
+                          <span>🚩</span>
+                          <span>{t.feedback.report}</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="relative flex items-center gap-2">
+              {/* 1. ハートいいねボタン（左側：親指連打に最適化） */}
+              <div className="relative shrink-0 flex items-center">
+                <div className="relative">
+                  {/* ハート浮き上がりアニメーション */}
+                  <div
+                    className="pointer-events-none absolute bottom-full left-1/2 h-64 w-48 -translate-x-1/2"
+                    aria-hidden="true"
+                  >
+                    {hearts.map(heart => (
+                      <span
+                        key={heart.id}
+                        className="animate-heart-float absolute bottom-0 left-1/2 -translate-x-1/2 text-2xl drop-shadow-[0_0_10px_rgba(244,63,94,0.45)]"
+                        style={
+                          {
+                            '--heart-drift': `${heart.drift}px`,
+                            '--heart-scale': heart.scale,
+                            '--heart-tilt': `${heart.tilt}deg`,
+                            '--heart-duration': `${heart.duration}s`
+                          } as React.CSSProperties
+                        }
+                      >
+                        {heart.emoji}
+                      </span>
+                    ))}
+                  </div>
+                  <button
+                    key={heartPop}
+                    type="button"
+                    onClick={sendHeart}
+                    aria-label={t.feedback.heart}
+                    className="animate-heart-pop flex items-center gap-1 px-2.5 h-9 rounded-xl bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-xs transition-colors active:scale-90"
+                  >
+                    <span>{heartCount > 0 ? '❤️' : '🤍'}</span>
+                    {heartCount > 0 && (
+                      <span key={heartPop} className="animate-heart-pop text-rose-300 font-bold font-mono text-[10px] tabular-nums">
+                        {heartCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
 
-              <div className="relative flex items-center gap-2">
+              {/* 2. 💬 質問入力ボックス（タップ・フォーカスでサジェストが上に展開） */}
+              <div className="relative flex-1 min-w-0">
                 <HintBubble
                   show={hints.step === 'ask'}
                   text={t.hints.ask}
@@ -3045,279 +3348,79 @@ export default function HomeClient({
                 <input
                   value={questionInput}
                   onChange={e => setQuestionInput(e.target.value)}
+                  onFocus={() => setShowQuestionSuggestions(true)}
+                  onClick={() => setShowQuestionSuggestions(true)}
                   onKeyDown={e => {
                     if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                       askQuestion(questionInput);
+                      setShowQuestionSuggestions(false);
                     }
                   }}
-                  placeholder={t.ask.placeholder}
+                  placeholder="💬 質問や裏話を聞く... (タップで候補表示)"
                   aria-label={t.ask.placeholder}
-                  className="flex-1 min-w-0 bg-slate-950/60 border border-slate-800 focus:border-teal-500/50 rounded-xl px-3 py-2.5 text-xs text-slate-200 placeholder-slate-600 outline-none"
+                  className="w-full bg-slate-900/90 border border-slate-800 focus:border-teal-500/50 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 outline-none transition-colors"
                 />
-                {recognition && (
-                  <button
-                    onClick={startListening}
-                    disabled={askLoading}
-                    aria-label={t.ask.voice}
-                    title={t.ask.voice}
-                    className={`shrink-0 w-10 h-10 rounded-xl text-sm transition-all active:scale-95 disabled:opacity-40 ${
-                      isListening
-                        ? 'bg-rose-500 text-white animate-pulse'
-                        : 'bg-blue-500/10 border border-blue-500/20 text-blue-450 hover:bg-blue-500/20'
-                    }`}
-                  >
-                    🎙️
-                  </button>
-                )}
+              </div>
+
+              {/* 3. 🎙️ 音声入力ボタン */}
+              {recognition && (
                 <button
-                  onClick={() => askQuestion(questionInput)}
-                  disabled={askLoading || !questionInput.trim()}
-                  className={`shrink-0 px-4 py-2.5 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-40 ${
-                    askLoading ? 'animate-pulse disabled:opacity-100' : ''
+                  type="button"
+                  onClick={startListening}
+                  disabled={askLoading}
+                  aria-label={t.ask.voice}
+                  title={t.ask.voice}
+                  className={`shrink-0 w-9 h-9 rounded-xl text-sm transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center ${
+                    isListening
+                      ? 'bg-rose-500 text-white animate-pulse'
+                      : 'bg-blue-500/10 border border-blue-500/20 text-blue-450 hover:bg-blue-500/20'
                   }`}
+                >
+                  🎙️
+                </button>
+              )}
+
+              {/* 4. 送信ボタン（入力がある時に表示） */}
+              {questionInput.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    askQuestion(questionInput);
+                    setShowQuestionSuggestions(false);
+                  }}
+                  disabled={askLoading}
+                  className="shrink-0 px-3.5 h-9 bg-teal-500/20 border border-teal-500/40 hover:bg-teal-500/30 text-teal-300 rounded-xl text-xs font-bold active:scale-95 transition-all"
                 >
                   {askLoading ? t.ask.thinking : t.ask.submit}
                 </button>
-              </div>
-
+              ) : null}
             </div>
-
-            {/* Voice question transcription indicator */}
-            {voiceText && (
-              <div className="p-3 bg-slate-950/40 border border-slate-900 rounded-xl text-xs text-slate-400 flex items-start gap-2 select-text font-sans">
-                <span className="text-sm">🗣️</span>
-                <div>
-                  <span className="font-semibold text-slate-300 block mb-0.5">{t.ask.yourQuestion}</span>
-                  <p className="italic">「{voiceText}」</p>
-                </div>
-              </div>
-            )}
-
-            {/* One quiet row: heart on the left, the rarely used actions as links */}
-            <div className="flex items-center gap-3 select-none font-sans text-[11px]">
-              <div className="relative">
-                {/* Hearts rise out of the button without affecting the layout. */}
-                <div
-                  className="pointer-events-none absolute bottom-full left-1/2 h-64 w-48 -translate-x-1/2"
-                  aria-hidden="true"
-                >
-                  {hearts.map(heart => (
-                    <span
-                      key={heart.id}
-                      className="animate-heart-float absolute bottom-0 left-1/2 -translate-x-1/2 text-2xl drop-shadow-[0_0_10px_rgba(244,63,94,0.45)]"
-                      style={
-                        {
-                          '--heart-drift': `${heart.drift}px`,
-                          '--heart-scale': heart.scale,
-                          '--heart-tilt': `${heart.tilt}deg`,
-                          '--heart-duration': `${heart.duration}s`
-                        } as React.CSSProperties
-                      }
-                    >
-                      {heart.emoji}
-                    </span>
-                  ))}
-                </div>
-                <button
-                  key={heartPop}
-                  onClick={sendHeart}
-                  aria-label={t.feedback.heart}
-                  className="animate-heart-pop w-11 h-11 rounded-full bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-lg transition-colors active:scale-90"
-                >
-                  {heartCount > 0 ? '❤️' : '🤍'}
-                </button>
-              </div>
-              {heartCount > 0 && (
-                <span key={heartPop} className="animate-heart-pop text-rose-300 font-bold tabular-nums">
-                  {heartCount}
-                </span>
-              )}
-              <div className="relative ml-auto flex items-center gap-3">
-                <HintBubble
-                  show={hints.step === 'deepDive'}
-                  text={t.hints.deepDive}
-                  dismissLabel={t.hints.dismiss}
-                  onDismiss={hints.dismiss}
-                />
-                <button
-                  key={deepDivePress}
-                  onClick={() => {
-                    hints.complete('deepDive');
-                    setDeepDivePress(prev => prev + 1);
-                    if (explanationMode === 'deep') handleDeepDive();
-                    else setExplanationMode('deep');
-                  }}
-                  disabled={deepDiveLoading}
-                  className={`animate-dive-flash relative overflow-hidden rounded-full border px-3 py-1.5 transition-colors active:scale-95 ${
-                    deepDiveLoading
-                      ? 'border-amber-300/60 bg-amber-300/10 text-amber-200'
-                      : 'border-teal-500/40 text-teal-300 hover:border-teal-400/80 hover:bg-teal-500/10'
-                  }`}
-                >
-                  {/* While the curator digs, gold light sweeps across the chip. */}
-                  {deepDiveLoading && (
-                    <span className="animate-shimmer absolute inset-0" aria-hidden="true" />
-                  )}
-                  <span className="relative flex items-center gap-1">
-                    <span className={deepDiveLoading ? 'animate-dig inline-block' : 'inline-block'}>
-                      🔍
-                    </span>
-                    {(deepDiveLoading ? t.ask.deepDiveLoading : t.ask.deepDive).replace('🔍 ', '')}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowReportForm(prev => !prev)}
-                  className="text-slate-500 hover:text-slate-300 underline underline-offset-2"
-                >
-                  {t.feedback.report}
-                </button>
-              </div>
-            </div>
-
-            {showReportForm && (
-              <div className="p-3 bg-slate-950/60 border border-slate-900 rounded-xl space-y-2 select-none font-sans">
-                <p className="text-[11px] text-slate-500">{t.feedback.reasonPrompt}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {t.feedback.reasons.map(reason => (
-                    <button
-                      key={reason.id}
-                      onClick={() => setReportReason(prev => (prev === reason.id ? null : reason.id))}
-                      aria-pressed={reportReason === reason.id}
-                      className={`rounded-full border px-3 py-1.5 text-[11px] transition-colors active:scale-95 ${
-                        reportReason === reason.id
-                          ? 'border-teal-400/70 bg-teal-500/15 text-teal-200'
-                          : 'border-slate-800 text-slate-400 hover:border-teal-500/40 hover:text-slate-200'
-                      }`}
-                    >
-                      {reason.label}
-                    </button>
-                  ))}
-                </div>
-                <textarea
-                  value={reportComment}
-                  onChange={e => setReportComment(e.target.value)}
-                  rows={2}
-                  placeholder={t.feedback.reportPlaceholder}
-                  className="w-full bg-slate-950/60 border border-slate-800 focus:border-teal-500/50 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 outline-none scroll-area"
-                />
-
-                {/* The curator answers the report itself, rather than a canned thank-you. */}
-                {(reportSending || curatorReply) && (
-                  <div className="rounded-lg border border-amber-300/25 bg-amber-300/5 px-3 py-2 space-y-1">
-                    <p className="text-[10px] tracking-wider uppercase text-amber-200/70">
-                      {reportSending ? t.feedback.reading : t.feedback.curatorReplied}
-                    </p>
-                    {reportSending ? (
-                      <span className="animate-dig inline-block text-sm">🔍</span>
-                    ) : (
-                      <>
-                        <p className="text-xs text-slate-200 leading-relaxed">{curatorReply}</p>
-                        {curatorReply !== t.feedback.noChange && (
-                          <p className="text-[10px] text-slate-500">{t.feedback.pendingReview}</p>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <button
-                    onClick={() => {
-                      setShowReportForm(false);
-                      setCuratorReply(null);
-                    }}
-                    className="px-3 py-2 text-[11px] text-slate-500 hover:text-slate-300"
-                  >
-                    {t.feedback.close}
-                  </button>
-                  <button
-                    onClick={handleRegenerateGuide}
-                    disabled={regenerating}
-                    className="px-3 py-2 bg-slate-900/60 border border-slate-800 hover:border-teal-500/40 text-slate-300 rounded-lg text-[11px] font-bold active:scale-95 disabled:opacity-40"
-                  >
-                    {regenerating ? t.feedback.regenerating : t.feedback.regenerate}
-                  </button>
-                  <button
-                    onClick={handleSendReport}
-                    disabled={reportSending || (!reportReason && !reportComment.trim())}
-                    className="px-3 py-2 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 text-teal-300 rounded-lg text-[11px] font-bold active:scale-95 disabled:opacity-40"
-                  >
-                    {t.feedback.send}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Recommendations Grid */}
-            {recommendations.length > 0 && (
-              <div className="pt-4 space-y-4 select-none">
-                <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase font-sans">
-                  {t.recommendations}
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {recommendations.map((rec, index) => (
-                    <div
-                      key={index}
-                      onClick={() => generateGuide(rec.title, rec.artist)}
-                      className="bg-slate-900/30 border border-slate-900 hover:border-teal-500/40 hover:bg-slate-900/50 rounded-2xl p-3 flex gap-3 cursor-pointer transition-all duration-300 group shadow-md"
-                    >
-                      {/* Mini Thumbnail */}
-                      <div className="relative w-28 h-24 rounded-xl overflow-hidden bg-slate-950 border border-slate-850 shrink-0 flex items-center justify-center">
-                        {rec.imageLoading ? (
-                          <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">
-                            <div className="animate-pulse w-1.5 h-1.5 bg-slate-600 rounded-full"></div>
-                          </div>
-                        ) : rec.imageUrl ? (
-                          <img src={rec.imageUrl} alt={rec.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-xl">🖼️</span>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0 text-left flex flex-col justify-between py-0.5 font-sans">
-                        <div>
-                          <h4 className="font-semibold text-slate-200 text-xs truncate group-hover:text-teal-400 transition-colors">
-                            {localizeName(rec.title, locale)}
-                          </h4>
-                          <p className="text-[10px] text-slate-500 truncate">{localizeName(rec.artist, locale)}</p>
-                        </div>
-                        <p className="text-[10px] text-slate-400 line-clamp-1 italic">{rec.reason}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Catalogue similarity recommendations (Supabase pgvector) */}
-            <div className="pt-4">
-              <ForYouShelf
-                items={similarArtworks}
-                basis={recommendationBasis}
-                viewCount={tasteProfile?.viewCount ?? 0}
-                favoriteTags={tasteProfile?.favoriteTags ?? []}
-                locale={locale}
-                onPick={(title, artistName) => generateGuide(title, artistName)}
-              />
-            </div>
-
           </div>
-        )}
-      </div>
 
-      {/* Downward Fixed Controller Panel (Optimized Smartphone Thumb Reach) */}
-      {responseShort && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950 border-t border-slate-800 px-4 pt-2 pb-5 shadow-[0_-12px_32px_rgba(2,6,23,0.9)] flex flex-col justify-center gap-2 select-none min-h-28">
-          {voiceUnavailable && (
-            <div className="w-full max-w-lg mx-auto px-1 text-[10px] leading-tight text-amber-300/80 font-sans">
-              {t.voiceUnavailable}
-            </div>
-          )}
-          {/* Narration progress */}
-          <div className="w-full max-w-lg mx-auto px-1 font-sans">
-            <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono mb-1">
-              <span>{Math.max(activeSegmentIndex + 1, 0)} / {speakableSegments.length}</span>
-              <div className="flex items-center gap-2">
+          {/* 【2段目】 ナレーション進行バー（広々表示） ＋ ⚡ マグネティック・アナログ倍速スライダー */}
+          <div className="w-full max-w-lg mx-auto px-1 font-sans flex items-center gap-3">
+            {/* 1. ナレーション進行バー（伸縮領域） */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono mb-1">
+                <span>{Math.max(activeSegmentIndex + 1, 0)} / {speakableSegments.length}</span>
                 <span>{Math.round(narrationProgress * 100)}%</span>
+              </div>
+              <div
+                className="h-1 w-full bg-slate-900 rounded-full overflow-hidden"
+                role="progressbar"
+                aria-valuenow={Math.round(narrationProgress * 100)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={t.player.position}
+              >
+                <div
+                  className="h-full bg-gradient-to-r from-teal-500 to-blue-500 transition-all duration-500"
+                  style={{ width: `${narrationProgress * 100}%` }}
+                />
+              </div>
+            </div>
+
+            {/* 2. ⚡ マグネティック・アナログ倍速スライダー ＆ ポップアップ（右側） */}
             <div className="relative shrink-0 flex items-center">
               <button
                 type="button"
@@ -3464,297 +3567,289 @@ export default function HomeClient({
                 })()
               )}
             </div>
-              </div>
-            </div>
-            <div
-              className="h-1 w-full bg-slate-900 rounded-full overflow-hidden"
-              role="progressbar"
-              aria-valuenow={Math.round(narrationProgress * 100)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={t.player.position}
-            >
-              <div
-                className="h-full bg-gradient-to-r from-teal-500 to-blue-500 transition-all duration-500"
-                style={{ width: `${narrationProgress * 100}%` }}
-              />
-            </div>
           </div>
-            {/* 2. ⚡ マグネティック・アナログ倍速スライダー ＆ ポップアップ（右側） */}
 
-          <div className="flex items-center justify-between w-full max-w-lg mx-auto px-1 font-sans">
-            {/* Prev Artwork in History */}
-            <button
-              onClick={() => loadHistoryEntry(historyIndex - 1)}
-              disabled={historyIndex <= 0}
-              className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90 disabled:pointer-events-none"
-              title={t.player.prevWork}
-            >
-              <span className="text-xl">⏮️</span>
-              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.prevWork}</span>
-            </button>
+        {/* 【下段】 メイン操作コントロールボタン群 */}
+        <div className="flex items-center justify-between w-full max-w-lg mx-auto px-1 font-sans">
 
-            {/* Skip 1 segment backward */}
-            <button
-              onClick={handleSkipBackward}
-              disabled={activeSegmentIndex <= 0}
-              className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90"
-              title={t.player.backSentence}
-            >
-              <span className="text-lg">⏪</span>
-              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.backSentence}</span>
-            </button>
-            
-            {/* Central Play/Pause button (Enlarged circle) */}
-            <div className="relative flex-1 min-w-0 mx-2 flex justify-center">
-              {/* Browsers block autoplay, so point at the button until the first tap.
-                  It stands down while another hint is up, and for good once the
-                  walkthrough is finished or dismissed. */}
-              <HintBubble
-                show={
-                  !hasPlayedOnce &&
-                  !hints.finished &&
-                  (hints.step === 'play' || hints.step === null)
-                }
-                text={t.player.playHere}
-                dismissLabel={t.hints.dismiss}
-                onDismiss={hints.dismiss}
-              />
-              {/* Halo lives outside the button so it can grow past its edge. */}
-              {isPlaying && (
+          {/* 履歴：前の作品へ戻る */}
+          <button
+            onClick={() => loadHistoryEntry(historyIndex - 1)}
+            disabled={historyIndex <= 0}
+            className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90 disabled:pointer-events-none"
+            title={t.player.prevWork}
+          >
+            <span className="text-xl">⏮️</span>
+            <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.prevWork}</span>
+          </button>
+
+          {/* ナレーション：前文へスキップ */}
+          <button
+            onClick={handleSkipBackward}
+            disabled={activeSegmentIndex <= 0}
+            className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90"
+            title={t.player.backSentence}
+          >
+            <span className="text-lg">⏪</span>
+            <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.backSentence}</span>
+          </button>
+
+          {/* 中央：再生 / 一時停止ボタン（メイン操作） */}
+          <div className="relative shrink-0 mx-2 flex items-center justify-center">
+            {/* 初回再生を促すヒントバブル */}
+            <HintBubble
+              show={!hasPlayedOnce}
+              text={t.player.playHere}
+              dismissLabel={t.hints.dismiss}
+              onDismiss={hints.dismiss}
+            />
+            {/* 再生中の波紋（多重リップル波エフェクト）：再生時に外側へ広がるティール色のリング */}
+            {isPlaying && (
+              <>
                 <span
-                  className="animate-play-pulse pointer-events-none absolute inset-0 rounded-full bg-teal-400/40"
+                  className="animate-play-pulse pointer-events-none absolute inset-0 rounded-full bg-teal-400/30 border border-teal-300/60"
                   aria-hidden="true"
                 />
-              )}
+                <span
+                  className="animate-play-pulse-delayed pointer-events-none absolute inset-0 rounded-full bg-teal-400/20 border border-teal-400/40"
+                  aria-hidden="true"
+                />
+              </>
+            )}
             <button
               onClick={handlePlayPause}
-              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl active:scale-95 relative overflow-hidden ${
-                isPlaying
-                  ? 'bg-teal-500 text-slate-950 hover:bg-teal-400 hover:shadow-teal-400/20'
-                  : 'bg-slate-900 text-teal-400 border border-teal-500/30 hover:border-teal-500 hover:shadow-teal-500/10'
-              }`}
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl active:scale-95 relative z-10 overflow-hidden ${isPlaying
+                ? 'bg-teal-500 text-slate-950 hover:bg-teal-400 hover:shadow-teal-400/30'
+                : 'bg-slate-900 text-teal-400 border border-teal-500/30 hover:border-teal-500 hover:shadow-teal-500/10'
+                }`}
             >
               {isPlaying ? (
                 <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
                 </svg>
               ) : (
                 <svg className="w-5 h-5 fill-current translate-x-0.5" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z"/>
+                  <path d="M8 5v14l11-7z" />
                 </svg>
               )}
             </button>
-            </div>
+          </div>
 
-            {/* Skip 1 segment forward */}
+          {/* ナレーション：次文へスキップ */}
+          <button
+            onClick={handleSkipForward}
+            disabled={activeSegmentIndex >= speakableSegments.length - 1}
+            className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90"
+            title={t.player.forwardSentence}
+          >
+            <span className="text-lg">⏩</span>
+            <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.forwardSentence}</span>
+          </button>
+
+          {/* 履歴：次の作品へ進む */}
+          <button
+            onClick={() => loadHistoryEntry(historyIndex + 1)}
+            disabled={historyIndex >= history.length - 1}
+            className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90 disabled:pointer-events-none"
+            title={t.player.nextWork}
+          >
+            <span className="text-xl">⏭️</span>
+            <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.nextWork}</span>
+          </button>
+
+        </div>
+      </div>
+    )
+  }
+
+  {/* Slide-Up Input Drawer */ }
+  {
+    showInputDrawer && (
+      <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in select-none">
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+          onClick={() => setShowInputDrawer(false)}
+        ></div>
+
+        {/* Drawer content */}
+        <div className="relative w-full max-w-xl bg-slate-950 border-t border-slate-900 rounded-t-3xl shadow-2xl p-6 md:p-8 animate-slide-up z-10 max-h-[90vh] overflow-y-auto scroll-area">
+
+          {/* Handle bar */}
+          <div className="w-12 h-1 bg-slate-800 rounded-full mx-auto mb-5"></div>
+
+          <div className="flex items-center justify-between mb-6 font-sans">
+            <h2 className="text-xl font-bold text-slate-200 flex items-center gap-2">
+              <span className="text-teal-400">✦</span> {t.hub.findNext}
+            </h2>
             <button
-              onClick={handleSkipForward}
-              disabled={activeSegmentIndex >= speakableSegments.length - 1}
-              className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90"
-              title={t.player.forwardSentence}
+              onClick={() => setShowInputDrawer(false)}
+              className="text-slate-505 hover:text-white transition-colors"
             >
-              <span className="text-lg">⏩</span>
-              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.forwardSentence}</span>
+              ✕
             </button>
+          </div>
 
-            {/* Next Artwork in History */}
+          {renderBrowseHub(() => setShowInputDrawer(false))}
+        </div>
+      </div>
+    )
+  }
+
+  {/* Sign-in overlay: same in-place pattern as the approval queue */ }
+  {
+    showAccount && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
+        <div
+          className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+          onClick={() => setShowAccount(false)}
+        ></div>
+
+        <div className="relative z-50 w-full max-w-md max-h-[85vh] overflow-y-auto scroll-area bg-slate-950 border border-slate-900 rounded-3xl shadow-2xl p-6">
+          <div className="flex items-center justify-between border-b border-slate-900 pb-4 mb-4 font-sans">
+            <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
+              <span>👤</span> アカウント
+            </h3>
             <button
-              onClick={() => loadHistoryEntry(historyIndex + 1)}
-              disabled={historyIndex >= history.length - 1}
-              className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90 disabled:pointer-events-none"
-              title={t.player.nextWork}
+              onClick={() => setShowAccount(false)}
+              className="text-slate-500 hover:text-white transition-colors"
             >
-              <span className="text-xl">⏭️</span>
-              <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.nextWork}</span>
+              ✕
             </button>
-
           </div>
+
+          <AccountPanel onUserId={setUserId} />
         </div>
-      )}
+      </div>
+    )
+  }
 
-      {/* Slide-Up Input Drawer */}
-      {showInputDrawer && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in select-none">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
-            onClick={() => setShowInputDrawer(false)}
-          ></div>
+  {/* Moderation queues, in place so approving never leaves the guide */ }
+  {
+    showReadingApprovals && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
+        <div
+          className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+          onClick={() => setShowReadingApprovals(false)}
+        ></div>
 
-          {/* Drawer content */}
-          <div className="relative w-full max-w-xl bg-slate-950 border-t border-slate-900 rounded-t-3xl shadow-2xl p-6 md:p-8 animate-slide-up z-10 max-h-[90vh] overflow-y-auto scroll-area">
-            
-            {/* Handle bar */}
-            <div className="w-12 h-1 bg-slate-800 rounded-full mx-auto mb-5"></div>
-
-            <div className="flex items-center justify-between mb-6 font-sans">
-              <h2 className="text-xl font-bold text-slate-200 flex items-center gap-2">
-                <span className="text-teal-400">✦</span> {t.hub.findNext}
-              </h2>
-              <button
-                onClick={() => setShowInputDrawer(false)}
-                className="text-slate-505 hover:text-white transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-
-            {renderBrowseHub(() => setShowInputDrawer(false))}
-          </div>
-        </div>
-      )}
-
-      {/* Sign-in overlay: same in-place pattern as the approval queue */}
-      {showAccount && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div
-            className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
-            onClick={() => setShowAccount(false)}
-          ></div>
-
-          <div className="relative z-50 w-full max-w-md max-h-[85vh] overflow-y-auto scroll-area bg-slate-950 border border-slate-900 rounded-3xl shadow-2xl p-6">
-            <div className="flex items-center justify-between border-b border-slate-900 pb-4 mb-4 font-sans">
-              <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
-                <span>👤</span> アカウント
-              </h3>
-              <button
-                onClick={() => setShowAccount(false)}
-                className="text-slate-500 hover:text-white transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-
-            <AccountPanel onUserId={setUserId} />
-          </div>
-        </div>
-      )}
-
-      {/* Moderation queues, in place so approving never leaves the guide */}
-      {showReadingApprovals && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div
-            className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
-            onClick={() => setShowReadingApprovals(false)}
-          ></div>
-
-          <div className="relative z-50 w-full max-w-lg max-h-[85vh] overflow-y-auto scroll-area bg-slate-950 border border-slate-900 rounded-3xl shadow-2xl p-6">
-            <div className="flex items-center justify-between border-b border-slate-900 pb-4 mb-4 font-sans">
-              <div className="flex gap-2">
-                {([
-                  ['readings', '🗣️ 読み'],
-                  ['guides', '📝 解説']
-                ] as const).map(([tab, label]) => (
-                  <button
-                    key={tab}
-                    onClick={() => setAdminTab(tab)}
-                    className={`rounded-lg px-3 py-1.5 text-sm font-bold transition-colors ${
-                      adminTab === tab
-                        ? 'bg-slate-800 text-slate-100'
-                        : 'text-slate-500 hover:text-slate-300'
+        <div className="relative z-50 w-full max-w-lg max-h-[85vh] overflow-y-auto scroll-area bg-slate-950 border border-slate-900 rounded-3xl shadow-2xl p-6">
+          <div className="flex items-center justify-between border-b border-slate-900 pb-4 mb-4 font-sans">
+            <div className="flex gap-2">
+              {([
+                ['readings', '🗣️ 読み'],
+                ['guides', '📝 解説']
+              ] as const).map(([tab, label]) => (
+                <button
+                  key={tab}
+                  onClick={() => setAdminTab(tab)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-bold transition-colors ${adminTab === tab
+                    ? 'bg-slate-800 text-slate-100'
+                    : 'text-slate-500 hover:text-slate-300'
                     }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => setShowReadingApprovals(false)}
-                className="text-slate-500 hover:text-white transition-colors"
-              >
-                ✕
-              </button>
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-
-            {adminTab === 'readings' ? <ReadingApprovals /> : <GuideCorrections />}
+            <button
+              onClick={() => setShowReadingApprovals(false)}
+              className="text-slate-500 hover:text-white transition-colors"
+            >
+              ✕
+            </button>
           </div>
+
+          {adminTab === 'readings' ? <ReadingApprovals /> : <GuideCorrections />}
         </div>
-      )}
+      </div>
+    )
+  }
 
-      {/* History Sidebar Drawer */}
-      {showHistorySidebar && (
-        <div className="fixed inset-0 z-50 flex justify-end select-none animate-fade-in">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
-            onClick={() => setShowHistorySidebar(false)}
-          ></div>
+  {/* History Sidebar Drawer */ }
+  {
+    showHistorySidebar && (
+      <div className="fixed inset-0 z-50 flex justify-end select-none animate-fade-in">
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+          onClick={() => setShowHistorySidebar(false)}
+        ></div>
 
-          {/* Drawer content */}
-          <div className="relative w-full max-w-xs bg-slate-950 border-l border-slate-900 h-full flex flex-col shadow-2xl p-6 overflow-y-auto scroll-area z-50">
-            <div className="flex items-center justify-between border-b border-slate-900 pb-4 mb-4 font-sans">
-              <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
-                <span>📜</span> {t.history.title}
-              </h3>
-              <button
-                onClick={() => setShowHistorySidebar(false)}
-                className="text-slate-500 hover:text-white transition-colors text-lg"
-              >
-                ✕
-              </button>
-            </div>
+        {/* Drawer content */}
+        <div className="relative w-full max-w-xs bg-slate-950 border-l border-slate-900 h-full flex flex-col shadow-2xl p-6 overflow-y-auto scroll-area z-50">
+          <div className="flex items-center justify-between border-b border-slate-900 pb-4 mb-4 font-sans">
+            <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
+              <span>📜</span> {t.history.title}
+            </h3>
+            <button
+              onClick={() => setShowHistorySidebar(false)}
+              className="text-slate-500 hover:text-white transition-colors text-lg"
+            >
+              ✕
+            </button>
+          </div>
 
-            {/* History List */}
-            <div className="flex-1 space-y-2 overflow-y-auto scroll-area pr-1 font-sans">
-              {history.length === 0 ? (
-                <div className="text-slate-650 text-xs py-8 text-center leading-relaxed">
-                  {t.history.empty}
-                </div>
-              ) : (
-                history.map((entry, idx) => {
-                  const isActive = idx === historyIndex;
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => {
-                        loadHistoryEntry(idx);
-                        setShowHistorySidebar(false);
-                      }}
-                      className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer border transition-all ${
-                        isActive
-                          ? 'bg-teal-500/10 border-teal-500/30 text-teal-400 font-bold'
-                          : 'bg-slate-900/40 border-slate-800/40 hover:border-slate-800 hover:bg-slate-900/60 text-slate-350 hover:text-slate-200'
+          {/* History List */}
+          <div className="flex-1 space-y-2 overflow-y-auto scroll-area pr-1 font-sans">
+            {history.length === 0 ? (
+              <div className="text-slate-650 text-xs py-8 text-center leading-relaxed">
+                {t.history.empty}
+              </div>
+            ) : (
+              history.map((entry, idx) => {
+                const isActive = idx === historyIndex;
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      loadHistoryEntry(idx);
+                      setShowHistorySidebar(false);
+                    }}
+                    className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer border transition-all ${isActive
+                      ? 'bg-teal-500/10 border-teal-500/30 text-teal-400 font-bold'
+                      : 'bg-slate-900/40 border-slate-800/40 hover:border-slate-800 hover:bg-slate-900/60 text-slate-350 hover:text-slate-200'
                       }`}
-                    >
-                      {/* Minithumb */}
-                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-950 border border-slate-850 flex items-center justify-center shrink-0">
-                        {entry.imageUrl ? (
-                          <img src={entry.imageUrl} alt={entry.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-xs">🖼️</span>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0 text-left">
-                        <p className="font-semibold text-xs truncate">{localizeName(entry.title, locale)}</p>
-                        <p className="text-[10px] text-slate-500 truncate">{localizeName(entry.artist, locale) || t.history.unknownArtist}</p>
-                      </div>
+                  >
+                    {/* Minithumb */}
+                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-950 border border-slate-850 flex items-center justify-center shrink-0">
+                      {entry.imageUrl ? (
+                        <img src={entry.imageUrl} alt={entry.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xs">🖼️</span>
+                      )}
                     </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Clear Button */}
-            {history.length > 0 && (
-              <button
-                onClick={() => {
-                  if (confirm(t.history.clearConfirm)) {
-                    setHistory([]);
-                    setHistoryIndex(-1);
-                    localStorage.removeItem('art_free_guide_history');
-                    localStorage.removeItem('art_free_guide_history_index');
-                  }
-                }}
-                className="w-full mt-4 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/30 text-rose-400 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5 font-sans"
-              >
-                <span>🗑️</span>
-                <span>{t.history.clear}</span>
-              </button>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="font-semibold text-xs truncate">{localizeName(entry.title, locale)}</p>
+                      <p className="text-[10px] text-slate-500 truncate">{localizeName(entry.artist, locale) || t.history.unknownArtist}</p>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
+
+          {/* Clear Button */}
+          {history.length > 0 && (
+            <button
+              onClick={() => {
+                if (confirm(t.history.clearConfirm)) {
+                  setHistory([]);
+                  setHistoryIndex(-1);
+                  localStorage.removeItem('art_free_guide_history');
+                  localStorage.removeItem('art_free_guide_history_index');
+                }
+              }}
+              className="w-full mt-4 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/30 text-rose-400 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5 font-sans"
+            >
+              <span>🗑️</span>
+              <span>{t.history.clear}</span>
+            </button>
+          )}
         </div>
-      )}
-    </main>
+      </div>
+    )
+  }
+    </main >
   );
 }
