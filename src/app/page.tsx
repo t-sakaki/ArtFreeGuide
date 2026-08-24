@@ -51,9 +51,10 @@ export default async function Page({
   const artist = canonicalName(param(params, 'artist'));
 
   // Server-side daily pick: deterministic per day, driven by live feedback.
+  // Display names are localized on the client (DailyArtworkCard follows the UI locale).
   let daily: DailyArtwork | null = null;
   try {
-    daily = await getDailyArtwork(locale);
+    daily = await getDailyArtwork();
   } catch {
     daily = null;
   }

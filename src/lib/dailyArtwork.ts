@@ -15,8 +15,6 @@
  */
 
 import { getCloudflareContext } from '@opennextjs/cloudflare';
-import { Locale } from './i18n';
-import { localizeName } from './names';
 import { PLAYLISTS } from './playlists';
 
 interface D1Binding {
@@ -122,18 +120,14 @@ async function fetchRankedFromD1(): Promise<RankedArtwork[]> {
 }
 
 export interface DailyArtwork {
-  title: string;
-  artist: string;
-  /** Canonical Japanese title/artist, used for image resolution (more reliable than localized names). */
+  /** Canonical Japanese title — display names are localized on the client from this. */
   canonicalTitle: string;
   canonicalArtist: string;
   year?: string;
   museum?: string;
   medium?: string;
-  /** Theme id of the day, drawn from PLAYLISTS. */
+  /** Theme id of the day, drawn from PLAYLISTS. Client localizes via localizePlaylist. */
   themeId: string;
-  themeTitle: string;
-  themeSubtitle: string;
   /** True when chosen from live feedback; false when from the curated fallback. */
   fromFeedback: boolean;
   date: string;
@@ -149,10 +143,10 @@ function dailyTheme(dateStr: string): { id: string; title: string; subtitle: str
 
 /**
  * Decide today's artwork. Always returns a pick (curated fallback guarantees it).
- * `locale` only affects display names via localizeName; the ranking key stays
- * the canonical Japanese title.
+ * Returns canonical Japanese title/artist and the theme id; the client localizes
+ * display names via localizeName / localizePlaylist so it follows the UI language.
  */
-export async function getDailyArtwork(locale: Locale = 'ja'): Promise<DailyArtwork> {
+export async function getDailyArtwork(): Promise<DailyArtwork> {
   const date = todayStr();
   const seed = daySeed(date);
   const theme = dailyTheme(date);
@@ -173,16 +167,12 @@ export async function getDailyArtwork(locale: Locale = 'ja'): Promise<DailyArtwo
   const fromFeedback = ranked.some(r => r.title === pick.title && r.hearts > 0);
 
   return {
-    title: localizeName(pick.title, locale),
-    artist: pick.artist ? localizeName(pick.artist, locale) : '',
     canonicalTitle: pick.title,
     canonicalArtist: pick.artist,
     year: meta.year,
     museum: meta.museum,
     medium: meta.medium,
     themeId: theme.id,
-    themeTitle: theme.title,
-    themeSubtitle: theme.subtitle,
     fromFeedback,
     date,
   };
