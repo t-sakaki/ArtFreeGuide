@@ -4,6 +4,7 @@ import { guideMetadata } from '@/lib/guideMetadata';
 import { DEFAULT_LOCALE, Locale, isLocale } from '@/lib/i18n';
 import { canonicalName } from '@/lib/names';
 import { artworkPath } from '@/lib/site';
+import { getDailyArtwork, type DailyArtwork } from '@/lib/dailyArtwork';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -37,6 +38,25 @@ export async function generateMetadata({
   });
 }
 
-export default function Page() {
-  return <HomeClient />;
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const params = await searchParams;
+  const langParam = param(params, 'lang');
+  const locale: Locale = isLocale(langParam) ? langParam : DEFAULT_LOCALE;
+
+  const title = canonicalName(param(params, 'artwork'));
+  const artist = canonicalName(param(params, 'artist'));
+
+  // Server-side daily pick: deterministic per day, driven by live feedback.
+  let daily: DailyArtwork | null = null;
+  try {
+    daily = await getDailyArtwork(locale);
+  } catch {
+    daily = null;
+  }
+
+  return <HomeClient daily={daily} />;
 }
