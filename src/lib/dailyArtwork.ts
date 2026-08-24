@@ -124,6 +124,9 @@ async function fetchRankedFromD1(): Promise<RankedArtwork[]> {
 export interface DailyArtwork {
   title: string;
   artist: string;
+  /** Canonical Japanese title/artist, used for image resolution (more reliable than localized names). */
+  canonicalTitle: string;
+  canonicalArtist: string;
   year?: string;
   museum?: string;
   medium?: string;
@@ -172,6 +175,8 @@ export async function getDailyArtwork(locale: Locale = 'ja'): Promise<DailyArtwo
   return {
     title: localizeName(pick.title, locale),
     artist: pick.artist ? localizeName(pick.artist, locale) : '',
+    canonicalTitle: pick.title,
+    canonicalArtist: pick.artist,
     year: meta.year,
     museum: meta.museum,
     medium: meta.medium,

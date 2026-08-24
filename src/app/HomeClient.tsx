@@ -31,6 +31,7 @@ import {
 import { canonicalName, localizeName } from '@/lib/names';
 import { artworkPath } from '@/lib/site';
 import type { DailyArtwork } from '@/lib/dailyArtwork';
+import { fetchArtworkImage } from '@/lib/artworkThumbnail';
 import ReadingApprovals from '@/components/ReadingApprovals';
 import GuideCorrections from '@/components/GuideCorrections';
 import AppMenu, { type MenuItem } from '@/components/AppMenu';
@@ -2413,6 +2414,16 @@ export default function HomeClient({
   const renderDailyArtwork = () => {
     if (!daily) return null;
 
+    const [dailyImage, setDailyImage] = useState<string | null>(null);
+    useEffect(() => {
+      let cancelled = false;
+      setDailyImage(null);
+      fetchArtworkImage(daily.canonicalTitle, daily.canonicalArtist)
+        .then(url => { if (!cancelled && url) setDailyImage(url); })
+        .catch(() => {});
+      return () => { cancelled = true; };
+    }, [daily.canonicalTitle, daily.canonicalArtist]);
+
     const startDaily = () => {
       exitTour();
       setArtwork(daily.title);
@@ -2440,6 +2451,19 @@ export default function HomeClient({
             onClick={startDaily}
             className="w-full text-left bg-slate-900/50 border border-slate-800 hover:border-teal-500/50 hover:bg-slate-900/80 rounded-2xl p-4 transition-all active:scale-[0.98] group"
           >
+            <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-950/60 mb-3 flex items-center justify-center">
+              {dailyImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={dailyImage}
+                  alt={daily.title}
+                  className="w-full h-full object-contain"
+                  loading="lazy"
+                />
+              ) : (
+                <span className="text-slate-600 text-4xl">🖼️</span>
+              )}
+            </div>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-2xl font-bold text-slate-100 leading-tight wordmark group-hover:text-teal-300 transition-colors">
