@@ -2424,101 +2424,22 @@ export default function HomeClient({
   );
 
 
-  /** 薄いラッパー: daily が null のときは何も描画しない（hooks は子コンポーネント内で常に呼ぶ）。 */
+  /** 薄いラッパー: daily が null のときは何も描画しない。DailyArtworkCard はトップレベル関数なので安定参照。 */
   const renderDailyArtwork = () => {
     if (!daily) return null;
     return (
       <DailyArtworkCard
         daily={daily}
+        locale={locale}
         onStart={() => {
           exitTour();
-          setArtwork(daily.title);
-          if (daily.artist) setArtist(daily.artist);
-          generateGuide(daily.title, daily.artist);
+          setArtwork(daily.canonicalTitle);
+          if (daily.canonicalArtist) setArtist(daily.canonicalArtist);
+          generateGuide(daily.canonicalTitle, daily.canonicalArtist);
         }}
       />
     );
   };
-
-
-  /**
-   * "本日の一枚" カード。ホックスルールを守るため、daily は常に非null で受け取り、
-   * useState/useEffect はこのコンポーネント内で常に呼ぶ。
-   */
-  function DailyArtworkCard({
-    daily,
-    onStart,
-  }: {
-    daily: DailyArtwork;
-    onStart: () => void;
-  }) {
-    const [dailyImage, setDailyImage] = useState<string | null>(null);
-    useEffect(() => {
-      let cancelled = false;
-      setDailyImage(null);
-      fetchArtworkImage(daily.canonicalTitle, daily.canonicalArtist)
-        .then(url => { if (!cancelled && url) setDailyImage(url); })
-        .catch(() => {});
-      return () => { cancelled = true; };
-    }, [daily.canonicalTitle, daily.canonicalArtist]);
-
-    return (
-      <section className="w-full max-w-2xl mx-auto px-4 pt-2 pb-6">
-        <div className="bg-gradient-to-b from-slate-900/80 to-slate-950/90 border border-slate-800/80 rounded-3xl p-5 sm:p-6 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 via-emerald-500 to-blue-500 opacity-70 rounded-t-3xl" />
-          <div className="flex items-baseline justify-between gap-3 mb-1">
-            <p className="text-[11px] font-bold text-teal-400 tracking-[0.25em] uppercase font-sans">
-              今日の一枚 / Today
-            </p>
-            {daily.fromFeedback && (
-              <span className="text-[10px] text-slate-500 font-sans">♥ 人気の解説から</span>
-            )}
-          </div>
-          <p className="text-xs text-slate-400 font-sans mb-4">
-            {daily.themeTitle} — {daily.themeSubtitle}
-          </p>
-
-          <button
-            onClick={onStart}
-            className="w-full text-left bg-slate-900/50 border border-slate-800 hover:border-teal-500/50 hover:bg-slate-900/80 rounded-2xl p-4 transition-all active:scale-[0.98] group"
-          >
-            <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-950/60 mb-3 flex items-center justify-center">
-              {dailyImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={dailyImage}
-                  alt={daily.title}
-                  className="w-full h-full object-contain"
-                  loading="lazy"
-                />
-              ) : (
-                <span className="text-slate-600 text-4xl">🖼️</span>
-              )}
-            </div>
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-2xl font-bold text-slate-100 leading-tight wordmark group-hover:text-teal-300 transition-colors">
-                  {daily.title}
-                </p>
-                {daily.artist && (
-                  <p className="text-sm text-slate-400 font-sans mt-0.5">{daily.artist}</p>
-                )}
-                {(daily.year || daily.medium || daily.museum) && (
-                  <p className="text-[11px] text-slate-500 font-sans mt-2 leading-relaxed">
-                    {[daily.year, daily.medium, daily.museum].filter(Boolean).join('　／　')}
-                  </p>
-                )}
-              </div>
-              <span className="shrink-0 text-teal-400 text-3xl leading-none mt-1 group-hover:scale-110 transition-transform">→</span>
-            </div>
-            <p className="text-[11px] text-teal-300/80 font-sans mt-3">
-              この作品から、はじめる
-            </p>
-          </button>
-        </div>
-      </section>
-    );
-  }
 
 
   /**
@@ -3972,5 +3893,93 @@ export default function HomeClient({
     )
   }
     </main >
+  );
+}
+
+/**
+ * "本日の一枚" カード。
+ * トップレベル関数として定義することで、親の再レンダリングでも安定した
+ * コンポーネント参照を保ち、無限リマウント（画像の点滅）を防ぐ。
+ * daily は常に非null。表示名は locale に追従して client 側で localize する。
+ */
+function DailyArtworkCard({
+  daily,
+  locale,
+  onStart,
+}: {
+  daily: DailyArtwork;
+  locale: Locale;
+  onStart: () => void;
+}) {
+  const [dailyImage, setDailyImage] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setDailyImage(null);
+    fetchArtworkImage(daily.canonicalTitle, daily.canonicalArtist)
+      .then(url => { if (!cancelled && url) setDailyImage(url); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [daily.canonicalTitle, daily.canonicalArtist]);
+
+  const title = localizeName(daily.canonicalTitle, locale);
+  const artist = daily.canonicalArtist ? localizeName(daily.canonicalArtist, locale) : '';
+  const theme = PLAYLISTS.find(p => p.id === daily.themeId);
+  const themeLabel = theme ? localizePlaylist(theme, locale) : null;
+
+  return (
+    <section className="w-full max-w-2xl mx-auto px-4 pt-2 pb-6">
+      <div className="bg-gradient-to-b from-slate-900/80 to-slate-950/90 border border-slate-800/80 rounded-3xl p-5 sm:p-6 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 via-emerald-500 to-blue-500 opacity-70 rounded-t-3xl" />
+        <div className="flex items-baseline justify-between gap-3 mb-1">
+          <p className="text-[11px] font-bold text-teal-400 tracking-[0.25em] uppercase font-sans">
+            {UI[locale]?.header?.today ?? '今日の一枚'}
+          </p>
+          {daily.fromFeedback && (
+            <span className="text-[10px] text-slate-500 font-sans">♥ 人気の解説から</span>
+          )}
+        </div>
+        <p className="text-xs text-slate-400 font-sans mb-4">
+          {themeLabel ? `${themeLabel.title} — ${themeLabel.subtitle}` : ''}
+        </p>
+
+        <button
+          onClick={onStart}
+          className="w-full text-left bg-slate-900/50 border border-slate-800 hover:border-teal-500/50 hover:bg-slate-900/80 rounded-2xl p-4 transition-all active:scale-[0.98] group"
+        >
+          <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-950/60 mb-3 flex items-center justify-center">
+            {dailyImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={dailyImage}
+                alt={title}
+                className="w-full h-full object-contain"
+                loading="lazy"
+              />
+            ) : (
+              <span className="text-slate-600 text-4xl">🖼️</span>
+            )}
+          </div>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-2xl font-bold text-slate-100 leading-tight wordmark group-hover:text-teal-300 transition-colors">
+                {title}
+              </p>
+              {artist && (
+                <p className="text-sm text-slate-400 font-sans mt-0.5">{artist}</p>
+              )}
+              {(daily.year || daily.medium || daily.museum) && (
+                <p className="text-[11px] text-slate-500 font-sans mt-2 leading-relaxed">
+                  {[daily.year, daily.medium, daily.museum].filter(Boolean).join('　／　')}
+                </p>
+              )}
+            </div>
+            <span className="shrink-0 text-teal-400 text-3xl leading-none mt-1 group-hover:scale-110 transition-transform">→</span>
+          </div>
+          <p className="text-[11px] text-teal-300/80 font-sans mt-3">
+            この作品から、はじめる
+          </p>
+        </button>
+      </div>
+    </section>
   );
 }

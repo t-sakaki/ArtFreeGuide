@@ -121,6 +121,8 @@ export interface UIStrings {
     menu: string;
     account: string;
     admin: string;
+    /** Label for the "artwork of the day" section on the landing page. */
+    today: string;
   };
   image: {
     loading: string;
@@ -271,6 +273,7 @@ const ja: UIStrings = {
     menu: 'メニュー',
     account: 'アカウント',
     admin: '承認キュー',
+    today: '今日の一枚',
   },
   image: {
     loading: '画像を読み込み中...',
@@ -429,6 +432,7 @@ const en: UIStrings = {
     menu: 'Menu',
     account: 'Account',
     admin: 'Approval queue',
+    today: "Today's Artwork",
   },
   image: {
     loading: 'Loading the image...',
@@ -587,6 +591,7 @@ const fr: UIStrings = {
     menu: 'Menu',
     account: 'Compte',
     admin: 'File de validation',
+    today: 'Œuvre du jour',
   },
   image: {
     loading: 'Chargement de l’image...',
@@ -746,6 +751,7 @@ const zh: UIStrings = {
     menu: '菜单',
     account: '账户',
     admin: '审核队列',
+    today: '今日作品',
   },
   image: {
     loading: '正在加载图片...',
@@ -905,6 +911,7 @@ const es: UIStrings = {
     menu: 'Menú',
     account: 'Cuenta',
     admin: 'Cola de aprobación',
+    today: 'Obra del día',
   },
   image: {
     loading: 'Cargando la imagen...',
@@ -1063,6 +1070,7 @@ const it: UIStrings = {
     menu: 'Menu',
     account: 'Account',
     admin: 'Approval queue',
+    today: "Opera del giorno",
   },
   image: {
     loading: 'Loading the image...',
@@ -1221,6 +1229,7 @@ const de: UIStrings = {
     menu: 'Menu',
     account: 'Account',
     admin: 'Approval queue',
+    today: "Bild des Tages",
   },
   image: {
     loading: 'Loading the image...',
@@ -1379,6 +1388,7 @@ const pt: UIStrings = {
     menu: 'Menu',
     account: 'Account',
     admin: 'Approval queue',
+    today: "Obra do dia",
   },
   image: {
     loading: 'Loading the image...',
@@ -1537,6 +1547,7 @@ const nl: UIStrings = {
     menu: 'Menu',
     account: 'Account',
     admin: 'Approval queue',
+    today: "Werk van de dag",
   },
   image: {
     loading: 'Loading the image...',
@@ -1695,6 +1706,7 @@ const pl: UIStrings = {
     menu: 'Menu',
     account: 'Account',
     admin: 'Approval queue',
+    today: "Dzieło dnia",
   },
   image: {
     loading: 'Loading the image...',
@@ -1853,6 +1865,7 @@ const tr: UIStrings = {
     menu: 'Menu',
     account: 'Account',
     admin: 'Approval queue',
+    today: "Günün eseri",
   },
   image: {
     loading: 'Loading the image...',
@@ -2011,6 +2024,7 @@ const sv: UIStrings = {
     menu: 'Menu',
     account: 'Account',
     admin: 'Approval queue',
+    today: "Dagens verk",
   },
   image: {
     loading: 'Loading the image...',
@@ -2169,6 +2183,7 @@ const hu: UIStrings = {
     menu: 'Menu',
     account: 'Account',
     admin: 'Approval queue',
+    today: "A nap műve",
   },
   image: {
     loading: 'Loading the image...',
