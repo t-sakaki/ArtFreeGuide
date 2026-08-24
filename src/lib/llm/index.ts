@@ -2,7 +2,8 @@ import { LLMProvider } from './provider';
 import { GeminiProvider } from './gemini';
 import { WorkersAiProvider } from './workers-ai';
 import { NvidiaProvider } from './nvidia';
-import { parseModelList } from './models';
+import { parseModelList, parseProviderList } from './models';
+import { FallbackProvider } from './fallback';
 
 export type { LLMProvider, Message } from './provider';
 
@@ -12,6 +13,11 @@ export type { LLMProvider, Message } from './provider';
  * each task picks its own provider and model chain:
  *
  *   LLM_<TASK>_PROVIDER / LLM_<TASK>_MODEL  ->  LLM_PROVIDER  ->  workers-ai
+ *
+ * `LLM_PROVIDER` (and `LLM_<TASK>_PROVIDER`) is a comma separated provider
+ * priority list for cross-provider fallback, e.g. `workers-ai,nvidia` tries
+ * Workers AI first and falls back to NVIDIA NIM when it fails (e.g. daily
+ * allocation spent).
  *
  * `LLM_ASK_MODEL` takes a comma separated priority list, e.g.
  * `nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct`.
@@ -28,21 +34,44 @@ export { parseModelList } from './models';
 
 export function getLLMProvider(task: LLMTask = 'guide'): LLMProvider {
   const prefix = TASK_ENV_PREFIX[task];
-  const providerType =
-    process.env[`${prefix}_PROVIDER`] || process.env.LLM_PROVIDER || 'workers-ai';
-  const models = parseModelList(process.env[`${prefix}_MODEL`]);
+  const providerList = parseProviderList(
+    process.env[`${prefix}_PROVIDER`] || process.env.LLM_PROVIDER || 'workers-ai'
+  );
 
-  switch (providerType.toLowerCase()) {
+  const providers = providerList.map(name => createProvider(name, task));
+  return new FallbackProvider(providers);
+}
+
+/**
+ * Builds a single provider. Model lists are filtered per provider so a
+ * NVIDIA-only model name (e.g. `nvidia/nemotron-...`) is never handed to
+ * Workers AI, and vice versa. Each provider falls back to its own dedicated
+ * env (`WORKERS_AI_MODEL` / `NVIDIA_MODEL` / `GEMINI_MODEL`) or built-in
+ * defaults when no applicable model is configured.
+ */
+function createProvider(name: string, task: LLMTask): LLMProvider {
+  const prefix = TASK_ENV_PREFIX[task];
+  const commonModels = parseModelList(process.env[`${prefix}_MODEL`]);
+
+  switch (name) {
     case 'workers-ai':
     case 'workersai':
-    case 'cloudflare':
-      return new WorkersAiProvider(models);
-    case 'gemini':
-      return new GeminiProvider(models);
+    case 'cloudflare': {
+      const dedicated = parseModelList(process.env.WORKERS_AI_MODEL);
+      const filtered = commonModels.filter(m => !m.includes('/'));
+      return new WorkersAiProvider(dedicated.length ? dedicated : filtered);
+    }
+    case 'gemini': {
+      const dedicated = parseModelList(process.env.GEMINI_MODEL);
+      const filtered = commonModels.filter(m => m.includes('gemini'));
+      return new GeminiProvider(dedicated.length ? dedicated : filtered);
+    }
     case 'nvidia':
-    case 'nim':
-      return new NvidiaProvider(models);
+    case 'nim': {
+      const dedicated = parseModelList(process.env.NVIDIA_MODEL);
+      return new NvidiaProvider(dedicated.length ? dedicated : commonModels);
+    }
     default:
-      throw new Error(`Unsupported LLM provider: ${providerType}`);
+      throw new Error(`Unsupported LLM provider: ${name}`);
   }
 }
