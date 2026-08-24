@@ -34,8 +34,9 @@
 	},
 	"d1_databases": [
 		{
-			// Guide archive, reusing the database the earlier D1 version filled:
-			// npx wrangler d1 migrations apply artfreeguide_db_trial --remote
+			// Guide archive, reusing the database the earlier D1 version filled.
+			// This is the STAGING database (name predates the staging/main split).
+			// npx wrangler d1 migrations apply artfreeguide_db_trial --remote --env staging
 			"binding": "DB",
 			"database_name": "artfreeguide_db_trial",
 			"database_id": "1028e2d0-e5d5-47e7-b828-bacea0c934d0",
@@ -59,5 +60,28 @@
 		// Enable image optimization
 		// see https://opennext.js.org/cloudflare/howtos/image
 		"binding": "IMAGES"
+	},
+	// ── Environments ──────────────────────────────────────────────
+	// staging  = pre-production test (art-free-guide-staging.*.workers.dev)
+	// production = live (main branch, art-free-guide.*.workers.dev)
+	"env": {
+		"staging": {
+			"name": "art-free-guide-staging",
+			"services": [
+				{
+					"binding": "WORKER_SELF_REFERENCE",
+					"service": "art-free-guide-staging"
+				}
+			]
+		},
+		"production": {
+			"name": "art-free-guide",
+			"services": [
+				{
+					"binding": "WORKER_SELF_REFERENCE",
+					"service": "art-free-guide"
+				}
+			]
+		}
 	}
 }

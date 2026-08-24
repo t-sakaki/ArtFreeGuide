@@ -5,9 +5,9 @@
 
 ## 2. 技術スタック & アーキテクチャ
 - **Framework**: Next.js 16（App Router） / React 19 / TypeScript / Tailwind CSS
-- **Deployment**: Cloudflare Workers（OpenNext）。`main` への push で自動デプロイ
+- **Deployment**: Cloudflare Workers（OpenNext）。main への push で production へ自動デプロイ。pre-production のテストは staging環境（art-free-guide-staging.taira-sakakibara.workers.dev）で行う
 - **Database**:
-    - **Cloudflare D1** `artfreeguide_db_trial`: 生成済み解説のアーカイブ（`artwork_guides` / `guide_feedback`）。名前は trial だが本番稼働中で削除禁止。改名する場合は `docs/d1-rename-runbook.md`
+    - **Cloudflare D1** `artfreeguide_db_trial`: 生成済み解説のアーカイブ（`artwork_guides` / `guide_feedback`）。名前は trial 時代の名残だが現行は staging 用。削除禁止。改名する場合は `docs/d1-rename-runbook.md`
     - **Supabase (PostgreSQL)**: 作品カタログ、ベクトルデータ（`pgvector`）、認証、閲覧履歴
 - **LLM/Embedding**: NVIDIA NIM。モデルは wrangler.jsonc の vars で指定（解説 `nvidia/nemotron-3-super-120b-a12b`→`google/gemma-4-31b-it`、Q&A `nemotron-3-nano-30b-a3b`、サジェスト `mistralai/mistral-nemotron`、埋め込み `nvidia/llama-nemotron-embed-1b-v2`、画像認識 `nvidia/nemotron-nano-12b-v2-vl`）
 - **その他**: Web Speech API（読み上げ）、Web Audio API、Wikimedia Commons / Wikidata / ja.wikipedia API
@@ -49,7 +49,7 @@
 
 ## 5. ワークフロー
 - **ブランチ戦略**: `main`（本番）。作業は `feat/` または `devin/` ブランチで行い、PR 経由で `main` へ。`main` へ直接 push しない。
-- **デプロイ**: `main` への push で Cloudflare が自動デプロイ（手動なら `npx wrangler deploy`。wrangler は Node 22 以上が必要）。
+- **デプロイ**: staging 確認後に main へマージ。main への push で Cloudflare が自動デプロイ（production）。手動デプロイは `npx wrangler deploy --env staging`（staging 確認用）／ `npx wrangler deploy --env production`（本番）。wrangler は Node 22 以上が必要。
 - **確認コマンド**: `npm ci` → `npx tsc --noEmit` → `npm run build`（OpenNext ビルドまで通ること）。
 - **名前辞書の更新**: DB を直したら `node scripts/sync_names.mjs`（--push で file → DB）。生成された `names.data.json` をコミットしないと本番には出ません（スラグと sitemap はビルド時確定のため）。
 - **デプロイ後のウォームアップ**: `node scripts/warm_cache.mjs --images-only --concurrency=1` と `--guides-only --locales=ja,en --limit=20 --concurrency=1`。
@@ -59,8 +59,8 @@
 - **ベースは常に `origin/main` 最新**: 作業ブランチは必ず `git checkout -b <fix|feat>/... origin/main` で切る。ローカルの古い `main` や別ブランチの途中状態をベースにしない。
 - **変更は「該当関数・該当ブロックのみ」に最小化**: `HomeClient.tsx` 等の巨大ファイルを丸ごと書き換え・上書きしてはならない。差分（パッチ）で最小修正すること。
 - **サブエージェントは commit / push しない**: `delegate_task` で並列編集させる場合、各 leaf には「別々のファイル」を割り当て（編集競合回避）、完了後はメインエージェントが実ファイルを `read_file` で検証してからまとめてコミット・push する。サブエージェントの自己申告を鵜呑みにしない。
-- **ローカルは動かない前提**: ローカル `npm run dev` は `NEXT_PUBLIC_SUPABASE_URL` 不在＋ローカル D1 未初期化で動作しない。目視確認は trial 環境で行う。ローカルではビルド・型チェック・ユニットテストのみを検証手段とする。
-- **検証ステップは必ず通す**: 修正後は (1) `npm run build`（型チェック含む）通過、(2) ユニットテスト（`npx vitest run`）通過、(3) trial 環境での実 API 検証、を経てから PR 作成。マージと本番デプロイは人間が行う。
+- **ローカルは動かない前提**: ローカル `npm run dev` は `NEXT_PUBLIC_SUPABASE_URL` 不在＋ローカル D1 未初期化で動作しない。目視確認は staging 環境で行う。ローカルではビルド・型チェック・ユニットテストのみを検証手段とする。
+- **検証ステップは必ず通す**: 修正後は (1) `npm run build`（型チェック含む）通過、(2) ユニットテスト（`npx vitest run`）通過、(3) staging 環境での実 API 検証、を経てから PR 作成。マージと本番デプロイは人間が行う。
 - **UI の黄金期レイアウト（統合3段コントロール）を維持**:
   - **1段目**: `[❤️ いいね]`（左端）＋ `[💬 質問入力バー]` ＋ `[🎙️ 音声入力]` ＋ `[送信]`（タップで開くサジェストティッカー内に `[✨🔍 裏話・深掘り]` と `[🚩 問題報告]` を内包）
   - **2段目**: ナレーション進行バー ＋ `[⚡ 倍速]`（縦型マグネティック・アナログスライダー、自動消去＆枠外タップ消去）
