@@ -48,7 +48,7 @@ async function feedbackDatabase(): Promise<D1Binding | null> {
  * Hearts live in the guide archive (D1), keyed by title, because they are sent
  * from the player before the catalogue row is known.
  */
-async function heartCounts(titles: string[]): Promise<Map<string, number>> {
+export async function heartCounts(titles: string[]): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
   if (titles.length === 0) return counts;
 
