@@ -2406,14 +2406,34 @@ export default function HomeClient({
   );
 
 
-  /**
-   * "本日の一枚" — deterministic per-day pick from listener hearts, shown at the
-   * top of the landing page. Tapping it starts the guide for that work, exactly
-   * like a quick-start tile, but with the day's curated frame around it.
-   */
+  /** 薄いラッパー: daily が null のときは何も描画しない（hooks は子コンポーネント内で常に呼ぶ）。 */
   const renderDailyArtwork = () => {
     if (!daily) return null;
+    return (
+      <DailyArtworkCard
+        daily={daily}
+        onStart={() => {
+          exitTour();
+          setArtwork(daily.title);
+          if (daily.artist) setArtist(daily.artist);
+          generateGuide(daily.title, daily.artist);
+        }}
+      />
+    );
+  };
 
+
+  /**
+   * "本日の一枚" カード。ホックスルールを守るため、daily は常に非null で受け取り、
+   * useState/useEffect はこのコンポーネント内で常に呼ぶ。
+   */
+  function DailyArtworkCard({
+    daily,
+    onStart,
+  }: {
+    daily: DailyArtwork;
+    onStart: () => void;
+  }) {
     const [dailyImage, setDailyImage] = useState<string | null>(null);
     useEffect(() => {
       let cancelled = false;
@@ -2423,13 +2443,6 @@ export default function HomeClient({
         .catch(() => {});
       return () => { cancelled = true; };
     }, [daily.canonicalTitle, daily.canonicalArtist]);
-
-    const startDaily = () => {
-      exitTour();
-      setArtwork(daily.title);
-      if (daily.artist) setArtist(daily.artist);
-      generateGuide(daily.title, daily.artist);
-    };
 
     return (
       <section className="w-full max-w-2xl mx-auto px-4 pt-2 pb-6">
@@ -2448,7 +2461,7 @@ export default function HomeClient({
           </p>
 
           <button
-            onClick={startDaily}
+            onClick={onStart}
             className="w-full text-left bg-slate-900/50 border border-slate-800 hover:border-teal-500/50 hover:bg-slate-900/80 rounded-2xl p-4 transition-all active:scale-[0.98] group"
           >
             <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-950/60 mb-3 flex items-center justify-center">
@@ -2487,7 +2500,7 @@ export default function HomeClient({
         </div>
       </section>
     );
-  };
+  }
 
 
   /**
