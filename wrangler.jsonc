@@ -64,9 +64,30 @@
 	// ── Environments ──────────────────────────────────────────────
 	// staging  = pre-production test (art-free-guide-staging.*.workers.dev)
 	// production = live (main branch, art-free-guide.*.workers.dev)
+	// NOTE: wrangler does NOT inherit top-level vars/d1/ai/images into env.*,
+	// so every binding must be repeated under each environment.
 	"env": {
 		"staging": {
 			"name": "art-free-guide-staging",
+			"vars": {
+				"LLM_PROVIDER": "nvidia",
+				"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
+				"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
+				"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,meta/llama-3.1-8b-instruct",
+				"EMBEDDING_PROVIDER": "nvidia",
+				"GUIDE_STORE": "d1",
+				"GUIDE_SYSTEM_PROMPT": ""
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "artfreeguide_db_trial",
+					"database_id": "1028e2d0-e5d5-47e7-b828-bacea0c934d0",
+					"migrations_dir": "d1/migrations"
+				}
+			],
+			"ai": { "binding": "AI" },
+			"images": { "binding": "IMAGES" },
 			"services": [
 				{
 					"binding": "WORKER_SELF_REFERENCE",
@@ -76,6 +97,25 @@
 		},
 		"production": {
 			"name": "art-free-guide",
+			"vars": {
+				"LLM_PROVIDER": "nvidia",
+				"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
+				"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
+				"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,meta/llama-3.1-8b-instruct",
+				"EMBEDDING_PROVIDER": "nvidia",
+				"GUIDE_STORE": "d1",
+				"GUIDE_SYSTEM_PROMPT": ""
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "artfreeguide_db_trial",
+					"database_id": "1028e2d0-e5d5-47e7-b828-bacea0c934d0",
+					"migrations_dir": "d1/migrations"
+				}
+			],
+			"ai": { "binding": "AI" },
+			"images": { "binding": "IMAGES" },
 			"services": [
 				{
 					"binding": "WORKER_SELF_REFERENCE",
