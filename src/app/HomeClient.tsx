@@ -3914,7 +3914,7 @@ function DailyArtworkCard({
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 via-emerald-500 to-blue-500 opacity-70 rounded-t-3xl" />
         <div className="flex items-baseline justify-between gap-3 mb-1">
           <p className="text-[11px] font-bold text-teal-400 tracking-[0.25em] uppercase font-sans">
-            今日の一枚 / Today
+            {UI[locale]?.header?.today ?? '今日の一枚'}
           </p>
           {daily.fromFeedback && (
             <span className="text-[10px] text-slate-500 font-sans">♥ 人気の解説から</span>
