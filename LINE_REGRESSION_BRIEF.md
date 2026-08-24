@@ -50,6 +50,7 @@ Before: Authorization: *** ${lineConfig.channelAccessToken}`,
 After : Authorization: `Bearer ${lineConfig.channelAccessToken}`,
 ```
 `***` はプレースホルダで、`Bearer ` に直した。直さないと LINE Messaging API が 401 で弾く。
+（注：のちの検証で、この `***` は端末の秘密情報マスキングによる表示偽装であり、実ファイルはすでに `Bearer` 化されていたことが判明。`bb492f7` で正しく commit 済み。）
 
 ### 4.2 `src/app/api/tts/verify/route.ts:3` — import パス修正
 ```
@@ -61,9 +62,10 @@ After : import { createSafeMockMp3Buffer } from '@/app/api/tts/route';
 ### 4.3 `src/lib/line.ts:9` — appBaseUrl の env 候補追加
 ```
 Before: process.env.APP_BASE_URL || 'https://art-free-guide-trial.taira-sakakibara.workers.dev'
-After : process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://art-free-guide-trial.taira-sakakibara.workers.dev'
+After : process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://art-free-guide-staging.taira-sakakibara.workers.dev'
 ```
-trial 環境変数名が `APP_BASE_URL` とは限らないため、Next.js 側の `NEXT_PUBLIC_BASE_URL` も候補に加えた。最終フォールバックは trial ドメイン。
+環境変数名が `APP_BASE_URL` とは限らないため、Next.js 側の `NEXT_PUBLIC_BASE_URL` も候補に加えた。最終フォールバックは staging ドメイン。
+（注：旧 `trial` 環境は廃止され `staging` に代わった。）
 
 ---
 
@@ -126,7 +128,7 @@ LINE webhook の pre-flight も同じ `verifyMp3Buffer` を使うため、音声
 1. **tracked 化とコミット** — 核心ファイルを `git add` してコミット。`scratch/`, `RESTORATION_LOG.md`, `REVIEW_restore-restore-line-bot.md` の扱いも決める（残すなら docs/ や tests/ へ移動の検討）。
 2. **`package-lock.json` の `dev: true` 行削除の意図確認** — 意図的な変更であればメモ、意図的でなければ正規状態へ戻す。
 3. **`base-bugs`（`src/lib/llm/nvidia.ts`）との相互作用確認** — webhook は `getLLMProvider()` を使うため、nvidia.ts の env 解決変更が webhook の LLM 呼び出しに効くか統合後に確認。
-4. **trial 実環境での webhook 試験** — `LINE_CHANNEL_SECRET`／`LINE_CHANNEL_ACCESS_TOKEN` 注入後に、実際の LINE webhook、または同等生成ペイロードで署名検証を通るか確認。可能なら TTS フォールバック動作も試す。
+4. **staging 実環境での webhook 試験** — `LINE_CHANNEL_SECRET`／`LINE_CHANNEL_ACCESS_TOKEN` 注入後に、実際の LINE webhook、または同等生成ペイロードで署名検証を通るか確認。可能なら TTS フォールバック動作も試す。（旧 trial 環境は廃止され staging に代わった。）
 5. **LINE 本当の症状の確定** — 以前「signature 403」「音声が再生されない」などが観測されていた場合、今回の修正（特に Authorization ヘッダ）がそこに効くかを実環境で確かめる。
 
 ---

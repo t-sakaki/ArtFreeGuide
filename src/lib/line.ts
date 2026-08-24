@@ -6,7 +6,7 @@
 export const lineConfig = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
   channelSecret: process.env.LINE_CHANNEL_SECRET || '',
-  appBaseUrl: process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://art-free-guide-trial.taira-sakakibara.workers.dev',
+  appBaseUrl: process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://art-free-guide-staging.taira-sakakibara.workers.dev',
 };
 
 /**
