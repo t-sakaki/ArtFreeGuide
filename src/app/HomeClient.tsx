@@ -582,6 +582,24 @@ export default function HomeClient({
     setNarrationDone(false);
   }, [artwork, artist]);
 
+  // 作品ごとの累計いいね件数を取得し、ボタンに反映する（バグ修正: セッション内カウントのみで既存件数が表示されなかった）。
+  useEffect(() => {
+    if (!artwork) return;
+    let cancelled = false;
+    fetch(`/api/feedback/count?title=${encodeURIComponent(artwork)}`)
+      .then(res => (res.ok ? res.json() : { hearts: 0 }))
+      .then(data => {
+        if (cancelled) return;
+        setHeartCount(Number(data?.hearts) || 0);
+      })
+      .catch(() => {
+        /* 取得失敗時は 0 のまま（デグレなし） */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [artwork]);
+
   useEffect(() => {
     ensureAnonymousUser().then(setUserId);
   }, []);
