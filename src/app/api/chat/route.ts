@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getGuideStore } from '@/lib/guideStore';
 import { DEFAULT_LOCALE, Locale, OUTPUT_LANGUAGE_INSTRUCTION, isLocale } from '@/lib/i18n';
 import { getLLMProvider, Message } from '@/lib/llm';
+import { logChatRequest } from '@/lib/llm/logger';
 
 const DEFAULT_CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富な音声ガイド・キュレーターです。
 ユーザーから入力された美術作品（およびその作者）に対して、親しみやすくかつ知的なトーンで、以下の要件を満たす素晴らしい音声ガイドを提供してください。
@@ -105,8 +106,19 @@ function parseGuide(payload: string): { standard: string; deep: string } | null 
 }
 
 export async function POST(req: Request) {
+  let requestStartedAt = 0;
+  let cacheStatus: 'hit' | 'miss-generating' | 'miss-error' = 'miss-generating';
+  let llmAttempts = 0;
+  let title = '';
+  let artist = '';
+  let rawLocale: string | undefined;
   try {
-    const { messages, title, artist, refresh, locale: rawLocale, reason } = await req.json();
+    const { messages, refresh, reason, title: jsonTitle, artist: jsonArtist, locale: jsonLocale } =
+      await req.json();
+    title = typeof jsonTitle === 'string' ? jsonTitle : '';
+    artist = typeof jsonArtist === 'string' ? jsonArtist : '';
+    rawLocale = typeof jsonLocale === 'string' ? jsonLocale : undefined;
+    requestStartedAt = performance.now();
 
     // What the visitor disliked about the guide they just heard, so a rewrite
     // answers the complaint instead of rolling the dice again.
@@ -122,19 +134,21 @@ export async function POST(req: Request) {
     }
 
     // Only first-turn requests name an artwork; follow-up turns are not cacheable.
-    const store = typeof title === 'string' && title.trim() ? getGuideStore() : null;
-    const artistName = typeof artist === 'string' ? artist : '';
+    const store = title.trim() ? getGuideStore() : null;
+    const artistName = artist;
 
     // A guide reported as wrong is regenerated and overwrites the archived one.
     if (store && refresh !== true) {
       try {
         const cached = await store.get(title, artistName, locale);
         if (cached) {
+          cacheStatus = 'hit';
           return NextResponse.json({ text: cached.payload, cached: true, store: store.name });
         }
       } catch (error) {
         // A cold or misconfigured cache must never block the guide itself.
         console.warn('Guide cache read failed:', error);
+        cacheStatus = 'miss-error';
       }
     }
 
@@ -164,6 +178,7 @@ export async function POST(req: Request) {
     let cleanText = '';
     for (let attempt = 0; attempt < 2; attempt++) {
       const text = await provider.generateResponse(modifiedMessages, { json: true });
+      llmAttempts += 1;
       cleanText = extractJsonObject(text);
       if (isFullLengthGuide(cleanText)) break;
       console.warn(`Guide unusable or too short on attempt ${attempt + 1} for "${title}"`);
@@ -181,6 +196,18 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ text: cleanText, cached: false, store: store?.name ?? null });
   } catch (error: any) {
+    const totalDurationMs = Math.round(performance.now() - requestStartedAt);
+    logChatRequest({
+      title: title || undefined,
+      artist: artist || undefined,
+      locale: rawLocale,
+      cacheStatus,
+      llmAttempts,
+      llmDurationMs: 0,
+      totalDurationMs,
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
     console.error('API Route Error:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
