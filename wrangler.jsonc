@@ -66,9 +66,36 @@
 			}
 		},
 		"staging": {
+			// Full mirror of the top-level bindings so staging runs the same stack.
+			// Secrets (NVIDIA_API_KEY, Supabase, CLOUDFLARE_ACCOUNT_ID/API_TOKEN...)
+			// must be set per-environment: npx wrangler secret put <NAME> -e staging
 			"vars": {
-				"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4",
-				"LLM_PROVIDER": "gemini"
+				"LLM_PROVIDER": "nvidia",
+				"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
+				"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
+				"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,meta/llama-3.1-8b-instruct",
+				"EMBEDDING_PROVIDER": "nvidia",
+				"GUIDE_STORE": "d1"
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "artfreeguide_db_trial",
+					"database_id": "1028e2d0-e5d5-47e7-b828-bacea0c934d0",
+					"migrations_dir": "d1/migrations"
+				}
+			],
+			"ai": {
+				"binding": "AI"
+			},
+			"services": [
+				{
+					"binding": "WORKER_SELF_REFERENCE",
+					"service": "art-free-guide-staging"
+				}
+			],
+			"images": {
+				"binding": "IMAGES"
 			}
 		}
 	}
