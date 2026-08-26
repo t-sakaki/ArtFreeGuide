@@ -983,6 +983,33 @@ export default function HomeClient({
     [canonicalArtwork, canonicalArtist, locale]
   );
 
+  /**
+   * Voice-switching chips for the suggestion ticker. Built from the voices the
+   * visitor's own device actually has (KEITA etc.), so tapping one always works.
+   */
+  const [deviceVoices, setDeviceVoices] = useState<SpeechSynthesisVoice[]>([]);
+  useEffect(() => {
+    if (!('speechSynthesis' in window)) return;
+    const load = () =>
+      setDeviceVoices(
+        window.speechSynthesis
+          .getVoices()
+          .filter(v => v.lang.replace('_', '-').toLowerCase().startsWith('ja'))
+          .slice(0, 4)
+      );
+    load();
+    window.speechSynthesis.addEventListener('voiceschanged', load);
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
+  }, []);
+  const voiceChips = useMemo(
+    () =>
+      deviceVoices.map(v => ({
+        label: `🗣️ ${v.name.replace(/^Microsoft /, '').replace(/ \(.+\)$/, '')}の声で`,
+        command: `${v.name}の声で読み上げて`
+      })),
+    [deviceVoices]
+  );
+
   // After the guide falls silent, nudge each chip in turn a couple of rounds and stop.
   useEffect(() => {
     // A tour is already moving on to the next artwork, so stay out of the way.
@@ -3095,6 +3122,16 @@ export default function HomeClient({
             {/* Ask the curator: suggested questions, free text and voice */}
             <div className="space-y-2.5 select-none font-sans">
               <div className="scroll-area flex gap-2 overflow-x-auto snap-x snap-mandatory -mx-1 px-1">
+                {voiceChips.map(({ label, command }) => (
+                  <button
+                    key={command}
+                    onClick={() => askQuestion(command)}
+                    disabled={askLoading}
+                    className="shrink-0 snap-start whitespace-nowrap px-3 py-1.5 bg-teal-950/40 border border-teal-900/60 rounded-full text-[11px] text-teal-300/90 transition-colors active:scale-95 disabled:opacity-40 hover:border-teal-500/50"
+                  >
+                    {label}
+                  </button>
+                ))}
                 {questionChips.map((question, index) => (
                   <button
                     key={question}
