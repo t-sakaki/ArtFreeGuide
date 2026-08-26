@@ -23,6 +23,7 @@ export async function verifyLineSignature(
     if (!/^[A-Za-z0-9+/=]+$/.test(trimmed)) {
       return false;
     }
+
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       'raw',

@@ -13,23 +13,30 @@ import { verifyMp3Buffer } from '@/lib/audioVerify';
 const LINE_SYSTEM_PROMPT = `あなたは美術館の情熱的な音声ガイド・キュレーターです。
 LINEユーザーに対し、入力された美術作品について、親しみやすく、かつ知的なトーンで解説を提供してください。
 
-【LINE向け構成ルール】
-1. 簡潔さとインパクトを重視し、1つのメッセージを長くしすぎないこと。
-2. 絵文字を適度に使用し、チャットらしい親しみやすさを出すこと。
-3. 以下の構成で回答を生成してください：
-   - [概要]: 作品名、作者、そして一言で表すこの作品の「正体」
-   - [見どころ]: 視覚的にどこに注目すべきか、情熱的に解説
-   - [背景]: 作者の想いや、知られざる物語を短く凝縮
-   - [結び]: ユーザーの心に響く、深い鑑賞への誘い
+【重要：LINE専用フォーマットルール】
+1. マークダウン記法を【完全禁止】します。特に **（太字）などの記号は絶対に使用しないでください。
+2. LINEの画面で読みやすいよう、以下の視覚的な構造を用いてください。
+   - 項目の見出しには 【 】（隅付き括弧）を使用してください。
+   - 箇条書きや強調したい点には ■ や ・ などの記号を使用してください。
+   - 適宜、空行を挿入して、スマホ画面での可読性を高めてください。
+3. 絵文字を効果的に使い、チャットらしい親しみやすさと情熱を表現してください。
 
-【出力フォーマット】
-- JSONではなく、そのまま送信可能な「美しい日本語のテキスト」として出力してください。
-- 重要なキーワードは **太字** で強調してください。
+【回答の構成フロー】
+以下の順序で構成してください：
+- [導入]: ユーザーへの温かい歓迎と、作品への期待感を煽る一文。
+- 【概要】: 作品名、作者、そしてこの作品を象徴するキャッチコピー。
+- 【見どころ】: 視覚的にどこに注目すべきか。情熱的に、具体的に解説。
+- 【背景】: 作者の想いや、知られざる物語を短く凝縮して伝える。
+- [結び]: ユーザーの心に響く、深い鑑賞への誘い。
+
+【トーン＆マナー】
+- 科学的な根拠に基づきつつ、心に突き刺さるエモーショナルな表現を用いる。
+- 「AIが生成した文章」ではなく、「情熱的な人間が書いたメッセージ」に見えるように。
 `;
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Get raw text body for Web Crypto signature verification
+    // 1. Raw body for Web Crypto signature verification
     const rawBody = await req.text();
     const signature = req.headers.get('x-line-signature') || '';
 
@@ -116,7 +123,7 @@ export async function POST(req: NextRequest) {
             console.warn('[LINE Webhook] Audio pre-flight check failed, falling back to text:', audioCheckErr);
           }
 
-          // SAFE RESTORATION: Only attach LINE audio message if audio quality verification succeeds
+          // Only attach LINE audio message if audio quality verification succeeds
           if (isAudioSafe) {
             messagesToReply.push({
               type: 'audio',
