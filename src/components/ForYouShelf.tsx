@@ -36,6 +36,8 @@ function headings(basis: RecommendationBasis, locale: Locale): { title: string; 
  */
 export default function ForYouShelf({ items, basis, viewCount, favoriteTags, locale, onPick }: Props) {
   const [thumbnails, setThumbnails] = useState<Record<string, string | null>>({});
+  /** Enlarged view of a suggestion thumbnail; null when the lightbox is closed. */
+  const [enlarged, setEnlarged] = useState<{ url: string; title: string; artist: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -94,7 +96,17 @@ export default function ForYouShelf({ items, basis, viewCount, favoriteTags, loc
               onClick={() => onPick(item.title, item.artist)}
               className="bg-slate-900/40 border border-slate-800 hover:border-teal-500/40 hover:bg-slate-900/70 rounded-2xl p-3 flex gap-3 text-left active:scale-95 transition-all shadow-md group"
             >
-              <div className="relative w-28 h-24 rounded-xl overflow-hidden bg-slate-950 border border-slate-850 shrink-0 flex items-center justify-center">
+              <div
+                role="button"
+                aria-label={UI[locale].image.zoom}
+                title={UI[locale].image.zoom}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (image) setEnlarged({ url: image, title: item.title, artist: item.artist });
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                className={`relative w-28 h-24 rounded-xl overflow-hidden bg-slate-950 border border-slate-850 shrink-0 flex items-center justify-center ${image ? 'cursor-zoom-in' : 'cursor-default'}`}
+              >
                 {image ? (
                   <img src={image} alt={item.title} className="w-full h-full object-cover" />
                 ) : (
@@ -138,6 +150,31 @@ export default function ForYouShelf({ items, basis, viewCount, favoriteTags, loc
       <p className="text-[9px] text-slate-600 text-center font-mono">
         {t.credit}
       </p>
+
+      {/* Enlarged view of a thumbnail, with its title and artist. */}
+      {enlarged && (
+        <div className="fixed inset-0 z-[60] bg-slate-950/95 backdrop-blur-sm flex flex-col animate-fade-in">
+          <div className="flex items-center justify-between px-4 py-3 shrink-0 gap-3">
+            <span className="text-xs font-bold text-slate-300 font-sans truncate">
+              {localizeName(enlarged.title, locale)}
+              {enlarged.artist ? `　／　${localizeName(enlarged.artist, locale)}` : ''}
+            </span>
+            <button
+              onClick={() => setEnlarged(null)}
+              className="text-slate-400 hover:text-teal-400 bg-slate-900/70 border border-slate-800 rounded-lg px-3 py-1.5 text-xs font-bold font-sans shrink-0"
+            >
+              {UI[locale].image.close} ✕
+            </button>
+          </div>
+          <div className="relative flex-1 mx-4 mb-3 rounded-2xl overflow-hidden bg-slate-900/40 border border-slate-800 flex items-center justify-center">
+            <img
+              src={enlarged.url}
+              alt={enlarged.title}
+              className="absolute inset-0 w-full h-full object-contain"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
