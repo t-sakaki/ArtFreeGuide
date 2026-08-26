@@ -986,8 +986,10 @@ export default function HomeClient({
   /**
    * Voice-switching chips for the suggestion ticker. Built from the voices the
    * visitor's own device actually has (KEITA etc.), so tapping one always works.
+   * Hidden by default — shown only after the visitor asks for voices in chat.
    */
   const [deviceVoices, setDeviceVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [showVoiceChips, setShowVoiceChips] = useState(false);
   useEffect(() => {
     if (!('speechSynthesis' in window)) return;
     const load = () =>
@@ -2136,6 +2138,7 @@ export default function HomeClient({
     // hitting the LLM, apply them to the browser speech engine, and answer inline.
     const voiceCommand = matchVoiceCommand(trimmed);
     if (voiceCommand) {
+      setShowVoiceChips(true); // Once asked, keep the voice chips on offer.
       const reply = applyVoiceCommand(voiceCommand);
       const addition = `\n> ❓ **${trimmed}**\n\n${reply}`;
       setResponseDeep(`${responseDeep}\n\n${addition}`);
@@ -3122,7 +3125,7 @@ export default function HomeClient({
             {/* Ask the curator: suggested questions, free text and voice */}
             <div className="space-y-2.5 select-none font-sans">
               <div className="scroll-area flex gap-2 overflow-x-auto snap-x snap-mandatory -mx-1 px-1">
-                {voiceChips.map(({ label, command }) => (
+                {showVoiceChips && voiceChips.map(({ label, command }) => (
                   <button
                     key={command}
                     onClick={() => askQuestion(command)}
