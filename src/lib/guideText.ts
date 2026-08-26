@@ -42,13 +42,34 @@ export function looksLikeModelScaffolding(text: string): boolean {
   return SCAFFOLDING_PATTERNS.some(pattern => pattern.test(text));
 }
 
+const GREETING_PATTERNS: Record<string, RegExp> = {
+  ja: /^[　\s]*(こんにちは|こんばんは|ようこそ|皆様|視聴者の皆様|初めまして|はじめまして)[。、！!？?]?[　\s]*/,
+  en: /^[　\s]*(hello|hi|welcome|dear listeners|greetings)[,.!?]?[　\s]*/i,
+  fr: /^[　\s]*(bonjour|bonsoir|bienvenue|salut)[,.!?]?[　\s]*/i,
+  zh: /^[　\s]*(你好|欢迎|您好)[，。！？]?[　\s]*/,
+  es: /^[　\s]*(hola|bienvenido)[,.!?]?[　\s]*/i,
+  de: /^[　\s]*(hallo|guten tag|willkommen)[,.!?]?[　\s]*/i,
+  it: /^[　\s]*(ciao|buongiorno|benvenuto)[,.!?]?[　\s]*/i,
+  ko: /^[　\s]*(안녕하세요|환영합니다)[,.!?]?[　\s]*/,
+};
+
+const COMBINED_GREETING_PATTERN =
+  /^[　\s]*(こんにちは|こんばんは|ようこそ|皆様|視聴者の皆様|初めまして|はじめまして|hello|hi|welcome|dear listeners|greetings|bonjour|bonsoir|bienvenue|salut|你好|欢迎|您好|hola|bienvenido|hallo|guten tag|willkommen|ciao|buongiorno|benvenuto|안녕하세요|환영합니다)[。、，,.!！?？]?[　\s]*/i;
+
+export function stripLeadingGreeting(text: string, locale?: string): string {
+  if (!text) return text;
+  const pattern = (locale && GREETING_PATTERNS[locale]) || COMBINED_GREETING_PATTERN;
+  return text.replace(pattern, '');
+}
+
 /**
  * Makes a stored guide safe to display. Models leak JSON escapes (a literal
- * `\n`, sometimes double-escaped) and markdown the renderer cannot honour, and
- * guides written before a prompt fix keep those artefacts forever — so the
- * repair runs on the way to the screen rather than at generation time.
+ * `\n`, sometimes double-escaped), introductory greetings ("こんにちは"), and
+ * markdown the renderer cannot honour, and guides written before a prompt fix
+ * keep those artefacts forever — so the repair runs on the way to the screen
+ * rather than at generation time.
  */
-export function sanitizeGuideText(text: string): string {
+export function sanitizeGuideText(text: string, locale?: string): string {
   const withoutEscapes = text
     .replace(/\\{1,2}r\\{1,2}n|\\{1,2}[rn]/g, '\n')
     .replace(/\\{1,2}t/g, ' ')
@@ -58,8 +79,10 @@ export function sanitizeGuideText(text: string): string {
     .replace(/\r\n?/g, '\n')
     .replace(/\u0000/g, '');
 
+  const withoutGreeting = stripLeadingGreeting(withoutEscapes, locale);
+
   const kept: string[] = [];
-  const stripped = protectRenderableEmphasis(withoutEscapes, kept)
+  const stripped = protectRenderableEmphasis(withoutGreeting, kept)
     .split('\n')
     // Unpaired markers are left over, and they can only render as themselves.
     // A leading `* ` is a list bullet, so it stays.

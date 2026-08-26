@@ -7,11 +7,11 @@ import { localizeName } from './names';
  * screen the moment the guide starts, and a wrong-but-instant chip is worse than
  * no chip only if it is off-topic, which templates never are.
  */
-const TEMPLATES: Record<Locale, {
+const TEMPLATES: Partial<Record<Locale, {
   hotspot: (label: string) => string;
   artist: (artist: string) => string;
   general: string[];
-}> = {
+}>> = {
   ja: {
     hotspot: label => `「${label}」には何の意味がありますか？`,
     artist: artist => `${artist}はどんな人だったのですか？`,
@@ -60,7 +60,7 @@ const TEMPLATES: Record<Locale, {
 };
 
 export function suggestedQuestions(title: string, artist: string, locale: Locale = 'ja'): string[] {
-  const template = TEMPLATES[locale];
+  const template = TEMPLATES[locale] ?? TEMPLATES['en']!;
   const questions: string[] = [];
 
   const set = findHotspotSet(title, artist);

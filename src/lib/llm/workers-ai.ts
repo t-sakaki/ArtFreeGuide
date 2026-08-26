@@ -1,6 +1,7 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { LLMProvider, Message } from './provider';
 import { parseModelList } from './models';
+import { logLlmCall, LlmProviderType } from './logger';
 
 // Fallback models in case the primary one is overloaded or unavailable
 const DEFAULT_MODELS = [
@@ -17,6 +18,7 @@ interface AiBinding {
 
 export class WorkersAiProvider implements LLMProvider {
   private readonly models: string[];
+  private readonly providerType: LlmProviderType = 'workers-ai';
 
   constructor(models: string[] = []) {
     const configured = models.length ? models : parseModelList(process.env.WORKERS_AI_MODEL);
@@ -39,9 +41,12 @@ export class WorkersAiProvider implements LLMProvider {
     }));
 
     let lastError: unknown = null;
+    let lastModelName = '';
 
     for (const modelName of this.models) {
+      lastModelName = modelName;
       for (let attempt = 1; attempt <= 3; attempt++) {
+        const startedAt = performance.now();
         try {
           const result = await ai.run(modelName, {
             messages: chatMessages,
@@ -54,10 +59,33 @@ export class WorkersAiProvider implements LLMProvider {
             throw new Error('Empty response from Workers AI');
           }
 
+          logLlmCall({
+            provider: this.providerType,
+            modelName,
+            attempt,
+            totalAttemptsInModel: 3,
+            success: true,
+            durationMs: Math.round(performance.now() - startedAt),
+            kind: 'success',
+          });
+
           return text;
         } catch (error) {
           lastError = error;
           const message = error instanceof Error ? error.message : String(error);
+          const errorCode = extractWorkersAiErrorCode(error);
+          logLlmCall({
+            provider: this.providerType,
+            modelName,
+            attempt,
+            totalAttemptsInModel: 3,
+            success: false,
+            durationMs: Math.round(performance.now() - startedAt),
+            kind: 'attempt_failure',
+            error: message.slice(0, 1000),
+            errorCode,
+          });
+
           console.warn(`Model ${modelName} failed on attempt ${attempt}/3:`, message);
 
           if (attempt < 3) {
@@ -69,6 +97,16 @@ export class WorkersAiProvider implements LLMProvider {
 
     const message = lastError instanceof Error ? lastError.message : 'Service Unavailable';
     console.error('All Workers AI models in the fallback chain failed.', lastError);
+    logLlmCall({
+      provider: this.providerType,
+      modelName: lastModelName,
+      attempt: 3,
+      totalAttemptsInModel: 3,
+      success: false,
+      durationMs: 0,
+      kind: 'model_exhausted',
+      error: message.slice(0, 1000),
+    });
     throw new Error(`Workers AI call failed: ${message}`);
   }
 }
@@ -91,4 +129,23 @@ function extractText(result: unknown): string {
   }
 
   return '';
+}
+
+/** Workers AI のエラーから HTTP コードを抜き出す（返り値が { errors?: [...] } などの場合）。*/
+function extractWorkersAiErrorCode(error: unknown): number | undefined {
+  if (error instanceof Error) {
+    const m = error.message;
+    const mta = m.match(/HTTP\s+(\d{3})/);
+    if (mta) return Number(mta[1]);
+    try {
+      const body = JSON.parse(m.replace(/^[^\{]*\{/, '{'));
+      if (Array.isArray(body?.errors) && body.errors.length) {
+        const code = Number(body.errors[0]?.code);
+        if (typeof code === 'number') return code;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return undefined;
 }

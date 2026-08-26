@@ -43,7 +43,7 @@ export async function guideMetadata({
   /** Path the artwork should be indexed under, when it has a permalink. */
   canonical?: string;
 }): Promise<Metadata> {
-  const copy = SHARE_META[locale];
+  const copy = SHARE_META[locale] ?? SHARE_META['en']!;
   const base = await origin();
   const shown = title ? localizeName(title, locale) : '';
   const shownArtist = artist ? localizeName(artist, locale) : '';

@@ -24,7 +24,7 @@ export interface Hotspot {
   /** One or two sentences read on the panel when the visitor taps the mark. */
   detail: string;
   /** Same point in the other guide languages; narration is matched per language. */
-  i18n: Record<Exclude<Locale, 'ja'>, HotspotText>;
+  i18n: Partial<Record<Exclude<Locale, 'ja'>, HotspotText>>;
   /** Centre of the point of interest, 0–1 of the image frame. */
   x: number;
   y: number;
@@ -855,7 +855,8 @@ export const HOTSPOT_SETS: HotspotSet[] = [
 /** One point with its label, detail and keywords in the visitor's language. */
 export function localizeHotspot(hotspot: Hotspot, locale: Locale): Hotspot {
   if (locale === 'ja') return hotspot;
-  const text = hotspot.i18n[locale];
+  const text = hotspot.i18n[locale] || hotspot.i18n['en'];
+  if (!text) return hotspot;
   return { ...hotspot, label: text.label, detail: text.detail, keywords: text.keywords };
 }
 

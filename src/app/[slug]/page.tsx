@@ -50,7 +50,7 @@ export async function generateMetadata({
   const playlist = tourFromSlug(slug);
   if (!playlist) return {};
 
-  const copy = SHARE_META[locale];
+  const copy = SHARE_META[locale] ?? SHARE_META['en']!;
   const shown = localizePlaylist(playlist, locale);
   const base = await origin();
   const canonical = `/${playlist.id}`;
