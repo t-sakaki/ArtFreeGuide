@@ -197,7 +197,8 @@ class AudioController {
     onStart: () => void,
     onEnd: () => void,
     onError: (e: any) => void,
-    onSilent?: () => void
+    onSilent?: () => void,
+    preferredVoiceURI?: string | null
   ) {
     this.clearQueue();
 
@@ -224,11 +225,13 @@ class AudioController {
       utterance.rate = rate;
 
       // Without an explicit voice, some browsers read French/Chinese with the
-      // default (often English) voice.
+      // default (often English) voice. A chat-picked voice (e.g. KEITA) wins first.
       const prefix = lang.split('-')[0];
+      const voices = window.speechSynthesis.getVoices();
       const voice =
-        window.speechSynthesis.getVoices().find(v => v.lang.replace('_', '-') === lang) ??
-        window.speechSynthesis.getVoices().find(v => v.lang.startsWith(prefix));
+        (preferredVoiceURI ? voices.find(v => v.voiceURI === preferredVoiceURI) : undefined) ??
+        voices.find(v => v.lang.replace('_', '-') === lang) ??
+        voices.find(v => v.lang.startsWith(prefix));
       if (voice) utterance.voice = voice;
 
       let hasFinished = false;
@@ -405,6 +408,8 @@ export default function HomeClient({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE]);
   const [speechSupported, setSpeechSupported] = useState(false);
   const [voiceUnavailable, setVoiceUnavailable] = useState(false);
+  /** Voice picked by the visitor through chat (e.g. "KEITAの声で"); null = auto. */
+  const [preferredVoiceURI, setPreferredVoiceURI] = useState<string | null>(null);
 
   // Deep Dive & Interactive Feedback States
   const [deepDiveLoading, setDeepDiveLoading] = useState(false);
@@ -600,6 +605,9 @@ export default function HomeClient({
       setSpeechSupported(true);
       // Populate the voice list early so the first utterance is not dropped
       window.speechSynthesis.getVoices();
+      // Restore a chat-picked voice (e.g. KEITA) from a previous visit
+      const savedVoice = localStorage.getItem('art_free_guide_voice');
+      if (savedVoice) setPreferredVoiceURI(savedVoice);
     }
 
     const SpeechRecognitionClass =
@@ -1236,7 +1244,8 @@ export default function HomeClient({
           setActiveSegmentIndex(prev => prev + 1);
         }
       },
-      () => setVoiceUnavailable(true)
+      () => setVoiceUnavailable(true),
+      preferredVoiceURI
     );
   };
 
@@ -2026,11 +2035,87 @@ export default function HomeClient({
    * A question is answered by the same curator voice and appended to the guide,
    * so the answer is narrated in place instead of opening a separate chat.
    */
+  /**
+   * Chat-driven voice switching. Recognizes requests like "KEITAの声で",
+   * "ナナミに切り替えて", "デフォルトの声に戻して", "どんな声がある？".
+   * Returns the requested voice name fragment, 'reset', 'list', or null.
+   */
+  const matchVoiceCommand = (text: string): { kind: 'pick' | 'reset' | 'list'; name?: string } | null => {
+    const t = text.toLowerCase();
+    if (!/(声|ボイス|voice|読み上げ|よみあげ)/.test(t)) return null;
+
+    if (/(一覧|リスト|どんな|何|なに|what voices|list)/.test(t) && /(ある|教え|見せ|みせ|available)/.test(t)) {
+      return { kind: 'list' };
+    }
+    if (/(デフォルト|戻し|もどし|解除|リセット|reset|default)/.test(t)) {
+      return { kind: 'reset' };
+    }
+    const pickMatch = t.match(/([a-z\u30a0-\u30fc\u4e00-\u9faf]+?)(の声|で読んで|で読み上げ|に切り替え|にかえて|に変えて|で話して)/);
+    if (pickMatch && pickMatch[1]) {
+      return { kind: 'pick', name: pickMatch[1] };
+    }
+    return null;
+  };
+
+  /** Applies a matched voice command and returns a curator-style reply. */
+  const applyVoiceCommand = (
+    cmd: { kind: 'pick' | 'reset' | 'list'; name?: string }
+  ): string => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      return 'このブラウザでは音声読み上げをご利用いただけません。';
+    }
+
+    if (cmd.kind === 'reset') {
+      setPreferredVoiceURI(null);
+      localStorage.removeItem('art_free_guide_voice');
+      return '読み上げ音声を標準（自動選択）に戻しました。';
+    }
+
+    if (cmd.kind === 'list') {
+      const ja = window.speechSynthesis
+        .getVoices()
+        .filter(v => v.lang.replace('_', '-').toLowerCase().startsWith('ja'))
+        .map(v => `・${v.name}`);
+      return ja.length
+        ? `この端末で使える日本語音声です：\n\n${ja.join('\n')}\n\n「◯◯の声で」と送ると切り替えられます。`
+        : 'この端末には日本語の音声が見つかりませんでした。';
+    }
+
+    // pick: fuzzy match against installed voice names
+    const name = (cmd.name || '').toLowerCase();
+    const found = window.speechSynthesis.getVoices().find(v =>
+      v.name.toLowerCase().includes(name)
+    );
+    if (!found) {
+      const ja = window.speechSynthesis
+        .getVoices()
+        .filter(v => v.lang.replace('_', '-').toLowerCase().startsWith('ja'))
+        .map(v => `・${v.name}`);
+      return `「${cmd.name}」という音声はこの端末に見つかりませんでした。\n利用可能：\n\n${ja.join('\n') || '（日本語音声なし）'}`;
+    }
+
+    setPreferredVoiceURI(found.voiceURI);
+    localStorage.setItem('art_free_guide_voice', found.voiceURI);
+    return `読み上げ音声を **${found.name}** に切り替えました。次の文章からその声でお話しします。`;
+  };
+
   const askQuestion = async (question: string) => {
     const trimmed = question.trim();
     if (!trimmed || !artwork.trim() || askLoading) return;
 
     hints.complete('ask');
+
+    // Chat-driven voice switching: intercept requests like "KEITAの声で" before
+    // hitting the LLM, apply them to the browser speech engine, and answer inline.
+    const voiceCommand = matchVoiceCommand(trimmed);
+    if (voiceCommand) {
+      const reply = applyVoiceCommand(voiceCommand);
+      const addition = `\n> ❓ **${trimmed}**\n\n${reply}`;
+      setResponseDeep(`${responseDeep}\n\n${addition}`);
+      archiveGuideAddition(addition);
+      setExplanationMode('deep');
+      return;
+    }
 
     setAskLoading(true);
     setVoiceText(trimmed);

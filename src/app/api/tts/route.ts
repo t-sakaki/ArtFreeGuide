@@ -53,11 +53,11 @@ async function synthesizeWithCloudflareAI(cleanText: string): Promise<Uint8Array
   }
 
   const modelCandidates = [
-    '@cf/myshell-ai/melotts',
-    '@cf/myshell/melotts-japanese',
+    { name: '@cf/myshell-ai/melotts', body: { prompt: cleanText, lang: 'ja' } },
+    { name: '@cf/deepgram/aura-1', body: { text: cleanText, encoding: 'mp3' } },
   ];
 
-  for (const model of modelCandidates) {
+  for (const { name: model, body } of modelCandidates) {
     try {
       console.log(`[/api/tts] Synthesizing speech using Cloudflare Workers AI (${model})...`);
       const cfRes = await fetch(
@@ -68,11 +68,7 @@ async function synthesizeWithCloudflareAI(cleanText: string): Promise<Uint8Array
             Authorization: `Bearer ${apiToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            prompt: cleanText,
-            text: cleanText,
-            lang: 'ja',
-          }),
+          body: JSON.stringify(body),
         }
       );
 
@@ -123,6 +119,53 @@ async function synthesizeWithCloudflareAI(cleanText: string): Promise<Uint8Array
   return null;
 }
 
+/** Synthesize Japanese speech via VoiceText Web API when configured. */
+async function synthesizeWithVoiceText(cleanText: string): Promise<Uint8Array | null> {
+  const apiKey = process.env.VOICETEXT_API_KEY;
+
+  if (!apiKey) {
+    console.log('[/api/tts] VoiceText API key not configured. Skipping VoiceText TTS.');
+    return null;
+  }
+
+  try {
+    console.log('[/api/tts] Synthesizing speech using VoiceText Web API...');
+    const voiceTextRes = await fetch('https://api.voicetext.jp/v1/tts', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${btoa(`${apiKey}:`)}`,
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      },
+      body: new URLSearchParams({
+        text: cleanText,
+        speaker: 'hikari',
+        format: 'mp3',
+      }),
+    });
+
+    if (!voiceTextRes.ok) {
+      const errorText = await voiceTextRes.text().catch(() => '');
+      console.warn(`[/api/tts] VoiceText Web API HTTP ${voiceTextRes.status}: ${errorText}`);
+      return null;
+    }
+
+    const audioBuffer = new Uint8Array(await voiceTextRes.arrayBuffer());
+    const verification = verifyMp3Buffer(audioBuffer);
+    if (verification.valid && verification.format === 'mp3') {
+      console.log(
+        `[/api/tts] VoiceText TTS succeeded. Duration: ${verification.durationMs}ms, Bytes: ${verification.byteLength}`
+      );
+      return audioBuffer;
+    }
+
+    console.warn('[/api/tts] VoiceText audio verification failed:', verification.error);
+  } catch (err) {
+    console.warn('[/api/tts] VoiceText fetch error:', err);
+  }
+
+  return null;
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -151,8 +194,25 @@ export async function POST(req: Request) {
       }
     }
 
-    // 2. Absolute Fallback: Local Safe Mock MP3 Audio
-    console.log('[/api/tts] Cloudflare AI TTS unavailable or rate-limited. Serving Safe Mock MP3.');
+    // 2. Secondary Engine: VoiceText Web API
+    const voiceTextAudio = await synthesizeWithVoiceText(cleanText);
+    if (voiceTextAudio) {
+      const verification = verifyMp3Buffer(voiceTextAudio);
+      if (verification.valid && verification.format === 'mp3') {
+        return new Response(voiceTextAudio as BodyInit, {
+          status: 200,
+          headers: {
+            'Content-Type': 'audio/mpeg',
+            'Cache-Control': 'public, max-age=86400',
+            'X-Audio-Duration-Ms': String(verification.durationMs),
+            'X-Audio-Source': 'voicetext',
+          },
+        });
+      }
+    }
+
+    // 3. Absolute Fallback: Local Safe Mock MP3 Audio
+    console.log('[/api/tts] TTS providers unavailable or rate-limited. Serving Safe Mock MP3.');
     const mockBuffer = createSafeMockMp3Buffer(3);
     const verification = verifyMp3Buffer(mockBuffer);
 
