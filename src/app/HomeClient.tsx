@@ -32,6 +32,7 @@ import { canonicalName, localizeName } from '@/lib/names';
 import { artworkPath } from '@/lib/site';
 import type { DailyArtwork } from '@/lib/dailyArtwork';
 import { fetchArtworkImage } from '@/lib/artworkThumbnail';
+import ArtworkThumbnail from '@/components/ArtworkThumbnail';
 import ReadingApprovals from '@/components/ReadingApprovals';
 import GuideCorrections from '@/components/GuideCorrections';
 import AppMenu, { type MenuItem } from '@/components/AppMenu';
@@ -2741,7 +2742,15 @@ export default function HomeClient({
                       : 'hover:bg-slate-900/80 text-slate-300'
                       }`}
                   >
-                    <div className="text-left flex items-center gap-2">
+                    <div className="text-left flex items-center gap-3 min-w-0">
+                      {/* 候補のサムネイル（大きめ表示） */}
+                      <ArtworkThumbnail
+                        title={suggestion.title}
+                        artist={suggestion.artist}
+                        className="w-14 h-14 rounded-lg shrink-0 border border-slate-800"
+                        imgClassName="object-cover"
+                        placeholderSize="text-xl"
+                      />
                       {suggestion.isInstant && (
                         <span className="text-[9px] bg-teal-500/10 border border-teal-500/20 text-teal-400 px-1.5 py-0.5 rounded font-black shrink-0 uppercase tracking-wider">
                           {t.form.ready}
@@ -4075,38 +4084,63 @@ function DailyArtworkCard({
 
         <button
           onClick={onStart}
-          className="w-full text-left bg-slate-900/50 border border-slate-800 hover:border-teal-500/50 hover:bg-slate-900/80 rounded-2xl p-4 transition-all active:scale-[0.98] group"
+          className="w-full text-left bg-slate-900/50 border border-slate-800 hover:border-teal-500/50 hover:bg-slate-900/80 rounded-2xl overflow-hidden transition-all active:scale-[0.98] group"
         >
-          <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-950/60 mb-3 flex items-center justify-center">
+          {/* 画像をカード全面に表示し、タイトル等は下端のグラデーションに重ねる */}
+          <div className="relative w-full aspect-[4/3] bg-slate-950/60 flex items-center justify-center">
             {dailyImage ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={dailyImage}
                 alt={title}
-                className="w-full h-full object-contain"
+                className="w-full h-full object-cover"
                 loading="lazy"
               />
             ) : (
               <span className="text-slate-600 text-4xl">🖼️</span>
             )}
+            {/* 下端グラデーション + タイトル等の重ね表示（画像があるときのみ） */}
+            {dailyImage && (
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/50 to-transparent pt-10 pb-3 px-4">
+                <div className="flex items-end justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-2xl font-bold text-white leading-tight wordmark drop-shadow-md">
+                      {title}
+                    </p>
+                    {artist && (
+                      <p className="text-sm text-slate-200 font-sans mt-0.5 drop-shadow">{artist}</p>
+                    )}
+                    {(daily.year || daily.medium || daily.museum) && (
+                      <p className="text-[11px] text-slate-300 font-sans mt-1.5 leading-relaxed drop-shadow">
+                        {[daily.year, daily.medium, daily.museum].filter(Boolean).join('　／　')}
+                      </p>
+                    )}
+                  </div>
+                  <span className="shrink-0 text-teal-300 text-3xl leading-none group-hover:scale-110 transition-transform drop-shadow">→</span>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-2xl font-bold text-slate-100 leading-tight wordmark group-hover:text-teal-300 transition-colors">
-                {title}
-              </p>
-              {artist && (
-                <p className="text-sm text-slate-400 font-sans mt-0.5">{artist}</p>
-              )}
-              {(daily.year || daily.medium || daily.museum) && (
-                <p className="text-[11px] text-slate-500 font-sans mt-2 leading-relaxed">
-                  {[daily.year, daily.medium, daily.museum].filter(Boolean).join('　／　')}
+          {/* 画像がないときは従来通り下段にテキスト */}
+          {!dailyImage && (
+            <div className="flex items-start justify-between gap-4 p-4">
+              <div className="min-w-0">
+                <p className="text-2xl font-bold text-slate-100 leading-tight wordmark group-hover:text-teal-300 transition-colors">
+                  {title}
                 </p>
-              )}
+                {artist && (
+                  <p className="text-sm text-slate-400 font-sans mt-0.5">{artist}</p>
+                )}
+                {(daily.year || daily.medium || daily.museum) && (
+                  <p className="text-[11px] text-slate-500 font-sans mt-2 leading-relaxed">
+                    {[daily.year, daily.medium, daily.museum].filter(Boolean).join('　／　')}
+                  </p>
+                )}
+              </div>
+              <span className="shrink-0 text-teal-400 text-3xl leading-none mt-1 group-hover:scale-110 transition-transform">→</span>
             </div>
-            <span className="shrink-0 text-teal-400 text-3xl leading-none mt-1 group-hover:scale-110 transition-transform">→</span>
-          </div>
-          <p className="text-[11px] text-teal-300/80 font-sans mt-3">
+          )}
+          <p className="text-[11px] text-teal-300/80 font-sans px-4 pb-3">
             この作品から、はじめる
           </p>
         </button>
