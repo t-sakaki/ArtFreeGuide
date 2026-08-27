@@ -69,6 +69,9 @@
 - **音声ガイドに挨拶は不要**: プロンプト（`src/app/api/chat/route.ts`）で「こんにちは等の挨拶は絶対に入れない」と明記し、防御層 `src/lib/guideText.ts` の `sanitizeGuideText(text, locale?)` で冒頭挨拶およびプロンプト見出し漏れを多言語・複数行で除去する（実装済み）。新規プロンプト調整は環境変数 `GUIDE_SYSTEM_PROMPT` で上書き可能（未設定時は既定値）。
 
 ## 6. 既知の課題
+- **Supabase クレジット切れリスク（最重要）**: Supabase はハッカソン枠のクレジットで運用中。切れると「視聴履歴・類似推薦・認証」が停止する（解説再生自体は D1 なので影響なし）。詳細と除去ロードマップは `docs/supabase-decoupling.md` 参照。ベクトル検索は `EMBEDDING_PROVIDER=workers-ai` で D1 化可能（既に設計済み）。まず Supabase ダッシュボードで残量確認を。
+- **音源 (mp3) 保存先は R2（D1 ではない）**: D1 はテキスト DB のため音声保存に不適。R2 バインディング追加が必要（未設定）。詳細は同上ドキュメント。
+- **Edge TTS (Keita) は Cloudflare Workers 非対応**: WebSocket カスタムヘッダー (`Sec-MS-GEC`) 要件と Workers 制限のため。リクエスト時生成は不可。「あとで無料枠で事前生成 → R2 保存 → URL 再生」が正解。温存コードは `feat/edge-tts-keita` ブランチ。`docs/supabase-decoupling.md` §4 参照。
 - **Embedding 埋め合わせ**: NVIDIA NIM 移行後、一部の作品で `embedding_nv` が未生成である可能性があります。`/api/embeddings/backfill` または `scripts/backfill_embeddings.mjs` で補完してください。
 - **JSON 不整合**: LLM が稀に JSON 形式を崩して解説生成に失敗します（リトライは未実装）。再読込で回復するため、デモ前に `scripts/warm_cache.mjs` で該当作品をキャッシュ済みにしておきます。
 - **画像のない作品**: 著作権保護作品（ダリ・ピカソ・マグリット等）は Commons に画像がないため🖼️プレースホルダのままになります。データ不備ではありません。
