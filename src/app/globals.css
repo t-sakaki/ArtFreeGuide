@@ -376,3 +376,63 @@
     animation: none;
   }
 }
+
+/* ── AI-prompt style question box ──────────────────────────────────────────
+ * When the box is empty it shows a rotating "AI prompt" hint prefixed with a
+ * ">" caret and a blinking terminal-style cursor, so the input reads like a
+ * live assistant prompt rather than a plain placeholder. */
+@keyframes aiCaretBlink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.ai-prompt-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 2px;
+  transform: translateY(2px);
+  background: linear-gradient(180deg, #5eead4, #38bdf8);
+  border-radius: 1px;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.7);
+  animation: aiCaretBlink 1.05s steps(1, end) infinite;
+}
+
+.ai-prompt-hint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 0.875rem;
+  padding-right: 2.75rem;
+  pointer-events: none;
+  color: #5b6472;
+  font-size: 0.75rem;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: aiPromptSwap 0.5s ease-in-out;
+}
+
+/* The leading ">" prompt glyph, tinted like a terminal prompt. */
+.ai-prompt-glyph {
+  color: #38bdf8;
+  font-weight: 700;
+  margin-right: 0.35em;
+  flex-shrink: 0;
+}
+
+@keyframes aiPromptSwap {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-prompt-caret { animation: none; opacity: 1; }
+  .ai-prompt-hint { animation: none; }
+}

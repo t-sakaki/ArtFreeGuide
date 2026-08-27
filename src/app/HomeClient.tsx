@@ -27,6 +27,7 @@ import {
   SPEECH_LANG,
   UI,
   isLocale,
+  AI_PROMPTS,
 } from '@/lib/i18n';
 import { canonicalName, localizeName } from '@/lib/names';
 import { artworkPath } from '@/lib/site';
@@ -446,6 +447,18 @@ export default function HomeClient({
   const [narrationDone, setNarrationDone] = useState(false);
   const [nudgedChip, setNudgedChip] = useState(-1);
   const [showQuestionSuggestions, setShowQuestionSuggestions] = useState(false);
+
+  // AI-prompt style rotating hint shown inside the empty question box.
+  const aiPrompts = AI_PROMPTS[locale] ?? AI_PROMPTS.en;
+  const [promptIdx, setPromptIdx] = useState(0);
+  useEffect(() => {
+    // Re-seed to the first hint whenever the language changes.
+    setPromptIdx(0);
+    const id = setInterval(() => {
+      setPromptIdx(i => (i + 1) % aiPrompts.length);
+    }, 2600);
+    return () => clearInterval(id);
+  }, [aiPrompts]);
 
   // Marquee drag state to distinguish tap from drag on PC
   const isDraggingMarqueeRef = useRef(false);
@@ -3411,6 +3424,18 @@ export default function HomeClient({
                   aria-label={t.ask.placeholder}
                   className="w-full bg-slate-900/90 border border-slate-800 focus:border-teal-500/50 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 outline-none transition-colors"
                 />
+                {/* AI-prompt style overlay: "> " glyph + rotating hint + blinking caret while empty */}
+                {!questionInput && (
+                  <div
+                    className="ai-prompt-hint"
+                    key={promptIdx}
+                    aria-hidden="true"
+                  >
+                    <span className="ai-prompt-glyph">{'>'}</span>
+                    <span>{aiPrompts[promptIdx]}</span>
+                    <span className="ai-prompt-caret" />
+                  </div>
+                )}
               </div>
 
               {/* 3. 🎙️ 音声入力ボタン */}
