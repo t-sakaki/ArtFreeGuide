@@ -2298,3 +2298,87 @@ const hu: UIStrings = {
 };
 
 export const UI: Record<Locale, UIStrings> = { ja, en, fr, es, zh, it, de, pt, nl, pl, tr, sv, hu };
+
+/**
+ * Rotating "AI prompt" hints shown inside the empty question box so the input
+ * reads like a live assistant prompt rather than a plain placeholder.
+ * The leading ">" caret is rendered separately in the UI (see HomeClient).
+ * Five supported languages; anything else falls back to English.
+ */
+export const AI_PROMPTS: Record<Locale, string[]> = {
+  ja: [
+    'この作品の隠された意味を教えて',
+    '画家はなぜこれを描いたの？',
+    'もっと深い裏話を聞かせて',
+    'この色使いの意図は？',
+    '同時代の作品と比べると？',
+  ],
+  en: [
+    'Reveal the hidden meaning of this work',
+    'Why did the artist paint this?',
+    'Tell me a deeper backstory',
+    'What is the intent behind these colors?',
+    'How does it compare to its era?',
+  ],
+  fr: [
+    'Révèle la signification cachée de l’œuvre',
+    'Pourquoi l’artiste a-t-il peint cela ?',
+    'Donne-moi une anecdote plus profonde',
+    'Quelle est l’intention derrière ces couleurs ?',
+    'Compare-la à son époque',
+  ],
+  es: [
+    'Revela el significado oculto de la obra',
+    '¿Por qué el artista pintó esto?',
+    'Cuéntame una anécdota más profunda',
+    '¿Cuál es la intención de estos colores?',
+    'Compárala con su época',
+  ],
+  zh: [
+    '揭示这件作品隐藏的含义',
+    '画家为何创作此作？',
+    '讲讲更深的幕后故事',
+    '这些色彩的用意是什么？',
+    '与同时代作品相比如何？',
+  ],
+  it: [
+    'Reveal the hidden meaning of this work',
+    'Why did the artist paint this?',
+    'Tell me a deeper backstory',
+  ],
+  de: [
+    'Reveal the hidden meaning of this work',
+    'Why did the artist paint this?',
+    'Tell me a deeper backstory',
+  ],
+  pt: [
+    'Reveal the hidden meaning of this work',
+    'Why did the artist paint this?',
+    'Tell me a deeper backstory',
+  ],
+  nl: [
+    'Reveal the hidden meaning of this work',
+    'Why did the artist paint this?',
+    'Tell me a deeper backstory',
+  ],
+  pl: [
+    'Reveal the hidden meaning of this work',
+    'Why did the artist paint this?',
+    'Tell me a deeper backstory',
+  ],
+  tr: [
+    'Reveal the hidden meaning of this work',
+    'Why did the artist paint this?',
+    'Tell me a deeper backstory',
+  ],
+  sv: [
+    'Reveal the hidden meaning of this work',
+    'Why did the artist paint this?',
+    'Tell me a deeper backstory',
+  ],
+  hu: [
+    'Reveal the hidden meaning of this work',
+    'Why did the artist paint this?',
+    'Tell me a deeper backstory',
+  ],
+};
