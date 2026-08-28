@@ -29,6 +29,7 @@ import {
   isLocale,
 } from '@/lib/i18n';
 import { canonicalName, localizeName } from '@/lib/names';
+import { artworkSlug } from '@/lib/slug';
 import { artworkPath } from '@/lib/site';
 import type { DailyArtwork } from '@/lib/dailyArtwork';
 import { fetchArtworkImage } from '@/lib/artworkThumbnail';
@@ -203,7 +204,19 @@ class AudioController {
     onSilent?: () => void
   ) {
     this.clearQueue();
+    this.speakWithWebSpeech(index, text, rate, lang, onStart, onEnd, onError, onSilent);
+  }
 
+  static speakWithWebSpeech(
+    index: number,
+    text: string,
+    rate: number,
+    lang: string,
+    onStart: () => void,
+    onEnd: () => void,
+    onError: (e: any) => void,
+    onSilent?: () => void
+  ) {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       return;
     }
@@ -410,6 +423,14 @@ export default function HomeClient({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE] ?? 1.7);
   const [speechSupported, setSpeechSupported] = useState(false);
   const [voiceUnavailable, setVoiceUnavailable] = useState(false);
+
+  // MiniMax Week hackathon: per-artwork theme song (Music 3.0).
+  const [themeSongUrl, setThemeSongUrl] = useState<string | null>(null);
+  const [themeSongLyrics, setThemeSongLyrics] = useState<string>('');
+  const [themeSongLoading, setThemeSongLoading] = useState(false);
+  const [themeSongError, setThemeSongError] = useState<string | null>(null);
+  const [isThemeSongPlaying, setIsThemeSongPlaying] = useState(false);
+  const themeSongAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Deep Dive & Interactive Feedback States
   const [deepDiveLoading, setDeepDiveLoading] = useState(false);
@@ -1197,6 +1218,23 @@ export default function HomeClient({
 
   useEffect(() => cancelTourAdvance, []);
 
+  // MiniMax Week hackathon: track the current artwork slug for theme-song lookup.
+  useEffect(() => {
+    if (artwork) {
+      const slug = artworkSlug(artwork);
+      currentSlugRef.current = slug;
+      if (themeSongAudioRef.current) {
+        themeSongAudioRef.current.pause();
+        themeSongAudioRef.current = null;
+      }
+      setThemeSongUrl(null);
+      setThemeSongLyrics('');
+      setIsThemeSongPlaying(false);
+      setThemeSongError(null);
+    }
+  }, [artwork]);
+
+
   useEffect(() => {
     updateScrollHint();
   }, [segments, activeSegmentIndex, explanationMode]);
@@ -1306,6 +1344,84 @@ export default function HomeClient({
   };
 
   // Start the generative score that matches the artwork
+  // MiniMax Week hackathon: generate / play the artwork's theme song.
+  const currentSlugRef = useRef<string | null>(null);
+  const handleThemeSong = async () => {
+    if (themeSongLoading) return;
+    if (themeSongUrl && themeSongAudioRef.current) {
+      if (isThemeSongPlaying) {
+        themeSongAudioRef.current.pause();
+        setIsThemeSongPlaying(false);
+      } else {
+        await themeSongAudioRef.current.play().catch(() => {});
+        setIsThemeSongPlaying(true);
+      }
+      return;
+    }
+    const slug = currentSlugRef.current;
+    if (!slug) {
+      setThemeSongError('no_artwork');
+      return;
+    }
+    const locale = localeRef.current;
+    setThemeSongLoading(true);
+    setThemeSongError(null);
+    try {
+      // 1. Submit (fast): returns requestId + lyrics immediately.
+      const res = await fetch('/api/theme-song', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, locale }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setThemeSongError(data.error);
+        return;
+      }
+      setThemeSongLyrics(data.lyrics || '');
+      if (data.cached && data.audioUrl) {
+        // Cache hit — no polling needed.
+        setThemeSongUrl(data.audioUrl);
+        const audio = new Audio(data.audioUrl);
+        audio.onended = () => setIsThemeSongPlaying(false);
+        audio.onpause = () => setIsThemeSongPlaying(false);
+        themeSongAudioRef.current = audio;
+        await audio.play().catch(() => {});
+        setIsThemeSongPlaying(true);
+        return;
+      }
+      const requestId = data.requestId;
+      if (!requestId) {
+        setThemeSongError('submit_failed');
+        return;
+      }
+      // 2. Poll until the song is ready (1-2 min).
+      let audioUrl: string | undefined;
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 15000));
+        const poll = await fetch(`/api/theme-song/${requestId}?slug=${encodeURIComponent(slug)}&locale=${locale}`);
+        const p = await poll.json();
+        if (p.status === 'success' && p.audioUrl) { audioUrl = p.audioUrl; break; }
+        if (p.status === 'failed' || p.status === 'error') break;
+      }
+      if (!audioUrl) {
+        setThemeSongError('generation_failed');
+        return;
+      }
+      setThemeSongUrl(audioUrl);
+      const audio = new Audio(audioUrl);
+      audio.onended = () => setIsThemeSongPlaying(false);
+      audio.onpause = () => setIsThemeSongPlaying(false);
+      themeSongAudioRef.current = audio;
+      await audio.play().catch(() => {});
+      setIsThemeSongPlaying(true);
+    } catch (e) {
+      setThemeSongError('request_failed');
+    } finally {
+      setThemeSongLoading(false);
+    }
+  };
+
   const startAmbientSound = (artworkTitle: string, spec?: MusicSpec | null) => {
     try {
       const resolvedSpec =
@@ -3620,6 +3736,31 @@ export default function HomeClient({
             </div>
           </div>
 
+        {/* MiniMax Week hackathon: theme-song lyrics / status ticker */}
+        {(themeSongLyrics || themeSongError) && (
+          <div className="w-full max-w-lg mx-auto px-3 mb-2 font-sans">
+            {themeSongError && (
+              <p className="text-[10px] text-amber-300/80 text-center">
+                {themeSongError === 'no_guide_yet'
+                  ? '先に音声ガイドを再生してください'
+                  : themeSongError === 'no_gmi_key' || themeSongError === 'generation_failed'
+                  ? 'テーマソング生成に失敗しました（APIキーを確認）'
+                  : 'テーマソングを生成できませんでした'}
+              </p>
+            )}
+            {themeSongLyrics && (
+              <details className="bg-fuchsia-950/30 border border-fuchsia-500/30 rounded-xl px-3 py-2">
+                <summary className="text-[10px] font-semibold text-fuchsia-300 cursor-pointer select-none">
+                  🎵 この作品のテーマソング・歌詞
+                </summary>
+                <p className="text-[11px] text-slate-300 leading-relaxed whitespace-pre-line mt-1 max-h-32 overflow-y-auto">
+                  {themeSongLyrics}
+                </p>
+              </details>
+            )}
+          </div>
+        )}
+
         {/* 【下段】 メイン操作コントロールボタン群 */}
         <div className="flex items-center justify-between w-full max-w-lg mx-auto px-1 font-sans">
 
@@ -3707,6 +3848,19 @@ export default function HomeClient({
             <span className="text-xl">⏭️</span>
             <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.nextWork}</span>
           </button>
+          {/* MiniMax Week hackathon: 🎵 テーマソング (Music 3.0) */}
+          <button
+            onClick={handleThemeSong}
+            disabled={themeSongLoading || !artwork}
+            className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 transition-all active:scale-90 disabled:opacity-20 disabled:pointer-events-none ${isThemeSongPlaying ? 'text-fuchsia-400' : 'text-slate-400 hover:text-fuchsia-400'}`}
+            title="テーマソング"
+          >
+            <span className="text-lg">{themeSongLoading ? '🎶' : '🎵'}</span>
+            <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">
+              {themeSongLoading ? '作曲中…' : 'テーマソング'}
+            </span>
+          </button>
+
 
         </div>
       </div>

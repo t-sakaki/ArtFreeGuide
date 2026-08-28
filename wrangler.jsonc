@@ -43,6 +43,14 @@
 			"migrations_dir": "d1/migrations"
 		}
 	],
+	"r2_buckets": [
+		{
+			// MiniMax Week hackathon: generated theme-song MP3 assets.
+			// Stored here from GMI Cloud URLs for permanent self-hosted durability.
+			"binding": "MM_THEMES",
+			"bucket_name": "mm-themes"
+		}
+	],
 	"ai": {
 		// Workers AI: inference runs on Cloudflare, no API key needed
 		// see https://developers.cloudflare.com/workers-ai/
@@ -94,6 +102,12 @@
 					"binding": "WORKER_SELF_REFERENCE",
 					"service": "art-free-guide-staging"
 				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "MM_THEMES",
+					"bucket_name": "mm-themes"
+				}
 			]
 		},
 		"production": {
@@ -122,6 +136,12 @@
 				{
 					"binding": "WORKER_SELF_REFERENCE",
 					"service": "art-free-guide"
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "MM_THEMES",
+					"bucket_name": "mm-themes"
 				}
 			]
 		}

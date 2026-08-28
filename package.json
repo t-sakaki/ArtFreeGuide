@@ -32,5 +32,8 @@
     "typescript": "^5",
     "vitest": "^4.1.11",
     "wrangler": "^4.112.0"
+  },
+  "optionalDependencies": {
+    "@esbuild/win32-x64": "^0.28.2"
   }
 }
