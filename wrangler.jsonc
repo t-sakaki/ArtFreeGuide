@@ -94,8 +94,14 @@
 					"binding": "WORKER_SELF_REFERENCE",
 					"service": "art-free-guide-staging"
 				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "AUDIO",
+					"bucket_name": "artfreeguide-audio"
+				}
 			]
-		},
+			},
 		"production": {
 			"name": "art-free-guide",
 			"vars": {
@@ -122,6 +128,12 @@
 				{
 					"binding": "WORKER_SELF_REFERENCE",
 					"service": "art-free-guide"
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "AUDIO",
+					"bucket_name": "artfreeguide-audio"
 				}
 			]
 		}
