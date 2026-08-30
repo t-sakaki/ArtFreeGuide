@@ -2413,6 +2413,13 @@ export default function HomeClient({
       });
     }
 
+    items.push({
+      id: 'privacy',
+      icon: '🔒',
+      label: t.header.privacy,
+      onSelect: () => { window.location.href = '/privacy'; }
+    });
+
     return <AppMenu label={t.header.menu} items={items} footer={renderLanguageRow()} />;
   };
 

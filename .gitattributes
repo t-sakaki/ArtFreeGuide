@@ -1,0 +1,13 @@
+# Normalize all text files to LF in the repository to prevent CRLF diff churn
+# (WSL/Windows editors tend to save CRLF). Committed source is LF; keep it that way.
+* text=auto eol=lf
+
+*.ts text
+*.tsx text
+*.js text
+*.mjs text
+*.css text
+*.json text
+*.jsonc text
+*.sql text
+*.md text

@@ -1,0 +1,1 @@
+INSERT INTO artworks (title, artist, location, year, guide_short, guide_standard, guide_deep, search_query, recommendations, artist_slug, artwork_slug, view_count) VALUES ('レディメイドの花束','Unknown','ArtFreeGuide','2026','レディメイドの花束は、事前に用意されたブーケの作品です。','レディメイドの花束は、事前に用意されたブーケの作品です。','具体的な説明をここに入力','[]','レディメイドの花束','ready-made-bouquet','[]',0);
