@@ -43,6 +43,14 @@
 			"migrations_dir": "d1/migrations"
 		}
 	],
+	"r2_buckets": [
+		{
+			// Generated theme-song MP3s (MiniMax Week feature). Private bucket,
+			// served through /api/theme-song/audio.
+			"binding": "AUDIO",
+			"bucket_name": "artfreeguide-audio"
+		}
+	],
 	"ai": {
 		// Workers AI: inference runs on Cloudflare, no API key needed
 		// see https://developers.cloudflare.com/workers-ai/
@@ -94,6 +102,12 @@
 					"binding": "WORKER_SELF_REFERENCE",
 					"service": "art-free-guide-staging"
 				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "AUDIO",
+					"bucket_name": "artfreeguide-audio"
+				}
 			]
 		},
 		"production": {
@@ -122,6 +136,12 @@
 				{
 					"binding": "WORKER_SELF_REFERENCE",
 					"service": "art-free-guide"
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "AUDIO",
+					"bucket_name": "artfreeguide-audio"
 				}
 			]
 		}

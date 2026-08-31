@@ -34,6 +34,8 @@ import { artworkPath } from '@/lib/site';
 import type { DailyArtwork } from '@/lib/dailyArtwork';
 import { fetchArtworkImage } from '@/lib/artworkThumbnail';
 import ArtworkThumbnail from '@/components/ArtworkThumbnail';
+import ThemeSongButton from '@/components/ThemeSongButton';
+import { artworkSlug } from '@/lib/slug';
 import ReadingApprovals from '@/components/ReadingApprovals';
 import GuideCorrections from '@/components/GuideCorrections';
 import AppMenu, { type MenuItem } from '@/components/AppMenu';
@@ -355,6 +357,8 @@ export default function HomeClient({
   const canonicalArtist = canonicalName(artist);
   const shownArtwork = localizeName(canonicalArtwork, locale);
   const shownArtist = localizeName(canonicalArtist, locale);
+  // Permalink segment, when this work has one — also the key for its theme song.
+  const themeSongSlug = artworkSlug(canonicalArtwork);
 
   // Personalized Explanation Modes
   const [responseShort, setResponseShort] = useState('');
@@ -2413,6 +2417,13 @@ export default function HomeClient({
       });
     }
 
+    items.push({
+      id: 'privacy',
+      icon: '🔒',
+      label: t.header.privacy,
+      onSelect: () => { window.location.href = '/privacy'; }
+    });
+
     return <AppMenu label={t.header.menu} items={items} footer={renderLanguageRow()} />;
   };
 
@@ -3047,6 +3058,13 @@ export default function HomeClient({
               )}
             </div>
 
+            {/* MiniMax Week: per-artwork theme song, written from this guide */}
+            {responseShort && themeSongSlug && (
+              <div className="pb-1">
+                <ThemeSongButton slug={themeSongSlug} locale={locale} />
+              </div>
+            )}
+
             {/* Highlights Segment Box */}
             <div className="relative">
               <div
@@ -3420,7 +3438,7 @@ export default function HomeClient({
                       setShowQuestionSuggestions(false);
                     }
                   }}
-                  placeholder="💬 質問や裏話を聞く... (タップで候補表示)"
+                  placeholder=""
                   aria-label={t.ask.placeholder}
                   className="w-full bg-slate-900/90 border border-slate-800 focus:border-teal-500/50 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 outline-none transition-colors"
                 />
