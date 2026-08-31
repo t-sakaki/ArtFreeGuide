@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ArtFreeGuide</string>
+    <string name="title_activity_main">ArtFreeGuide</string>
+    <string name="package_name">com.sakakibara.artfreeguide</string>
+    <string name="custom_url_scheme">com.sakakibara.artfreeguide</string>
+</resources>
