@@ -4,7 +4,17 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { ensureAnonymousUser } from '@/lib/user';
 import ArtworkStage from '@/components/ArtworkStage';
 import ArtworkPlaque from '@/components/ArtworkPlaque';
-import { findHotspotSet, hotspotImageUrl, localizeHotspotSet, matchHotspot } from '@/lib/hotspots';
+import {
+  cleanGuideHotspots,
+  findHotspotSet,
+  GuideHotspot,
+  Hotspot,
+  hotspotImageUrl,
+  localizeHotspotSet,
+  matchGuideHotspot,
+  matchHotspot,
+  PlacedHotspot,
+} from '@/lib/hotspots';
 import { useRecommendations, useTasteProfile } from '@/hooks/useRecommendations';
 import ForYouShelf from '@/components/ForYouShelf';
 import {
@@ -69,6 +79,10 @@ interface GuideCacheEntry {
   imageError: boolean;
   searchQuery: string;
   recommendations: Recommendation[];
+  /** Marker-less viewing points generated with the guide, for any artwork. */
+  hotspots?: GuideHotspot[];
+  /** Those points once a vision model has placed them on the image (Phase 2). */
+  hotspotMarks?: PlacedHotspot[];
   music?: MusicSpec;
   /** Guides cached before the music spec existed */
   mood?: string;
@@ -84,6 +98,8 @@ interface HistoryEntry {
   imageError: boolean;
   searchQuery: string;
   recommendations: Recommendation[];
+  hotspots?: GuideHotspot[];
+  hotspotMarks?: PlacedHotspot[];
   timestamp: string;
   music?: MusicSpec;
   /** History written before the music spec existed */
@@ -403,6 +419,13 @@ export default function HomeClient({
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  /** Generated viewing points for artworks without a curated, measured set. */
+  const [generatedHotspots, setGeneratedHotspots] = useState<GuideHotspot[]>([]);
+  const [activeGeneratedHotspot, setActiveGeneratedHotspot] = useState(-1);
+  /** The generated points once a vision model has placed them on the image. */
+  const [generatedMarks, setGeneratedMarks] = useState<PlacedHotspot[]>([]);
+  /** Guide cache keys we have already asked the vision endpoint about. */
+  const marksRequestedRef = useRef<Set<string>>(new Set());
 
   // Recommendations State
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
@@ -893,6 +916,9 @@ export default function HomeClient({
               setImageError(entry.imageError);
               setSearchQuery(entry.searchQuery);
               setRecommendations(entry.recommendations);
+              setGeneratedHotspots(entry.hotspots ?? []);
+              setGeneratedMarks(entry.hotspotMarks ?? []);
+              setActiveGeneratedHotspot(-1);
             }
           }
         } catch (e) {
@@ -948,6 +974,9 @@ export default function HomeClient({
     setImageError(entry.imageError);
     setSearchQuery(entry.searchQuery);
     setRecommendations(entry.recommendations);
+    setGeneratedHotspots(entry.hotspots ?? []);
+    setGeneratedMarks(entry.hotspotMarks ?? []);
+    setActiveGeneratedHotspot(-1);
     // An entry stored before its image resolved would leave an empty frame:
     // neither a picture nor the "no image" plaque.
     if (!entry.imageUrl && !entry.imageError) {
@@ -1087,6 +1116,43 @@ export default function HomeClient({
     return found ? localizeHotspotSet(found, locale) : null;
   }, [canonicalArtwork, canonicalArtist, locale]);
   const hotspots = hotspotSet?.hotspots ?? [];
+  // Curated marks win; the generated list only fills in for everything else.
+  const showGeneratedHotspots = !hotspotSet && generatedHotspots.length > 0;
+
+  // A vision model may have placed the generated points on the image (Phase 2).
+  // They are shown through the same <ArtworkStage> as curated marks, but with
+  // ids keyed to the list so selection stays in sync with the caption panel.
+  const markHotspots = useMemo<Hotspot[]>(
+    () =>
+      generatedMarks.map(mark => ({
+        id: `gen-${generatedHotspots.findIndex(g => g.label === mark.label)}`,
+        label: mark.label,
+        detail: mark.detail,
+        keywords: mark.keywords,
+        i18n: {},
+        x: mark.x,
+        y: mark.y,
+        zoom: mark.zoom,
+      })),
+    [generatedMarks, generatedHotspots]
+  );
+  const showGeneratedMarks = showGeneratedHotspots && markHotspots.length > 0;
+  const stageHotspots = hotspots.length > 0 ? hotspots : showGeneratedMarks ? markHotspots : [];
+  const stageActiveId =
+    hotspots.length > 0
+      ? activeHotspotId
+      : activeGeneratedHotspot >= 0
+        ? `gen-${activeGeneratedHotspot}`
+        : null;
+  const selectStageHotspot = (id: string | null) => {
+    if (hotspots.length > 0) {
+      selectHotspot(id);
+      return;
+    }
+    const idx = id ? Number(id.replace('gen-', '')) : -1;
+    setActiveGeneratedHotspot(Number.isInteger(idx) ? idx : -1);
+    if (idx >= 0) hints.complete('hotspot');
+  };
   // Coordinates were measured on one specific reproduction, so it wins over search results.
   const displayImageUrl = hotspotSet ? hotspotImageUrl(hotspotSet.file) : imageUrl;
   const activeHotspot = hotspots.find(h => h.id === activeHotspotId) ?? null;
@@ -1108,6 +1174,54 @@ export default function HomeClient({
     if (match) setActiveHotspotId(match.id);
   }, [hotspotSet, hotspotPinned, isPlaying, activeSegmentIndex, speakableSegments]);
 
+  // Same idea for the generated list: highlight the point being narrated.
+  useEffect(() => {
+    if (!showGeneratedHotspots) return;
+    if (!isPlaying || activeSegmentIndex < 0 || activeSegmentIndex >= speakableSegments.length) return;
+    const index = matchGuideHotspot(generatedHotspots, speakableSegments[activeSegmentIndex]);
+    if (index !== -1) setActiveGeneratedHotspot(index);
+  }, [showGeneratedHotspots, generatedHotspots, isPlaying, activeSegmentIndex, speakableSegments]);
+
+  // Ask a vision model to place the generated points on the image, once per
+  // artwork. The endpoint caches the result in the guide payload, so a revisit
+  // is a no-op round trip and a work with a curated set never asks at all.
+  useEffect(() => {
+    if (!showGeneratedHotspots || !displayImageUrl || generatedMarks.length > 0) return;
+    const key = `${canonicalArtwork.trim().toLowerCase()}::${canonicalArtist.trim().toLowerCase()}::${locale}`;
+    if (marksRequestedRef.current.has(key)) return;
+    marksRequestedRef.current.add(key);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/hotspots', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: canonicalArtwork,
+            artist: canonicalArtist,
+            locale,
+            imageUrl: displayImageUrl,
+          }),
+        });
+        const data = await res.json();
+        const marks: PlacedHotspot[] = Array.isArray(data?.marks) ? data.marks : [];
+        if (cancelled || marks.length === 0) return;
+        setGeneratedMarks(marks);
+        setGuideCache(prev => {
+          const entry = prev[key];
+          return entry ? { ...prev, [key]: { ...entry, hotspotMarks: marks } } : prev;
+        });
+        updateHistoryEntryByArtwork(canonicalArtwork, canonicalArtist, { hotspotMarks: marks });
+      } catch {
+        // Best effort; the text list stays on screen regardless.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showGeneratedHotspots, displayImageUrl, generatedMarks.length, canonicalArtwork, canonicalArtist, locale]);
+
   const selectHotspot = (id: string | null) => {
     setActiveHotspotId(id);
     setHotspotPinned(id !== null);
@@ -1122,7 +1236,7 @@ export default function HomeClient({
     () => [
       ['artwork', !responseShort && !loading],
       ['play', Boolean(responseShort) && !hasPlayedOnce],
-      ['hotspot', Boolean(responseShort) && hotspots.length > 0],
+      ['hotspot', Boolean(responseShort) && (hotspots.length > 0 || showGeneratedMarks)],
       ['deepDive', Boolean(responseShort)],
       ['ask', Boolean(responseShort)],
       ['language', Boolean(responseShort)]
@@ -1194,6 +1308,9 @@ export default function HomeClient({
     setImageUrl(null);
     setImageError(false);
     setRecommendations([]);
+    setGeneratedHotspots([]);
+    setGeneratedMarks([]);
+    setActiveGeneratedHotspot(-1);
     setShowInputDrawer(false);
     setArtwork('');
     setArtist('');
@@ -1750,6 +1867,9 @@ export default function HomeClient({
       setImageError(cached.imageError);
       setSearchQuery(cached.searchQuery);
       setRecommendations(cached.recommendations);
+      setGeneratedHotspots(cached.hotspots ?? []);
+      setGeneratedMarks(cached.hotspotMarks ?? []);
+      setActiveGeneratedHotspot(-1);
       if (!cached.imageUrl && !cached.imageError) {
         fetchImage(
           cached.searchQuery || `${targetArtwork} ${targetArtist}`.trim(),
@@ -1790,6 +1910,9 @@ export default function HomeClient({
     setImageUrl(null);
     setImageError(false);
     setRecommendations([]);
+    setGeneratedHotspots([]);
+    setGeneratedMarks([]);
+    setActiveGeneratedHotspot(-1);
 
     try {
       const res = await fetch('/api/chat', {
@@ -1834,6 +1957,7 @@ export default function HomeClient({
         let standardText = '';
         let deepText = '';
         let music: unknown = null;
+        let guideHotspots: GuideHotspot[] = [];
 
         try {
           let jsonString = data.text.trim();
@@ -1852,6 +1976,7 @@ export default function HomeClient({
           if (parsed.music && typeof parsed.music === 'object') {
             music = parsed.music;
           }
+          guideHotspots = cleanGuideHotspots(parsed.hotspots);
           if (parsed.recommendations && Array.isArray(parsed.recommendations)) {
             recs = parsed.recommendations.map((r: any) => ({
               title: r.title,
@@ -1896,6 +2021,9 @@ export default function HomeClient({
         setResponseShort(shortText);
         setResponseStandard(standardText);
         setResponseDeep(deepText);
+        setGeneratedHotspots(guideHotspots);
+        setGeneratedMarks([]);
+        setActiveGeneratedHotspot(-1);
         setExplanationMode(targetMode);
 
         // Store primary metadata in cache
@@ -1907,6 +2035,8 @@ export default function HomeClient({
           imageError: false,
           searchQuery: queryForImage,
           recommendations: recs,
+          hotspots: guideHotspots,
+          hotspotMarks: [],
           music: resolvedSpec
         };
 
@@ -1923,6 +2053,8 @@ export default function HomeClient({
           imageError: false,
           searchQuery: queryForImage,
           recommendations: recs,
+          hotspots: guideHotspots,
+          hotspotMarks: [],
           timestamp: new Date().toISOString(),
           music: resolvedSpec
         };
@@ -2802,13 +2934,13 @@ export default function HomeClient({
               </div>
             )}
             {displayImageUrl && (
-              hotspots.length > 0 ? (
+              stageHotspots.length > 0 ? (
                 <ArtworkStage
                   imageUrl={displayImageUrl}
                   alt={artwork}
-                  hotspots={hotspots}
-                  activeHotspotId={activeHotspotId}
-                  onSelect={selectHotspot}
+                  hotspots={stageHotspots}
+                  activeHotspotId={stageActiveId}
+                  onSelect={selectStageHotspot}
                   kenBurns={isPlaying}
                 />
               ) : (
@@ -2834,7 +2966,7 @@ export default function HomeClient({
                   onClick={() => setShowArtworkViewer(true)}
                   className="bg-slate-950/70 hover:bg-slate-950 border border-slate-700 hover:border-teal-500/60 text-slate-300 hover:text-teal-400 rounded-lg px-2 py-1 text-[10px] font-bold font-sans transition-colors"
                 >
-                  {hotspots.length > 0 ? t.image.zoomHotspots : t.image.zoom}
+                  {hotspots.length > 0 || showGeneratedHotspots ? t.image.zoomHotspots : t.image.zoom}
                 </button>
               </div>
             )}
@@ -2890,13 +3022,13 @@ export default function HomeClient({
           </div>
 
           <div className="relative flex-1 mx-4 mb-3 rounded-2xl overflow-hidden bg-slate-900/40 border border-slate-800">
-            {hotspots.length > 0 ? (
+            {stageHotspots.length > 0 ? (
               <ArtworkStage
                 imageUrl={displayImageUrl}
                 alt={artwork}
-                hotspots={hotspots}
-                activeHotspotId={activeHotspotId}
-                onSelect={selectHotspot}
+                hotspots={stageHotspots}
+                activeHotspotId={stageActiveId}
+                onSelect={selectStageHotspot}
               />
             ) : (
               <img src={displayImageUrl} alt={artwork} className="absolute inset-0 w-full h-full object-contain" />
@@ -2921,6 +3053,28 @@ export default function HomeClient({
               </div>
               <p className="text-sm text-slate-300 font-serif leading-relaxed min-h-[3rem]">
                 {activeHotspot ? activeHotspot.detail : t.image.hotspotHint}
+              </p>
+            </div>
+          ) : showGeneratedHotspots ? (
+            <div className="px-4 pb-6 space-y-2.5 shrink-0 max-w-2xl w-full mx-auto">
+              <div className="scroll-area flex gap-2 overflow-x-auto snap-x snap-mandatory -mx-1 px-1">
+                {generatedHotspots.map((point, index) => (
+                  <button
+                    key={point.label}
+                    onClick={() => setActiveGeneratedHotspot(activeGeneratedHotspot === index ? -1 : index)}
+                    className={`shrink-0 snap-start whitespace-nowrap px-3 py-1.5 rounded-full text-[11px] font-bold font-sans border transition-colors ${activeGeneratedHotspot === index
+                      ? 'bg-teal-500 text-slate-950 border-teal-400'
+                      : 'bg-slate-900/60 text-slate-300 border-slate-800 hover:border-teal-500/50'
+                      }`}
+                  >
+                    {point.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-sm text-slate-300 font-serif leading-relaxed min-h-[3rem]">
+                {activeGeneratedHotspot >= 0
+                  ? generatedHotspots[activeGeneratedHotspot].detail
+                  : t.image.highlightsIntro}
               </p>
             </div>
           ) : (
@@ -3061,7 +3215,13 @@ export default function HomeClient({
             {/* MiniMax Week: per-artwork theme song, written from this guide */}
             {responseShort && themeSongSlug && (
               <div className="pb-1">
-                <ThemeSongButton slug={themeSongSlug} locale={locale} />
+                <ThemeSongButton
+                  slug={themeSongSlug}
+                  locale={locale}
+                  title={shownArtwork}
+                  artist={shownArtist}
+                  imageUrl={displayImageUrl}
+                />
               </div>
             )}
 
@@ -3204,6 +3364,39 @@ export default function HomeClient({
               >
                 {t.feedback.send}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Generated viewing points (no curated marks for this work) */}
+        {showGeneratedHotspots && (
+          <div className="pt-4 space-y-3 select-none">
+            <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase font-sans">
+              {t.image.highlightsTitle}
+            </h3>
+            <div className="space-y-2">
+              {generatedHotspots.map((point, index) => {
+                const open = activeGeneratedHotspot === index;
+                return (
+                  <button
+                    key={point.label}
+                    onClick={() => setActiveGeneratedHotspot(open ? -1 : index)}
+                    className={`w-full text-left rounded-xl border px-3 py-2.5 transition-colors ${open
+                      ? 'bg-teal-500/10 border-teal-500/40'
+                      : 'bg-slate-900/50 border-slate-800 hover:border-teal-500/40'
+                      }`}
+                  >
+                    <span className={`text-[13px] font-bold font-sans ${open ? 'text-teal-300' : 'text-slate-200'}`}>
+                      {point.label}
+                    </span>
+                    {open && (
+                      <p className="mt-1 text-sm text-slate-300 font-serif leading-relaxed">
+                        {point.detail}
+                      </p>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

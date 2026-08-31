@@ -2,15 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Locale, themeSongStrings } from '@/lib/i18n';
+import ThemeSongMode from '@/components/ThemeSongMode';
 
 /**
  * MiniMax Week feature: composes and plays a theme song written from the
- * artwork's own guide text. The job runs server-side across several short
- * requests (MiniMax M3 for lyrics, MiniMax Music 3.0 for the track), so this
- * component kicks it off and then polls until the row is ready.
+ * artwork's own guide text.
+ *
+ * The song is expensive (~2 min) but cached per (slug, locale) and shared
+ * across visitors, so we start it automatically a few seconds after the guide
+ * opens — by the time the reader looks for it, it is usually ready. The server
+ * side is fully poll-driven; this component just kicks it off and polls.
  */
 
-type Phase = 'idle' | 'composing' | 'ready' | 'failed' | 'need_guide' | 'unavailable';
+type Phase = 'checking' | 'composing' | 'ready' | 'failed' | 'need_guide' | 'unavailable';
 
 interface PollResponse {
   status: 'none' | 'pending' | 'ready' | 'failed' | 'unavailable';
@@ -20,14 +24,31 @@ interface PollResponse {
 }
 
 const POLL_MS = 8000;
+/** Stop polling after this many minutes; the reader can retry by hand. */
+const MAX_POLL_MS = 6 * 60 * 1000;
+/** Wait this long after the guide opens before spending money on a song. */
+const AUTOSTART_DELAY_MS = 3500;
 
-export default function ThemeSongButton({ slug, locale }: { slug: string; locale: Locale }) {
+export default function ThemeSongButton({
+  slug,
+  locale,
+  title,
+  artist,
+  imageUrl,
+}: {
+  slug: string;
+  locale: Locale;
+  title: string;
+  artist?: string;
+  imageUrl?: string | null;
+}) {
   const t = themeSongStrings(locale);
-  const [phase, setPhase] = useState<Phase>('idle');
+  const [phase, setPhase] = useState<Phase>('checking');
   const [audioUrl, setAudioUrl] = useState('');
   const [lyrics, setLyrics] = useState('');
-  const [showLyrics, setShowLyrics] = useState(false);
+  const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingSince = useRef(0);
 
   const stopPolling = useCallback(() => {
     if (timer.current) {
@@ -36,73 +57,44 @@ export default function ThemeSongButton({ slug, locale }: { slug: string; locale
     }
   }, []);
 
-  const apply = useCallback(
-    (data: PollResponse): boolean => {
-      if (data.status === 'ready' && data.audioUrl) {
-        setAudioUrl(data.audioUrl);
-        setLyrics(data.lyrics || '');
-        setPhase('ready');
-        return true;
-      }
-      if (data.status === 'failed') {
-        setPhase('failed');
-        return true;
-      }
-      if (data.status === 'unavailable') {
-        setPhase('unavailable');
-        return true;
-      }
-      return false;
-    },
-    [],
-  );
+  const apply = useCallback((data: PollResponse): boolean => {
+    if (data.status === 'ready' && data.audioUrl) {
+      setAudioUrl(data.audioUrl);
+      setLyrics(data.lyrics || '');
+      setPhase('ready');
+      return true;
+    }
+    if (data.status === 'failed') {
+      setPhase('failed');
+      return true;
+    }
+    if (data.status === 'unavailable') {
+      setPhase('unavailable');
+      return true;
+    }
+    return false;
+  }, []);
 
   const poll = useCallback(async () => {
+    if (Date.now() - pollingSince.current > MAX_POLL_MS) {
+      stopPolling();
+      setPhase('failed');
+      return;
+    }
     try {
-      const res = await fetch(
-        `/api/theme-song?slug=${encodeURIComponent(slug)}&locale=${locale}`,
-      );
+      const res = await fetch(`/api/theme-song?slug=${encodeURIComponent(slug)}&locale=${locale}`);
       const data = (await res.json()) as PollResponse;
       if (apply(data)) stopPolling();
     } catch {
-      /* transient; try again on the next tick */
+      /* transient; try again next tick */
     }
   }, [slug, locale, apply, stopPolling]);
 
   const startPolling = useCallback(() => {
     stopPolling();
+    pollingSince.current = Date.now();
     timer.current = setInterval(poll, POLL_MS);
   }, [poll, stopPolling]);
-
-  // On mount, see whether a song already exists or is already in progress.
-  useEffect(() => {
-    let cancelled = false;
-    setPhase('idle');
-    setAudioUrl('');
-    setLyrics('');
-    setShowLyrics(false);
-    stopPolling();
-    (async () => {
-      try {
-        const res = await fetch(
-          `/api/theme-song?slug=${encodeURIComponent(slug)}&locale=${locale}`,
-        );
-        const data = (await res.json()) as PollResponse;
-        if (cancelled) return;
-        if (apply(data)) return;
-        if (data.status === 'pending') {
-          setPhase('composing');
-          startPolling();
-        }
-      } catch {
-        /* leave as idle */
-      }
-    })();
-    return () => {
-      cancelled = true;
-      stopPolling();
-    };
-  }, [slug, locale, apply, startPolling, stopPolling]);
 
   const start = useCallback(async () => {
     setPhase('composing');
@@ -124,67 +116,79 @@ export default function ThemeSongButton({ slug, locale }: { slug: string; locale
     }
   }, [slug, locale, apply, startPolling]);
 
-  if (phase === 'idle') {
+  // On mount: adopt any existing/in-progress song, else auto-start after a beat.
+  useEffect(() => {
+    let cancelled = false;
+    let kickoff: ReturnType<typeof setTimeout> | null = null;
+    setPhase('checking');
+    setAudioUrl('');
+    setLyrics('');
+    setOpen(false);
+    stopPolling();
+    (async () => {
+      try {
+        const res = await fetch(`/api/theme-song?slug=${encodeURIComponent(slug)}&locale=${locale}`);
+        const data = (await res.json()) as PollResponse;
+        if (cancelled) return;
+        if (apply(data)) return;
+        if (data.status === 'pending') {
+          setPhase('composing');
+          startPolling();
+          return;
+        }
+        // status 'none' — nothing generated yet; start it shortly.
+        kickoff = setTimeout(() => {
+          if (!cancelled) start();
+        }, AUTOSTART_DELAY_MS);
+      } catch {
+        if (!cancelled) setPhase('unavailable');
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (kickoff) clearTimeout(kickoff);
+      stopPolling();
+    };
+  }, [slug, locale, apply, start, startPolling, stopPolling]);
+
+  // Stay quiet unless there is something to show.
+  if (phase === 'unavailable' || phase === 'need_guide' || phase === 'failed') return null;
+
+  if (phase === 'checking' || phase === 'composing') {
     return (
-      <button
-        onClick={start}
-        className="w-full text-left text-[11px] font-semibold text-teal-300/90 bg-teal-950/30 border border-teal-900/60 hover:border-teal-500/50 hover:bg-teal-950/50 rounded-lg px-3 py-2 transition-colors"
-      >
-        {t.cta}
-      </button>
-    );
-  }
-
-  if (phase === 'need_guide') {
-    return <p className="text-[11px] text-slate-500 px-1 py-1">{t.needGuide}</p>;
-  }
-
-  if (phase === 'unavailable') {
-    return null;
-  }
-
-  if (phase === 'composing') {
-    return (
-      <div className="flex items-center gap-2 text-[11px] text-teal-300/80 bg-teal-950/20 border border-teal-900/50 rounded-lg px-3 py-2">
+      <div className="flex items-center gap-2 text-[11px] text-teal-300/70 px-1 py-1.5">
         <span className="inline-block h-1.5 w-1.5 rounded-full bg-teal-400 animate-pulse" />
         <span>{t.composing}</span>
       </div>
     );
   }
 
-  if (phase === 'failed') {
-    return (
-      <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-2">
-        <span>{t.failed}</span>
-        <button onClick={start} className="font-bold text-teal-400 hover:text-teal-300 shrink-0">
-          {t.retry}
-        </button>
-      </div>
-    );
-  }
-
   // ready
   return (
-    <div className="bg-teal-950/20 border border-teal-900/50 rounded-lg px-3 py-2.5 space-y-2">
-      <p className="text-[11px] font-semibold text-teal-300/90">{t.ready}</p>
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <audio src={audioUrl} controls preload="none" className="w-full h-9" />
-      {lyrics && (
-        <div>
-          <button
-            onClick={() => setShowLyrics(v => !v)}
-            className="text-[11px] font-semibold text-teal-400 hover:text-teal-300"
-          >
-            {showLyrics ? t.hideLyrics : t.showLyrics}
-          </button>
-          {showLyrics && (
-            <pre className="mt-1.5 whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-slate-300 max-h-52 overflow-y-auto">
-              {lyrics}
-            </pre>
-          )}
-        </div>
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full flex items-center gap-2.5 text-left bg-teal-950/30 border border-teal-900/60 hover:border-teal-500/50 hover:bg-teal-950/50 rounded-lg px-3 py-2.5 transition-colors group"
+      >
+        <span className="shrink-0 w-8 h-8 rounded-full bg-teal-500 text-black grid place-items-center text-sm group-hover:bg-teal-400 transition-colors">
+          ▶
+        </span>
+        <span className="min-w-0">
+          <span className="block text-[12px] font-semibold text-teal-200">{t.ready}</span>
+          <span className="block text-[10px] text-teal-300/60">{t.credit}</span>
+        </span>
+      </button>
+      {open && (
+        <ThemeSongMode
+          locale={locale}
+          audioUrl={audioUrl}
+          lyrics={lyrics}
+          title={title}
+          artist={artist}
+          imageUrl={imageUrl}
+          onClose={() => setOpen(false)}
+        />
       )}
-      <p className="text-[10px] text-slate-500">{t.credit}</p>
-    </div>
+    </>
   );
 }

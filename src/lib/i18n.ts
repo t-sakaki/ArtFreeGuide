@@ -137,6 +137,10 @@ export interface UIStrings {
     close: string;
     hotspotHint: string;
     noHotspots: string;
+    /** Heading for the generated, marker-less list of things to look for. */
+    highlightsTitle: string;
+    /** Placeholder shown before a generated highlight is opened. */
+    highlightsIntro: string;
   };
   tour: {
     prev: string;
@@ -289,6 +293,8 @@ const ja: UIStrings = {
     close: '閉じる',
     hotspotHint: '見どころをタップすると、その部分を拡大して解説します。',
     noHotspots: 'この作品にはまだ見どころの登録がありません。',
+    highlightsTitle: '見どころ',
+    highlightsIntro: '項目をタップすると解説を表示します。',
   },
   tour: {
     prev: '前へ',
@@ -449,6 +455,8 @@ const en: UIStrings = {
     close: 'Close',
     hotspotHint: 'Tap a marked detail to zoom in and hear about it.',
     noHotspots: 'No details have been mapped for this work yet.',
+    highlightsTitle: 'Things to look for',
+    highlightsIntro: 'Tap a point to read about it.',
   },
   tour: {
     prev: 'Previous',
@@ -609,6 +617,8 @@ const fr: UIStrings = {
     close: 'Fermer',
     hotspotHint: 'Touchez un détail signalé pour l’agrandir et l’écouter.',
     noHotspots: 'Aucun détail n’est encore repéré pour cette œuvre.',
+    highlightsTitle: 'À observer',
+    highlightsIntro: 'Touchez un point pour le découvrir.',
   },
   tour: {
     prev: 'Précédent',
@@ -770,6 +780,8 @@ const zh: UIStrings = {
     close: '关闭',
     hotspotHint: '点击标记的看点，即可放大并听讲解。',
     noHotspots: '这件作品还没有登记看点。',
+    highlightsTitle: '看点',
+    highlightsIntro: '点击条目查看讲解。',
   },
   tour: {
     prev: '上一件',
@@ -931,6 +943,8 @@ const es: UIStrings = {
     close: 'Cerrar',
     hotspotHint: 'Toca un detalle marcado para ampliarlo y escucharlo.',
     noHotspots: 'Todavía no hay detalles marcados en esta obra.',
+    highlightsTitle: 'Qué mirar',
+    highlightsIntro: 'Toca un punto para leer sobre él.',
   },
   tour: {
     prev: 'Anterior',
@@ -1091,6 +1105,8 @@ const it: UIStrings = {
     close: 'Close',
     hotspotHint: 'Tap a marked detail to zoom in and hear about it.',
     noHotspots: 'No details have been mapped for this work yet.',
+    highlightsTitle: 'Things to look for',
+    highlightsIntro: 'Tap a point to read about it.',
   },
   tour: {
     prev: 'Previous',
@@ -1251,6 +1267,8 @@ const de: UIStrings = {
     close: 'Close',
     hotspotHint: 'Tap a marked detail to zoom in and hear about it.',
     noHotspots: 'No details have been mapped for this work yet.',
+    highlightsTitle: 'Things to look for',
+    highlightsIntro: 'Tap a point to read about it.',
   },
   tour: {
     prev: 'Previous',
@@ -1411,6 +1429,8 @@ const pt: UIStrings = {
     close: 'Close',
     hotspotHint: 'Tap a marked detail to zoom in and hear about it.',
     noHotspots: 'No details have been mapped for this work yet.',
+    highlightsTitle: 'Things to look for',
+    highlightsIntro: 'Tap a point to read about it.',
   },
   tour: {
     prev: 'Previous',
@@ -1571,6 +1591,8 @@ const nl: UIStrings = {
     close: 'Close',
     hotspotHint: 'Tap a marked detail to zoom in and hear about it.',
     noHotspots: 'No details have been mapped for this work yet.',
+    highlightsTitle: 'Things to look for',
+    highlightsIntro: 'Tap a point to read about it.',
   },
   tour: {
     prev: 'Previous',
@@ -1731,6 +1753,8 @@ const pl: UIStrings = {
     close: 'Close',
     hotspotHint: 'Tap a marked detail to zoom in and hear about it.',
     noHotspots: 'No details have been mapped for this work yet.',
+    highlightsTitle: 'Things to look for',
+    highlightsIntro: 'Tap a point to read about it.',
   },
   tour: {
     prev: 'Previous',
@@ -1891,6 +1915,8 @@ const tr: UIStrings = {
     close: 'Close',
     hotspotHint: 'Tap a marked detail to zoom in and hear about it.',
     noHotspots: 'No details have been mapped for this work yet.',
+    highlightsTitle: 'Things to look for',
+    highlightsIntro: 'Tap a point to read about it.',
   },
   tour: {
     prev: 'Previous',
@@ -2051,6 +2077,8 @@ const sv: UIStrings = {
     close: 'Close',
     hotspotHint: 'Tap a marked detail to zoom in and hear about it.',
     noHotspots: 'No details have been mapped for this work yet.',
+    highlightsTitle: 'Things to look for',
+    highlightsIntro: 'Tap a point to read about it.',
   },
   tour: {
     prev: 'Previous',
@@ -2211,6 +2239,8 @@ const hu: UIStrings = {
     close: 'Close',
     hotspotHint: 'Tap a marked detail to zoom in and hear about it.',
     noHotspots: 'No details have been mapped for this work yet.',
+    highlightsTitle: 'Things to look for',
+    highlightsIntro: 'Tap a point to read about it.',
   },
   tour: {
     prev: 'Previous',
