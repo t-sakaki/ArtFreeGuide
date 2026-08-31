@@ -852,6 +852,74 @@ export const HOTSPOT_SETS: HotspotSet[] = [
   },
 ];
 
+/**
+ * A viewing point generated with the guide for any artwork, in the guide's
+ * language. Unlike {@link Hotspot} it carries no coordinates: no one has
+ * measured this work, so the point is shown as a caption in a list, not as a
+ * mark on the image.
+ */
+export interface GuideHotspot {
+  label: string;
+  detail: string;
+  keywords: string[];
+}
+
+/**
+ * A {@link GuideHotspot} that a vision model has placed on the canvas
+ * (Phase 2). Coordinates are approximate, so it is drawn as a soft circle with
+ * a gentle focus rather than the hard punch-in of a curated {@link Hotspot}.
+ */
+export interface PlacedHotspot extends GuideHotspot {
+  /** Centre of the point, 0–1 of the image frame. */
+  x: number;
+  y: number;
+  /** Magnification used when focusing; deliberately gentle. */
+  zoom: number;
+}
+
+/** Keeps only well-formed points; drops anything the model half-filled. */
+export function cleanGuideHotspots(value: unknown): GuideHotspot[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const points: GuideHotspot[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue;
+    const label = typeof (raw as any).label === 'string' ? (raw as any).label.trim() : '';
+    const detail = typeof (raw as any).detail === 'string' ? (raw as any).detail.trim() : '';
+    if (label.length < 1 || label.length > 40 || detail.length < 8 || detail.length > 400) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const keywords = Array.isArray((raw as any).keywords)
+      ? (raw as any).keywords
+          .filter((k: unknown): k is string => typeof k === 'string' && k.trim().length > 0)
+          .map((k: string) => k.trim())
+          .slice(0, 8)
+      : [];
+    points.push({ label, detail, keywords });
+    if (points.length >= 6) break;
+  }
+  return points;
+}
+
+/** Index of the generated point the narration is talking about now, or -1. */
+export function matchGuideHotspot(points: GuideHotspot[], spokenText: string): number {
+  if (!spokenText || points.length === 0) return -1;
+  const haystack = spokenText.toLowerCase();
+  let best = -1;
+  let bestAt = Infinity;
+  points.forEach((point, index) => {
+    for (const keyword of [point.label, ...point.keywords]) {
+      const at = haystack.indexOf(keyword.toLowerCase());
+      if (at !== -1 && at < bestAt) {
+        best = index;
+        bestAt = at;
+      }
+    }
+  });
+  return best;
+}
+
 /** One point with its label, detail and keywords in the visitor's language. */
 export function localizeHotspot(hotspot: Hotspot, locale: Locale): Hotspot {
   if (locale === 'ja') return hotspot;
