@@ -13,48 +13,48 @@ const TEMPLATES: Partial<Record<Locale, {
   general: string[];
 }>> = {
   ja: {
-    hotspot: label => `「${label}」には何の意味がありますか？`,
-    artist: artist => `${artist}はどんな人だったのですか？`,
+    hotspot: label => `「${label}」の描写から、作者のどんな意図が読み取れますか？`,
+    artist: artist => `${artist}の人生で、この作品の制作に影響した出来事は何ですか？`,
     general: [
-      'この作品はどこで実物を見られますか？',
-      '描かれた当時、どう受け止められたのですか？',
-      'どんな技法で描かれているのですか？',
+      'この作品の背景に、作者のどんな時代の焦りや希望が投影されていますか？',
+      'もしこの構図に隠されたメッセージがあるとしたら、それは何ですか？',
+      '他の時代の同じテーマを扱う名作と比べて、この作品の独自性はどこにありますか？',
     ],
   },
   en: {
-    hotspot: label => `What does “${label}” mean?`,
-    artist: artist => `What kind of person was ${artist}?`,
+    hotspot: label => `What intention does the depiction of “${label}” reveal?`,
+    artist: artist => `What events in ${artist}'s life influenced the making of this work?`,
     general: [
-      'Where can I see this work in person?',
-      'How was it received when it was made?',
-      'What technique was used to make it?',
+      'What anxieties or hopes of that era are projected into this work?',
+      'If there is a hidden message in the composition, what might it be?',
+      'Compared with other famous works on the same theme, where does this one stand apart?',
     ],
   },
   fr: {
-    hotspot: label => `Que signifie « ${label} » ?`,
-    artist: artist => `Quel genre de personne était ${artist} ?`,
+    hotspot: label => `Que révèle la représentation de « ${label} » sur l’intention de l’artiste ?`,
+    artist: artist => `Quels événements de la vie de ${artist} ont influencé la création de cette œuvre ?`,
     general: [
-      'Où peut-on voir cette œuvre en vrai ?',
-      'Comment a-t-elle été reçue à l’époque ?',
-      'Quelle technique a été employée ?',
+      `Quelles angoisses ou quels espoirs de l'époque sont projetés dans cette œuvre ?`,
+      'Si la composition cache un message, quel pourrait-il être ?',
+      `Comparée à d’autres œuvres célèbres sur le même thème, en quoi celle-ci se distingue-t-elle ?`,
     ],
   },
   es: {
-    hotspot: label => `¿Qué significa «${label}»?`,
-    artist: artist => `¿Qué clase de persona fue ${artist}?`,
+    hotspot: label => `¿Qué intención revela la representación de «${label}»?`,
+    artist: artist => `¿Qué acontecimientos de la vida de ${artist} influyeron en esta obra?`,
     general: [
-      '¿Dónde puedo ver esta obra en persona?',
-      '¿Cómo se recibió en su época?',
-      '¿Qué técnica se empleó?',
+      '¿Qué angustias o esperanzas de la época se proyectan en esta obra?',
+      'Si la composición esconde un mensaje, ¿cuál podría ser?',
+      `Comparada con otras obras famosas sobre el mismo tema, ¿en qué destaca esta?`,
     ],
   },
   zh: {
-    hotspot: label => `「${label}」有什么含义？`,
-    artist: artist => `${artist}是怎样一个人？`,
+    hotspot: label => `从对「${label}」的描绘中，能看出作者怎样的意图？`,
+    artist: artist => `${artist}人生中，哪些经历影响了这件作品的创作？`,
     general: [
-      '这件作品的真迹在哪里可以看到？',
-      '在当时它是如何被看待的？',
-      '它使用了什么技法？',
+      '这件作品里，映射了作者所处时代怎样的焦虑与希望？',
+      '如果构图里藏着一个隐喻，它可能是什么？',
+      '与其他同主题的名作相比，这件作品的独特性体现在哪里？',
     ],
   },
 };
