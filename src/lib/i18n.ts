@@ -2397,3 +2397,57 @@ export const AI_PROMPTS: Record<Locale, string[]> = {
     'Tell me a deeper backstory',
   ],
 };
+
+/**
+ * MiniMax Week feature: the per-artwork theme song. Only a handful of languages
+ * are translated; `themeSongStrings()` falls back to English for the rest.
+ */
+export interface ThemeSongStrings {
+  /** Collapsed call-to-action button. */
+  cta: string;
+  /** While MiniMax M3 + Music 3.0 are working (can take a minute or two). */
+  composing: string;
+  /** Heading above the finished player. */
+  ready: string;
+  /** Toggle for the generated lyrics. */
+  showLyrics: string;
+  hideLyrics: string;
+  /** Generation failed for this artwork. */
+  failed: string;
+  retry: string;
+  /** The guide has to exist before a song can be written from it. */
+  needGuide: string;
+  /** Small print under the player. */
+  credit: string;
+}
+
+const THEME_SONG_EN: ThemeSongStrings = {
+  cta: '🎵 Compose this artwork’s theme song',
+  composing: 'Composing the theme song… this takes a minute or two.',
+  ready: '🎵 This artwork’s theme song',
+  showLyrics: 'Show lyrics',
+  hideLyrics: 'Hide lyrics',
+  failed: 'The theme song could not be composed this time.',
+  retry: 'Try again',
+  needGuide: 'Create the audio guide first, then a theme song can be written from it.',
+  credit: 'Lyrics by MiniMax M3 · music by MiniMax Music 3.0 · experimental',
+};
+
+export const THEME_SONG_UI: Partial<Record<Locale, ThemeSongStrings>> = {
+  ja: {
+    cta: '🎵 この作品のテーマソングを作る',
+    composing: 'テーマソングを作曲中… 1〜2分ほどかかります。',
+    ready: '🎵 この作品のテーマソング',
+    showLyrics: '歌詞を見る',
+    hideLyrics: '歌詞を隠す',
+    failed: '今回はテーマソングを作曲できませんでした。',
+    retry: 'もう一度試す',
+    needGuide: '先に音声ガイドを生成すると、その解説からテーマソングを作れます。',
+    credit: '作詞 MiniMax M3 ・ 作曲 MiniMax Music 3.0 ・ 実験的機能',
+  },
+  en: THEME_SONG_EN,
+};
+
+export function themeSongStrings(locale: Locale): ThemeSongStrings {
+  return THEME_SONG_UI[locale] ?? THEME_SONG_EN;
+}
