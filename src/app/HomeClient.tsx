@@ -3061,7 +3061,13 @@ export default function HomeClient({
             {/* MiniMax Week: per-artwork theme song, written from this guide */}
             {responseShort && themeSongSlug && (
               <div className="pb-1">
-                <ThemeSongButton slug={themeSongSlug} locale={locale} />
+                <ThemeSongButton
+                  slug={themeSongSlug}
+                  locale={locale}
+                  title={shownArtwork}
+                  artist={shownArtist}
+                  imageUrl={displayImageUrl}
+                />
               </div>
             )}
 

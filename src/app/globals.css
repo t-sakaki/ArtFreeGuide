@@ -436,3 +436,32 @@
   .ai-prompt-caret { animation: none; opacity: 1; }
   .ai-prompt-hint { animation: none; }
 }
+
+/* ── Theme-song mode (MiniMax Week) ───────────────────────────────────────
+ * A generated "music video" for the artwork: the picture drifts slowly (Ken
+ * Burns) behind large, karaoke-style lyric lines. animationDuration is set to
+ * the track length inline; play state follows the audio. */
+@keyframes themeSongKenBurns {
+  0%   { transform: scale(1.05) translate3d(-1.5%, -1%, 0); }
+  50%  { transform: scale(1.18) translate3d(1.5%, 1.5%, 0); }
+  100% { transform: scale(1.08) translate3d(-1%, 1%, 0); }
+}
+
+.theme-song-kenburns {
+  animation-name: themeSongKenBurns;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
+  will-change: transform;
+}
+
+@keyframes themeSongLineIn {
+  from { opacity: 0; transform: translateY(0.5em); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.theme-song-line-current { animation: themeSongLineIn 0.45s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-song-kenburns { animation: none; }
+  .theme-song-line-current { animation: none; }
+}
