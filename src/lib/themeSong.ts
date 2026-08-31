@@ -18,7 +18,12 @@ import { Locale } from './i18n';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const GMI_BASE = 'https://console.gmicloud.ai/api/v1/ie/requestqueue/apikey';
-const MUSIC_MODEL = 'minimax-music-3.0';
+const MUSIC_MODEL = process.env.GMI_MUSIC_MODEL || 'minimax-music-3.0';
+
+/** fetch() with a hard timeout so a stuck upstream never pins the worker. */
+async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(ms) });
+}
 
 export interface LyricPlan {
   lyrics: string;
@@ -62,24 +67,28 @@ export async function planThemeSong(guideText: string, locale: Locale): Promise<
     `}`;
 
   try {
-    const res = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://artfreeguide.app',
-        'X-Title': 'ArtFreeGuide ThemeSong',
+    const res = await fetchWithTimeout(
+      OPENROUTER_URL,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://artfreeguide.app',
+          'X-Title': 'ArtFreeGuide ThemeSong',
+        },
+        body: JSON.stringify({
+          model: process.env.THEME_SONG_LYRIC_MODEL || 'minimax/minimax-m3:free',
+          messages: [
+            { role: 'system', content: sys },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.9,
+          response_format: { type: 'json_object' },
+        }),
       },
-      body: JSON.stringify({
-        model: 'minimax/minimax-m3:free',
-        messages: [
-          { role: 'system', content: sys },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.9,
-        response_format: { type: 'json_object' },
-      }),
-    });
+      150_000,
+    );
     if (!res.ok) {
       console.warn(`[theme-song] M3 failed: ${res.status}`);
       return null;
@@ -117,36 +126,45 @@ function parseLyricJson(content: string): LyricPlan | null {
 }
 
 /**
- * Submit the composition job to MiniMax Music 3.0. Returns the request id to
- * poll, or null on failure.
+ * Submit the composition job to MiniMax Music. Returns the request id to poll,
+ * or a short error string (which the caller stores so it is visible).
  */
-export async function submitMusicJob(plan: LyricPlan): Promise<string | null> {
+export async function submitMusicJob(plan: LyricPlan): Promise<{ requestId: string } | { error: string }> {
   const key = gmiKey();
-  if (!key) return null;
+  if (!key) return { error: 'missing_gmi_key' };
+  // MiniMax Music caps lyrics length; keep well under it.
+  const lyrics = plan.lyrics.slice(0, 3000);
   try {
-    const res = await fetch(`${GMI_BASE}/requests`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: MUSIC_MODEL,
-        payload: {
-          lyrics: plan.lyrics,
-          prompt: plan.stylePrompt,
-          sample_rate: 44100,
-          bitrate: 256000,
-          format: 'mp3',
-        },
-      }),
-    });
+    const res = await fetchWithTimeout(
+      `${GMI_BASE}/requests`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: MUSIC_MODEL,
+          payload: {
+            lyrics,
+            prompt: plan.stylePrompt.slice(0, 2000),
+            sample_rate: 44100,
+            bitrate: 256000,
+            format: 'mp3',
+          },
+        }),
+      },
+      30_000,
+    );
+    const body = await res.text();
     if (!res.ok) {
-      console.warn(`[theme-song] music submit failed: ${res.status}`);
-      return null;
+      console.warn(`[theme-song] music submit failed: ${res.status} ${body.slice(0, 300)}`);
+      return { error: `submit_${res.status}: ${body.slice(0, 120)}` };
     }
-    const data = await res.json();
-    return data.request_id || data.id || null;
+    const data = JSON.parse(body);
+    const requestId = data.request_id || data.id || null;
+    if (!requestId) return { error: `submit_no_request_id: ${body.slice(0, 120)}` };
+    return { requestId };
   } catch (e) {
     console.warn('[theme-song] music submit error:', e);
-    return null;
+    return { error: `submit_exception: ${e instanceof Error ? e.message : String(e)}` };
   }
 }
 
@@ -155,9 +173,11 @@ export async function pollMusicJob(requestId: string): Promise<MusicPollResult> 
   const key = gmiKey();
   if (!key) return { status: 'failed', error: 'missing_gmi_key' };
   try {
-    const res = await fetch(`${GMI_BASE}/requests/${requestId}`, {
-      headers: { Authorization: `Bearer ${key}` },
-    });
+    const res = await fetchWithTimeout(
+      `${GMI_BASE}/requests/${requestId}`,
+      { headers: { Authorization: `Bearer ${key}` } },
+      20_000,
+    );
     if (!res.ok) {
       // A transient read error is not fatal; let the client poll again.
       return { status: 'pending' };
@@ -183,7 +203,7 @@ export async function pollMusicJob(requestId: string): Promise<MusicPollResult> 
 /** Fetch the finished MP3 so the caller can persist it (e.g. to R2). */
 export async function downloadAudio(url: string): Promise<ArrayBuffer | null> {
   try {
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url, {}, 60_000);
     if (!res.ok) {
       console.warn(`[theme-song] audio download failed: ${res.status}`);
       return null;
