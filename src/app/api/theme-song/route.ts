@@ -9,21 +9,22 @@ import {
   submitMusicJob,
   pollMusicJob,
   downloadAudio,
-  openRouterKey,
   gmiKey,
 } from '@/lib/themeSong';
 
 /**
  * MiniMax Week hackathon feature: generate (and cache) a per-artwork theme song.
  *
- *   POST { slug, locale }  - start (or resume) the job. Plans the lyrics with
- *                            MiniMax M3 and submits the MiniMax Music job, then
- *                            returns immediately with { status: 'pending' }.
- *   GET  ?slug&locale      - poll. When the music job finishes, this request
- *                            copies the audio into R2 and flips the row to
- *                            'ready' with { audioUrl, lyrics }.
+ * Fully poll-driven — no ctx.waitUntil, no multi-minute handler:
  *
- * The result is cached in D1 keyed by (slug, locale) and shared across visitors.
+ *   POST { slug, locale }  - write the lyrics (fast LLM) and hand the job to GMI
+ *                            (the connection is dropped after a few seconds; the
+ *                            job keeps running). Stores request_id, returns
+ *                            { status: 'pending' } (or 'ready' if GMI was quick).
+ *   GET  ?slug&locale      - poll. Once GMI reports success this request copies
+ *                            the MP3 into R2 and flips the row to 'ready'.
+ *
+ * Result cached in D1 keyed by (slug, locale), shared across visitors.
  */
 
 interface D1Statement {
@@ -48,26 +49,21 @@ interface SongRow {
   updated_at: string;
 }
 
-interface WaitCtx {
-  waitUntil(p: Promise<unknown>): void;
-}
-
 async function bindings() {
   try {
-    const { env, ctx } = await getCloudflareContext({ async: true });
+    const { env } = await getCloudflareContext({ async: true });
     const e = env as unknown as { DB?: D1Binding; AUDIO?: R2Bucket };
-    return { db: e.DB ?? null, audio: e.AUDIO ?? null, ctx: (ctx as unknown as WaitCtx) ?? null };
+    return { db: e.DB ?? null, audio: e.AUDIO ?? null };
   } catch {
-    return { db: null, audio: null, ctx: null };
+    return { db: null, audio: null };
   }
 }
 
 /**
- * How long the background plan+submit step may run before a 'pending' row with
- * no request_id is treated as dead (MiniMax M3 for lyrics, then the synchronous
- * MiniMax Music submit which itself blocks ~2 min).
+ * A 'pending' row that has not advanced in this long is treated as dead (the
+ * request that was driving it was cut off). A fresh POST then restarts it.
  */
-const PLANNING_TIMEOUT_MS = 6 * 60 * 1000;
+const STALE_PENDING_MS = 15 * 60 * 1000;
 
 const audioKey = (slug: string, locale: Locale) => `theme-songs/${slug}/${locale}.mp3`;
 const audioPath = (slug: string, locale: Locale) =>
@@ -125,7 +121,15 @@ function ready(row: { audio_url: string; lyrics: string }) {
 }
 
 function keysConfigured() {
-  return Boolean(openRouterKey() && gmiKey());
+  // GMI composes the music and is required; OpenRouter (MiniMax M3) is only the
+  // preferred lyric writer and falls back to the app's own LLM.
+  return Boolean(gmiKey());
+}
+
+function isStalePending(row: SongRow): boolean {
+  if (row.status !== 'pending') return false;
+  const ts = Date.parse(row.updated_at || '');
+  return !Number.isFinite(ts) || Date.now() - ts > STALE_PENDING_MS;
 }
 
 async function loadGuideText(slug: string, locale: Locale): Promise<string | null> {
@@ -149,48 +153,21 @@ function parseParams(slugRaw: string, localeRaw: string) {
   return { slug, locale };
 }
 
-/**
- * Background step: write lyrics with MiniMax M3, then submit the MiniMax Music
- * job. Runs inside ctx.waitUntil so the POST can return immediately; the row is
- * left 'pending' (with a request_id once submitted) or flipped to 'failed'.
- */
-async function planAndSubmit(
+/** Copy a finished GMI MP3 into R2 and mark the row ready. */
+async function finish(
   db: D1Binding,
   audio: R2Bucket | null,
   slug: string,
   locale: Locale,
-  guideText: string,
-): Promise<void> {
-  try {
-    const plan = await planThemeSong(guideText, locale);
-    if (!plan) {
-      await patchRow(db, slug, locale, { status: 'failed', error: 'lyric_plan_failed' });
-      return;
-    }
-    await patchRow(db, slug, locale, { lyrics: plan.lyrics, style_prompt: plan.stylePrompt });
-    const submit = await submitMusicJob(plan);
-    if ('error' in submit) {
-      await patchRow(db, slug, locale, { status: 'failed', error: submit.error });
-      return;
-    }
-    // Record the id first so a GET can recover if the steps below are cut short.
-    await patchRow(db, slug, locale, { status: 'pending', request_id: submit.requestId });
-    // GMI's submit is synchronous and usually returns the finished URL already.
-    if (submit.audioUrl && audio) {
-      const bytes = await downloadAudio(submit.audioUrl);
-      if (bytes) {
-        await audio.put(audioKey(slug, locale), bytes, {
-          httpMetadata: { contentType: 'audio/mpeg' },
-        });
-        await patchRow(db, slug, locale, { status: 'ready', audio_url: audioPath(slug, locale) });
-      }
-    }
-  } catch (e) {
-    await patchRow(db, slug, locale, {
-      status: 'failed',
-      error: `plan_exception: ${e instanceof Error ? e.message : String(e)}`,
-    });
-  }
+  gmiAudioUrl: string,
+  lyrics: string,
+): Promise<NextResponse> {
+  if (!audio) return NextResponse.json({ status: 'failed', error: 'no_r2_bucket' });
+  const bytes = await downloadAudio(gmiAudioUrl);
+  if (!bytes) return NextResponse.json({ status: 'pending' });
+  await audio.put(audioKey(slug, locale), bytes, { httpMetadata: { contentType: 'audio/mpeg' } });
+  await patchRow(db, slug, locale, { status: 'ready', audio_url: audioPath(slug, locale) });
+  return NextResponse.json({ status: 'ready', audioUrl: audioPath(slug, locale), lyrics });
 }
 
 export async function POST(req: NextRequest) {
@@ -206,12 +183,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'missing_keys', status: 'unavailable' }, { status: 409 });
   }
 
-  const { db, audio, ctx } = await bindings();
+  const { db, audio } = await bindings();
   if (!db) return NextResponse.json({ error: 'no_db', status: 'unavailable' }, { status: 503 });
 
   const existing = await getRow(db, slug, locale);
   if (existing?.status === 'ready' && existing.audio_url) return ready(existing);
-  if (existing?.status === 'pending' && !isStalePlanning(existing)) {
+  if (existing && existing.status === 'pending' && !isStalePending(existing)) {
     return NextResponse.json({ status: 'pending' });
   }
 
@@ -224,18 +201,23 @@ export async function POST(req: NextRequest) {
   }
 
   await startRow(db, slug, locale);
-  const job = planAndSubmit(db, audio, slug, locale, guideText);
-  if (ctx) ctx.waitUntil(job);
-  else await job; // local dev without a real ctx
 
+  const plan = await planThemeSong(guideText, locale);
+  if (!plan) {
+    await patchRow(db, slug, locale, { status: 'failed', error: 'lyric_plan_failed' });
+    return NextResponse.json({ status: 'failed', error: 'lyric_plan_failed' });
+  }
+  await patchRow(db, slug, locale, { lyrics: plan.lyrics, style_prompt: plan.stylePrompt });
+
+  const submit = await submitMusicJob(plan);
+  if ('error' in submit) {
+    await patchRow(db, slug, locale, { status: 'failed', error: submit.error });
+    return NextResponse.json({ status: 'failed', error: submit.error });
+  }
+  await patchRow(db, slug, locale, { request_id: submit.requestId });
+
+  if (submit.audioUrl) return finish(db, audio, slug, locale, submit.audioUrl, plan.lyrics);
   return NextResponse.json({ status: 'pending' });
-}
-
-/** A 'pending' row with no request_id whose planning step has overrun. */
-function isStalePlanning(row: SongRow): boolean {
-  if (row.request_id) return false;
-  const ts = Date.parse(row.updated_at || '');
-  return Number.isFinite(ts) && Date.now() - ts > PLANNING_TIMEOUT_MS;
 }
 
 export async function GET(req: NextRequest) {
@@ -254,30 +236,27 @@ export async function GET(req: NextRequest) {
   }
   if (row.status !== 'pending') return NextResponse.json({ status: row.status });
 
-  // Still writing lyrics / submitting the job (no request_id yet).
+  // Lyrics / submit still running in the POST (or that POST died).
   if (!row.request_id) {
-    if (isStalePlanning(row)) {
-      await patchRow(db, slug, locale, { status: 'failed', error: 'planning_timed_out' });
-      return NextResponse.json({ status: 'failed', error: 'planning_timed_out' });
+    if (isStalePending(row)) {
+      await patchRow(db, slug, locale, { status: 'failed', error: 'timed_out' });
+      return NextResponse.json({ status: 'failed', error: 'timed_out' });
     }
     return NextResponse.json({ status: 'pending' });
   }
 
   const poll = await pollMusicJob(row.request_id);
-  if (poll.status === 'pending') return NextResponse.json({ status: 'pending' });
   if (poll.status === 'failed') {
     await patchRow(db, slug, locale, { status: 'failed', error: poll.error });
     return NextResponse.json({ status: 'failed', error: poll.error });
   }
+  if (poll.status === 'success') return finish(db, audio, slug, locale, poll.audioUrl, row.lyrics);
 
-  // Success: copy the MP3 into R2 so the URL never expires, then flip to ready.
-  if (!audio) return NextResponse.json({ status: 'failed', error: 'no_r2_bucket' });
-  const bytes = await downloadAudio(poll.audioUrl);
-  if (!bytes) return NextResponse.json({ status: 'pending' });
-  await audio.put(audioKey(slug, locale), bytes, { httpMetadata: { contentType: 'audio/mpeg' } });
-  const url = audioPath(slug, locale);
-  await patchRow(db, slug, locale, { status: 'ready', audio_url: url });
-  return NextResponse.json({ status: 'ready', audioUrl: url, lyrics: row.lyrics });
+  if (isStalePending(row)) {
+    await patchRow(db, slug, locale, { status: 'failed', error: 'timed_out' });
+    return NextResponse.json({ status: 'failed', error: 'timed_out' });
+  }
+  return NextResponse.json({ status: 'pending' });
 }
 
 export const runtime = 'nodejs';
