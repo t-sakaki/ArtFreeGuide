@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { DEFAULT_LOCALE, Locale, OUTPUT_LANGUAGE_INSTRUCTION, isLocale } from '@/lib/i18n';
+import { DEFAULT_LOCALE, Locale, outputLanguageInstruction, isLocale } from '@/lib/i18n';
 import { getLLMProvider, Message } from '@/lib/llm';
 
 export async function POST(req: Request) {
@@ -36,7 +36,7 @@ ${conditions}
 - JSON やコードブロックでは絶対に出力せず、考えた過程も書かないでください。
 - 確実でないことは断定せず、「〜と考えられています」のように述べてください。
 - 説明文そのものだけを出力してください。前置きや後書きは不要です。
-- ${OUTPUT_LANGUAGE_INSTRUCTION[locale]}`;
+- ${outputLanguageInstruction(locale)}`;
 
     const messages: Message[] = [{ role: 'user', content: prompt }];
     const provider = getLLMProvider('ask');
