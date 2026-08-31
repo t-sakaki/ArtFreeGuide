@@ -62,8 +62,12 @@ async function bindings() {
   }
 }
 
-/** How long the lyric-planning step (MiniMax M3) may run before we give up. */
-const PLANNING_TIMEOUT_MS = 4 * 60 * 1000;
+/**
+ * How long the background plan+submit step may run before a 'pending' row with
+ * no request_id is treated as dead (MiniMax M3 for lyrics, then the synchronous
+ * MiniMax Music submit which itself blocks ~2 min).
+ */
+const PLANNING_TIMEOUT_MS = 6 * 60 * 1000;
 
 const audioKey = (slug: string, locale: Locale) => `theme-songs/${slug}/${locale}.mp3`;
 const audioPath = (slug: string, locale: Locale) =>
@@ -150,7 +154,13 @@ function parseParams(slugRaw: string, localeRaw: string) {
  * job. Runs inside ctx.waitUntil so the POST can return immediately; the row is
  * left 'pending' (with a request_id once submitted) or flipped to 'failed'.
  */
-async function planAndSubmit(db: D1Binding, slug: string, locale: Locale, guideText: string): Promise<void> {
+async function planAndSubmit(
+  db: D1Binding,
+  audio: R2Bucket | null,
+  slug: string,
+  locale: Locale,
+  guideText: string,
+): Promise<void> {
   try {
     const plan = await planThemeSong(guideText, locale);
     if (!plan) {
@@ -163,7 +173,18 @@ async function planAndSubmit(db: D1Binding, slug: string, locale: Locale, guideT
       await patchRow(db, slug, locale, { status: 'failed', error: submit.error });
       return;
     }
+    // Record the id first so a GET can recover if the steps below are cut short.
     await patchRow(db, slug, locale, { status: 'pending', request_id: submit.requestId });
+    // GMI's submit is synchronous and usually returns the finished URL already.
+    if (submit.audioUrl && audio) {
+      const bytes = await downloadAudio(submit.audioUrl);
+      if (bytes) {
+        await audio.put(audioKey(slug, locale), bytes, {
+          httpMetadata: { contentType: 'audio/mpeg' },
+        });
+        await patchRow(db, slug, locale, { status: 'ready', audio_url: audioPath(slug, locale) });
+      }
+    }
   } catch (e) {
     await patchRow(db, slug, locale, {
       status: 'failed',
@@ -185,7 +206,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'missing_keys', status: 'unavailable' }, { status: 409 });
   }
 
-  const { db, ctx } = await bindings();
+  const { db, audio, ctx } = await bindings();
   if (!db) return NextResponse.json({ error: 'no_db', status: 'unavailable' }, { status: 503 });
 
   const existing = await getRow(db, slug, locale);
@@ -203,7 +224,7 @@ export async function POST(req: NextRequest) {
   }
 
   await startRow(db, slug, locale);
-  const job = planAndSubmit(db, slug, locale, guideText);
+  const job = planAndSubmit(db, audio, slug, locale, guideText);
   if (ctx) ctx.waitUntil(job);
   else await job; // local dev without a real ctx
 

@@ -87,7 +87,7 @@ export async function planThemeSong(guideText: string, locale: Locale): Promise<
           response_format: { type: 'json_object' },
         }),
       },
-      150_000,
+      90_000,
     );
     if (!res.ok) {
       console.warn(`[theme-song] M3 failed: ${res.status}`);
@@ -125,11 +125,27 @@ function parseLyricJson(content: string): LyricPlan | null {
   }
 }
 
+/** Pull the finished MP3 URL out of a GMI request/outcome object. */
+function extractAudioUrl(outcome: Record<string, unknown> | undefined | null): string | null {
+  if (!outcome) return null;
+  const direct = outcome.audio_url;
+  if (typeof direct === 'string' && direct) return direct;
+  const list = outcome.media_urls;
+  if (Array.isArray(list) && list[0] && typeof list[0].url === 'string') return list[0].url;
+  return null;
+}
+
 /**
- * Submit the composition job to MiniMax Music. Returns the request id to poll,
- * or a short error string (which the caller stores so it is visible).
+ * Submit the composition job to MiniMax Music.
+ *
+ * GMI's requestqueue endpoint is synchronous: the POST blocks for ~1-2 min and
+ * the response already carries the finished `outcome.audio_url`. We still return
+ * `requestId` so a dropped connection can be recovered by polling. This call is
+ * only made from ctx.waitUntil, so the long wait is fine.
  */
-export async function submitMusicJob(plan: LyricPlan): Promise<{ requestId: string } | { error: string }> {
+export async function submitMusicJob(
+  plan: LyricPlan,
+): Promise<{ requestId: string; audioUrl: string | null } | { error: string }> {
   const key = gmiKey();
   if (!key) return { error: 'missing_gmi_key' };
   // MiniMax Music caps lyrics length; keep well under it.
@@ -151,7 +167,7 @@ export async function submitMusicJob(plan: LyricPlan): Promise<{ requestId: stri
           },
         }),
       },
-      30_000,
+      240_000,
     );
     const body = await res.text();
     if (!res.ok) {
@@ -161,7 +177,7 @@ export async function submitMusicJob(plan: LyricPlan): Promise<{ requestId: stri
     const data = JSON.parse(body);
     const requestId = data.request_id || data.id || null;
     if (!requestId) return { error: `submit_no_request_id: ${body.slice(0, 120)}` };
-    return { requestId };
+    return { requestId, audioUrl: extractAudioUrl(data.outcome) };
   } catch (e) {
     console.warn('[theme-song] music submit error:', e);
     return { error: `submit_exception: ${e instanceof Error ? e.message : String(e)}` };
@@ -184,9 +200,7 @@ export async function pollMusicJob(requestId: string): Promise<MusicPollResult> 
     }
     const st = await res.json();
     if (st.status === 'success') {
-      const outcome = st.outcome || {};
-      const audioUrl: string | null =
-        outcome.audio_url || (outcome.media_urls || [{}])[0]?.url || null;
+      const audioUrl = extractAudioUrl(st.outcome);
       if (!audioUrl) return { status: 'failed', error: 'no_audio_url_in_outcome' };
       return { status: 'success', audioUrl };
     }
