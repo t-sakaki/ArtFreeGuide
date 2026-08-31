@@ -85,17 +85,13 @@ export default function ThemeSongMode({
     return idx;
   }, [starts, current]);
 
-  // Nearest sung (non-section) line to highlight, plus the one after it.
-  const { currentLine, nextLine } = useMemo(() => {
-    const sung = (from: number, dir: 1 | -1) => {
-      for (let i = from; i >= 0 && i < lines.length; i += dir) if (!lines[i].section) return lines[i].text;
-      return '';
-    };
-    return {
-      currentLine: activeIdx >= 0 ? sung(activeIdx, -1) : '',
-      nextLine: activeIdx >= 0 ? sung(activeIdx + 1, 1) : sung(0, 1),
-    };
-  }, [activeIdx, lines]);
+  const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
+
+  // Keep the active line centred in the scrolling lyric sheet.
+  useEffect(() => {
+    if (activeIdx < 0) return;
+    lineRefs.current[activeIdx]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [activeIdx]);
 
   useEffect(() => {
     if (imageUrl) return;
@@ -178,17 +174,45 @@ export default function ThemeSongMode({
         </button>
       </div>
 
-      {/* lyrics */}
-      <div className="relative flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
-        <p
-          key={currentLine}
-          className="theme-song-line-current text-2xl sm:text-4xl font-bold leading-snug max-w-xl drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]"
-        >
-          {currentLine || (playing ? '♪' : t.ready)}
-        </p>
-        {nextLine && nextLine !== currentLine && (
-          <p className="text-base sm:text-xl text-white/45 leading-snug max-w-lg">{nextLine}</p>
-        )}
+      {/* lyrics — the whole sheet, active line kept centred */}
+      <div className="relative flex-1 overflow-y-auto no-scrollbar">
+        <div className="min-h-full flex flex-col items-center justify-start gap-3 px-6 text-center py-[38vh]">
+          {lines.map((line, i) => {
+            if (line.section) {
+              return (
+                <p
+                  key={i}
+                  ref={el => {
+                    lineRefs.current[i] = el;
+                  }}
+                  className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-300/50 pt-3"
+                >
+                  {line.text}
+                </p>
+              );
+            }
+            const active = i === activeIdx;
+            const past = activeIdx >= 0 && i < activeIdx;
+            return (
+              <p
+                key={i}
+                ref={el => {
+                  lineRefs.current[i] = el;
+                }}
+                className={[
+                  'leading-snug max-w-xl transition-all duration-500',
+                  active
+                    ? 'text-2xl sm:text-4xl font-bold text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]'
+                    : past
+                      ? 'text-lg sm:text-2xl font-semibold text-white/35'
+                      : 'text-lg sm:text-2xl font-semibold text-white/55',
+                ].join(' ')}
+              >
+                {line.text}
+              </p>
+            );
+          })}
+        </div>
       </div>
 
       {/* transport */}
