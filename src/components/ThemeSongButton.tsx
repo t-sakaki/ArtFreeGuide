@@ -20,6 +20,7 @@ interface PollResponse {
   status: 'none' | 'pending' | 'ready' | 'failed' | 'unavailable';
   audioUrl?: string;
   lyrics?: string;
+  timings?: number[];
   error?: string;
 }
 
@@ -46,6 +47,7 @@ export default function ThemeSongButton({
   const [phase, setPhase] = useState<Phase>('checking');
   const [audioUrl, setAudioUrl] = useState('');
   const [lyrics, setLyrics] = useState('');
+  const [timings, setTimings] = useState<number[]>([]);
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollingSince = useRef(0);
@@ -61,6 +63,7 @@ export default function ThemeSongButton({
     if (data.status === 'ready' && data.audioUrl) {
       setAudioUrl(data.audioUrl);
       setLyrics(data.lyrics || '');
+      setTimings(Array.isArray(data.timings) ? data.timings : []);
       setPhase('ready');
       return true;
     }
@@ -123,6 +126,7 @@ export default function ThemeSongButton({
     setPhase('checking');
     setAudioUrl('');
     setLyrics('');
+    setTimings([]);
     setOpen(false);
     stopPolling();
     (async () => {
@@ -183,6 +187,7 @@ export default function ThemeSongButton({
           locale={locale}
           audioUrl={audioUrl}
           lyrics={lyrics}
+          timings={timings}
           title={title}
           artist={artist}
           imageUrl={imageUrl}

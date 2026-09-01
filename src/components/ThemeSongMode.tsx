@@ -3,32 +3,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Locale, themeSongStrings } from '@/lib/i18n';
 import { fetchArtworkImage } from '@/lib/artworkThumbnail';
+import { parseLyrics } from '@/lib/lyricAlign';
 
 /**
  * MiniMax Week: the theme song as a small generated "music video".
  *
  * The artwork drifts slowly behind the lyrics, which are highlighted line by
- * line. MiniMax does not return per-line timestamps, so timing is estimated
- * from the track length and each line's length — the same length-weighted
- * pacing the narration falls back to.
+ * line. When the server managed to align the written lyrics to a Whisper
+ * transcription of the actual track, `timings` gives one real start time per
+ * line (Spotify-style sync); otherwise we fall back to an estimate from the
+ * track length and each line's length, which drifts but is better than
+ * nothing.
  */
-
-interface Line {
-  text: string;
-  /** [Verse] / [Chorus] markers — kept for pacing, not shown as a lyric. */
-  section: boolean;
-}
 
 /** Fraction of the track assumed to be intro before the first sung line. */
 const INTRO_FRACTION = 0.06;
-
-function parseLyrics(raw: string): Line[] {
-  return raw
-    .split('\n')
-    .map(l => l.trim())
-    .filter(Boolean)
-    .map(l => ({ text: l.replace(/^\[(.+)\]$/, '$1'), section: /^\[.+\]$/.test(l) }));
-}
 
 function fmt(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) sec = 0;
@@ -41,6 +30,7 @@ export default function ThemeSongMode({
   locale,
   audioUrl,
   lyrics,
+  timings,
   title,
   artist,
   imageUrl,
@@ -49,6 +39,8 @@ export default function ThemeSongMode({
   locale: Locale;
   audioUrl: string;
   lyrics: string;
+  /** One start time (seconds) per line from parseLyrics(lyrics), if aligned. */
+  timings?: number[];
   title: string;
   artist?: string;
   imageUrl?: string | null;
@@ -63,8 +55,10 @@ export default function ThemeSongMode({
 
   const lines = useMemo(() => parseLyrics(lyrics), [lyrics]);
 
-  // Cumulative start time for every line, weighted by its length.
+  // One start time per line: the server's Whisper-aligned timings when they
+  // match this lyric sheet, otherwise a length-weighted estimate.
   const starts = useMemo(() => {
+    if (timings && timings.length === lines.length) return timings;
     if (!duration || lines.length === 0) return [];
     const weights = lines.map(l => Math.max(l.text.length, l.section ? 4 : 10));
     const total = weights.reduce((a, b) => a + b, 0);
@@ -76,7 +70,7 @@ export default function ThemeSongMode({
       acc += w;
       return at;
     });
-  }, [duration, lines]);
+  }, [duration, lines, timings]);
 
   const activeIdx = useMemo(() => {
     if (starts.length === 0) return -1;

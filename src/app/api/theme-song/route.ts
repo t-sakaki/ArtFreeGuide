@@ -9,8 +9,11 @@ import {
   submitMusicJob,
   pollMusicJob,
   downloadAudio,
+  transcribeVocals,
   gmiKey,
+  type AiBinding,
 } from '@/lib/themeSong';
+import { parseLyrics, alignLyricLines } from '@/lib/lyricAlign';
 
 /**
  * MiniMax Week hackathon feature: generate (and cache) a per-artwork theme song.
@@ -47,15 +50,16 @@ interface SongRow {
   lyrics: string;
   error: string;
   updated_at: string;
+  timings: string;
 }
 
 async function bindings() {
   try {
     const { env } = await getCloudflareContext({ async: true });
-    const e = env as unknown as { DB?: D1Binding; AUDIO?: R2Bucket };
-    return { db: e.DB ?? null, audio: e.AUDIO ?? null };
+    const e = env as unknown as { DB?: D1Binding; AUDIO?: R2Bucket; AI?: AiBinding };
+    return { db: e.DB ?? null, audio: e.AUDIO ?? null, ai: e.AI ?? null };
   } catch {
-    return { db: null, audio: null };
+    return { db: null, audio: null, ai: null };
   }
 }
 
@@ -72,7 +76,7 @@ const audioPath = (slug: string, locale: Locale) =>
 async function getRow(db: D1Binding, slug: string, locale: Locale): Promise<SongRow | null> {
   return db
     .prepare(
-      'SELECT status, request_id, audio_url, lyrics, error, updated_at FROM artwork_theme_songs WHERE slug = ?1 AND locale = ?2',
+      'SELECT status, request_id, audio_url, lyrics, error, updated_at, timings FROM artwork_theme_songs WHERE slug = ?1 AND locale = ?2',
     )
     .bind(slug, locale)
     .first<SongRow>();
@@ -83,10 +87,10 @@ async function startRow(db: D1Binding, slug: string, locale: Locale): Promise<vo
   const now = new Date().toISOString();
   await db
     .prepare(
-      `INSERT INTO artwork_theme_songs (slug, locale, status, request_id, audio_url, lyrics, style_prompt, error, created_at, updated_at)
-       VALUES (?1, ?2, 'pending', '', '', '', '', '', ?3, ?3)
+      `INSERT INTO artwork_theme_songs (slug, locale, status, request_id, audio_url, lyrics, style_prompt, error, timings, created_at, updated_at)
+       VALUES (?1, ?2, 'pending', '', '', '', '', '', '', ?3, ?3)
        ON CONFLICT(slug, locale) DO UPDATE SET
-         status = 'pending', request_id = '', audio_url = '', error = '', updated_at = ?3`,
+         status = 'pending', request_id = '', audio_url = '', error = '', timings = '', updated_at = ?3`,
     )
     .bind(slug, locale, now)
     .run();
@@ -99,6 +103,7 @@ type PatchFields = Partial<{
   lyrics: string;
   style_prompt: string;
   error: string;
+  timings: string;
 }>;
 
 /** Update only the named columns on an existing row; always bumps updated_at. */
@@ -116,8 +121,14 @@ async function patchRow(db: D1Binding, slug: string, locale: Locale, fields: Pat
     .run();
 }
 
-function ready(row: { audio_url: string; lyrics: string }) {
-  return NextResponse.json({ status: 'ready', audioUrl: row.audio_url, lyrics: row.lyrics });
+function ready(row: { audio_url: string; lyrics: string; timings?: string }) {
+  let timings: number[] = [];
+  try {
+    if (row.timings) timings = JSON.parse(row.timings);
+  } catch {
+    timings = [];
+  }
+  return NextResponse.json({ status: 'ready', audioUrl: row.audio_url, lyrics: row.lyrics, timings });
 }
 
 function keysConfigured() {
@@ -153,10 +164,14 @@ function parseParams(slugRaw: string, localeRaw: string) {
   return { slug, locale };
 }
 
-/** Copy a finished GMI MP3 into R2 and mark the row ready. */
+/**
+ * Copy a finished GMI MP3 into R2, best-effort align the lyrics to a Whisper
+ * transcription for Spotify-style sync, and mark the row ready.
+ */
 async function finish(
   db: D1Binding,
   audio: R2Bucket | null,
+  ai: AiBinding | null,
   slug: string,
   locale: Locale,
   gmiAudioUrl: string,
@@ -166,8 +181,27 @@ async function finish(
   const bytes = await downloadAudio(gmiAudioUrl);
   if (!bytes) return NextResponse.json({ status: 'pending' });
   await audio.put(audioKey(slug, locale), bytes, { httpMetadata: { contentType: 'audio/mpeg' } });
-  await patchRow(db, slug, locale, { status: 'ready', audio_url: audioPath(slug, locale) });
-  return NextResponse.json({ status: 'ready', audioUrl: audioPath(slug, locale), lyrics });
+
+  let timings: number[] = [];
+  if (ai) {
+    try {
+      const words = await transcribeVocals(bytes, ai);
+      if (words) {
+        const aligned = alignLyricLines(parseLyrics(lyrics), words);
+        if (aligned) timings = aligned;
+      }
+    } catch (e) {
+      console.warn('[theme-song] lyric alignment failed:', e);
+    }
+  }
+
+  const audioUrl = audioPath(slug, locale);
+  await patchRow(db, slug, locale, {
+    status: 'ready',
+    audio_url: audioUrl,
+    timings: timings.length ? JSON.stringify(timings) : '',
+  });
+  return NextResponse.json({ status: 'ready', audioUrl, lyrics, timings });
 }
 
 export async function POST(req: NextRequest) {
@@ -183,7 +217,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'missing_keys', status: 'unavailable' }, { status: 409 });
   }
 
-  const { db, audio } = await bindings();
+  const { db, audio, ai } = await bindings();
   if (!db) return NextResponse.json({ error: 'no_db', status: 'unavailable' }, { status: 503 });
 
   const existing = await getRow(db, slug, locale);
@@ -216,7 +250,7 @@ export async function POST(req: NextRequest) {
   }
   await patchRow(db, slug, locale, { request_id: submit.requestId });
 
-  if (submit.audioUrl) return finish(db, audio, slug, locale, submit.audioUrl, plan.lyrics);
+  if (submit.audioUrl) return finish(db, audio, ai, slug, locale, submit.audioUrl, plan.lyrics);
   return NextResponse.json({ status: 'pending' });
 }
 
@@ -225,7 +259,7 @@ export async function GET(req: NextRequest) {
   const { slug, locale } = parseParams(searchParams.get('slug') || '', searchParams.get('locale') || '');
   if (!slug) return NextResponse.json({ error: 'missing_slug' }, { status: 400 });
 
-  const { db, audio } = await bindings();
+  const { db, audio, ai } = await bindings();
   if (!db) return NextResponse.json({ error: 'no_db', status: 'unavailable' }, { status: 503 });
 
   const row = await getRow(db, slug, locale);
@@ -250,7 +284,7 @@ export async function GET(req: NextRequest) {
     await patchRow(db, slug, locale, { status: 'failed', error: poll.error });
     return NextResponse.json({ status: 'failed', error: poll.error });
   }
-  if (poll.status === 'success') return finish(db, audio, slug, locale, poll.audioUrl, row.lyrics);
+  if (poll.status === 'success') return finish(db, audio, ai, slug, locale, poll.audioUrl, row.lyrics);
 
   if (isStalePending(row)) {
     await patchRow(db, slug, locale, { status: 'failed', error: 'timed_out' });

@@ -283,3 +283,28 @@ export async function downloadAudio(url: string): Promise<ArrayBuffer | null> {
     return null;
   }
 }
+
+export interface AiBinding {
+  run(model: string, inputs: Record<string, unknown>): Promise<unknown>;
+}
+
+/**
+ * Transcribe the finished track (Whisper, word-level timestamps) so the
+ * written lyrics can be aligned to the actual performance. Returns null on
+ * any failure — the caller falls back to an estimate.
+ */
+export async function transcribeVocals(
+  bytes: ArrayBuffer,
+  ai: AiBinding,
+): Promise<{ word: string; start: number; end: number }[] | null> {
+  try {
+    const audio = Array.from(new Uint8Array(bytes));
+    const result = (await ai.run('@cf/openai/whisper-large-v3-turbo', { audio })) as {
+      words?: { word: string; start: number; end: number }[];
+    };
+    return Array.isArray(result?.words) && result.words.length ? result.words : null;
+  } catch (e) {
+    console.warn('[theme-song] whisper transcription failed:', e);
+    return null;
+  }
+}
