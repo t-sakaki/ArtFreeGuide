@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getGuideStore } from '@/lib/guideStore';
-import { DEFAULT_LOCALE, Locale, OUTPUT_LANGUAGE_INSTRUCTION, isLocale } from '@/lib/i18n';
+import { DEFAULT_LOCALE, Locale, outputLanguageInstruction, isLocale } from '@/lib/i18n';
 import { getLLMProvider, Message } from '@/lib/llm';
 import { logChatRequest } from '@/lib/llm/logger';
 
@@ -78,7 +78,7 @@ const CURATOR_SYSTEM_PROMPT =
 function curatorPrompt(locale: Locale): string {
   if (locale === 'ja') return CURATOR_SYSTEM_PROMPT;
 
-  const instruction = OUTPUT_LANGUAGE_INSTRUCTION[locale];
+  const instruction = outputLanguageInstruction(locale);
   return `${instruction}
 
 ${CURATOR_SYSTEM_PROMPT}

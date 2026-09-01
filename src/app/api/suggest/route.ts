@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { searchArtworks } from '@/lib/artworks';
-import { DEFAULT_LOCALE, Locale, OUTPUT_LANGUAGE_INSTRUCTION, isLocale } from '@/lib/i18n';
+import { DEFAULT_LOCALE, Locale, outputLanguageInstruction, isLocale } from '@/lib/i18n';
 import { getGuideStore } from '@/lib/guideStore';
 import { getLLMProvider, Message } from '@/lib/llm';
 import { createServiceClient } from '@/lib/supabase';
@@ -46,7 +46,7 @@ async function inventedTitles(
   const prompt = `${scope}を3〜5件提案してください。
 実在する作品名だけを挙げてください。存在しない作品を創作してはいけません。
 意味的な関連性も考慮してください（例：「春」というクエリに対して「ノルマンディーの春」を提案するなど）。
-${OUTPUT_LANGUAGE_INSTRUCTION[locale]}
+${outputLanguageInstruction(locale)}
 必ず、以下のJSON配列の形式のみを返してください。余計なマークダウンのバッククォート、解説、挨拶は一切含めず、純粋なパース可能なJSONオブジェクトとして出力してください。
 
 [
