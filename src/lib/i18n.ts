@@ -2449,6 +2449,14 @@ export interface ThemeSongStrings {
   needGuide: string;
   /** Small print under the player. */
   credit: string;
+  /** Playback-mode pills on the shared transport. */
+  modeSong: string;
+  modeNarration: string;
+  /** End-of-song panel. */
+  replay: string;
+  backToGuide: string;
+  /** Open the full-screen "music video" view. */
+  fullscreen: string;
 }
 
 const THEME_SONG_EN: ThemeSongStrings = {
@@ -2461,6 +2469,11 @@ const THEME_SONG_EN: ThemeSongStrings = {
   retry: 'Try again',
   needGuide: 'Create the audio guide first, then a theme song can be written from it.',
   credit: 'Lyrics by MiniMax M3 · music by MiniMax Music 3.0 · experimental',
+  modeSong: '🎵 Theme song',
+  modeNarration: 'Guide',
+  replay: 'Play again',
+  backToGuide: 'Back to the guide',
+  fullscreen: 'Full screen',
 };
 
 export const THEME_SONG_UI: Partial<Record<Locale, ThemeSongStrings>> = {
@@ -2474,6 +2487,11 @@ export const THEME_SONG_UI: Partial<Record<Locale, ThemeSongStrings>> = {
     retry: 'もう一度試す',
     needGuide: '先に音声ガイドを生成すると、その解説からテーマソングを作れます。',
     credit: '作詞 MiniMax M3 ・ 作曲 MiniMax Music 3.0 ・ 実験的機能',
+    modeSong: '🎵 テーマソング',
+    modeNarration: '解説',
+    replay: 'もう一度',
+    backToGuide: '解説にもどる',
+    fullscreen: '全画面',
   },
   en: THEME_SONG_EN,
 };
