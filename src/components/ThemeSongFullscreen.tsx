@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Locale, themeSongStrings } from '@/lib/i18n';
 import { fetchArtworkImage } from '@/lib/artworkThumbnail';
-import { parseLyrics } from '@/lib/lyricAlign';
+import { parseLyrics, type LyricTimeline } from '@/lib/lyricAlign';
+import VideoExportModal from '@/components/VideoExportModal';
 
 /**
  * The theme song as a full-screen "music video": the artwork drifts (Ken
@@ -23,8 +24,10 @@ function fmt(sec: number): string {
 
 export default function ThemeSongFullscreen({
   locale,
+  slug,
   lyrics,
   timings,
+  timeline,
   playing,
   ended,
   currentTime,
@@ -39,8 +42,10 @@ export default function ThemeSongFullscreen({
   onClose,
 }: {
   locale: Locale;
+  slug: string;
   lyrics: string;
   timings?: number[];
+  timeline?: LyricTimeline | null;
   playing: boolean;
   ended: boolean;
   currentTime: number;
@@ -56,6 +61,7 @@ export default function ThemeSongFullscreen({
 }) {
   const t = themeSongStrings(locale);
   const [img, setImg] = useState<string | null>(imageUrl ?? null);
+  const [exporting, setExporting] = useState(false);
   const lines = useMemo(() => parseLyrics(lyrics), [lyrics]);
 
   const starts = useMemo(() => {
@@ -225,8 +231,30 @@ export default function ThemeSongFullscreen({
             </div>
           </>
         )}
-        <p className="text-center text-[10px] text-white/40">{t.credit}</p>
+        <div className="flex flex-col items-center gap-1.5">
+          <button
+            onClick={() => setExporting(true)}
+            className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-[11px] font-semibold active:scale-95 transition"
+          >
+            {t.exportVideo}
+          </button>
+          <p className="text-center text-[10px] text-white/40">{t.credit}</p>
+        </div>
       </div>
+
+      {exporting && (
+        <VideoExportModal
+          locale={locale}
+          slug={slug}
+          lyrics={lyrics}
+          timings={timings ?? []}
+          timeline={timeline}
+          title={title}
+          artist={artist}
+          imageUrl={img}
+          onClose={() => setExporting(false)}
+        />
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Locale } from '@/lib/i18n';
+import type { LyricTimeline } from '@/lib/lyricAlign';
 
 /**
  * Owns the per-artwork theme song: the compose/poll lifecycle and a single
@@ -17,6 +18,7 @@ interface PollResponse {
   audioUrl?: string;
   lyrics?: string;
   timings?: number[];
+  timeline?: LyricTimeline | null;
   error?: string;
 }
 
@@ -29,6 +31,7 @@ export interface ThemeSongController {
   phase: ThemeSongPhase;
   lyrics: string;
   timings: number[];
+  timeline: LyricTimeline | null;
   playing: boolean;
   ended: boolean;
   currentTime: number;
@@ -53,6 +56,7 @@ export function useThemeSong({
   const [audioUrl, setAudioUrl] = useState('');
   const [lyrics, setLyrics] = useState('');
   const [timings, setTimings] = useState<number[]>([]);
+  const [timeline, setTimeline] = useState<LyricTimeline | null>(null);
   const [playing, setPlaying] = useState(false);
   const [ended, setEnded] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -74,6 +78,7 @@ export function useThemeSong({
       setAudioUrl(d.audioUrl);
       setLyrics(d.lyrics || '');
       setTimings(Array.isArray(d.timings) ? d.timings : []);
+      setTimeline(d.timeline ?? null);
       setPhase('ready');
       return true;
     }
@@ -96,6 +101,7 @@ export function useThemeSong({
     setAudioUrl('');
     setLyrics('');
     setTimings([]);
+    setTimeline(null);
     setPlaying(false);
     setEnded(false);
     setCurrentTime(0);
@@ -236,5 +242,5 @@ export function useThemeSong({
     [seek],
   );
 
-  return { phase, lyrics, timings, playing, ended, currentTime, duration, play, pause, toggle, seek, seekBy };
+  return { phase, lyrics, timings, timeline, playing, ended, currentTime, duration, play, pause, toggle, seek, seekBy };
 }
