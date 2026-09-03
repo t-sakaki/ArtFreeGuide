@@ -56,15 +56,28 @@ const MAX_DP_CELLS = 4_000_000;
  * if the transcription was unusable — the caller should fall back to an
  * estimate in that case.
  */
-export function alignLyricLines(lines: LyricLine[], words: WhisperWord[]): number[] | null {
+/**
+ * The shared DP core: aligns every (whitespace/punctuation-stripped) reference
+ * character to the transcription and returns an interpolated time for each, plus
+ * where each line begins and how many aligned characters it has. Both
+ * `alignLyricLines` and `alignLyricTimeline` build on this so the expensive
+ * Needleman–Wunsch grid is only ever walked once per call.
+ */
+function alignReferenceCharTimes(
+  lines: LyricLine[],
+  words: WhisperWord[],
+): { filled: number[]; lineStartRefIdx: number[]; lineCharLen: number[] } | null {
   if (words.length === 0) return null;
 
   const refChars: string[] = [];
   const lineStartRefIdx: number[] = new Array(lines.length).fill(-1);
+  const lineCharLen: number[] = new Array(lines.length).fill(0);
   lines.forEach((line, i) => {
     if (line.section) return;
     lineStartRefIdx[i] = refChars.length;
-    refChars.push(...Array.from(alignChars(line.text)));
+    const chars = Array.from(alignChars(line.text));
+    lineCharLen[i] = chars.length;
+    refChars.push(...chars);
   });
   if (refChars.length === 0) return null;
 
@@ -134,7 +147,20 @@ export function alignLyricLines(lines: LyricLine[], words: WhisperWord[]): numbe
   if (prevIdx === -1) return null; // nothing aligned at all
   for (let x = prevIdx + 1; x < n; x++) filled[x] = prevT;
 
-  // Per-character times back to one start time per (sung) line.
+  return { filled, lineStartRefIdx, lineCharLen };
+}
+
+/**
+ * Align `lines` (this song's written lyrics) to a Whisper transcription of the
+ * actual audio. Returns one start time (seconds) per entry in `lines`, or null
+ * if the transcription was unusable — the caller should fall back to an
+ * estimate in that case.
+ */
+export function alignLyricLines(lines: LyricLine[], words: WhisperWord[]): number[] | null {
+  const core = alignReferenceCharTimes(lines, words);
+  if (!core) return null;
+  const { filled, lineStartRefIdx } = core;
+
   const out = new Array(lines.length).fill(0);
   let carry = 0;
   lines.forEach((line, li) => {
@@ -148,4 +174,74 @@ export function alignLyricLines(lines: LyricLine[], words: WhisperWord[]): numbe
     carry = out[li];
   });
   return out;
+}
+
+/**
+ * The richer form used by the MP4 export: per-line start, per-line end (when the
+ * line's last sung character lands) and, for a true karaoke wipe, the time of
+ * every aligned character in the line (milliseconds, monotonic).
+ */
+export interface LyricTimeline {
+  v: 2;
+  /** Seconds from the top of the track, one per line (sections carry the last start). */
+  starts: number[];
+  /** Seconds; when the line's final aligned character was sung. */
+  ends: number[];
+  /** Per line: ms-integer time at each aligned character. Empty for sections / unaligned lines. */
+  chars: number[][];
+}
+
+export function alignLyricTimeline(lines: LyricLine[], words: WhisperWord[]): LyricTimeline | null {
+  const core = alignReferenceCharTimes(lines, words);
+  if (!core) return null;
+  const { filled, lineStartRefIdx, lineCharLen } = core;
+
+  const starts = new Array<number>(lines.length).fill(0);
+  const ends = new Array<number>(lines.length).fill(0);
+  const chars: number[][] = new Array(lines.length);
+  let carry = 0;
+
+  lines.forEach((line, li) => {
+    if (line.section) {
+      starts[li] = carry;
+      ends[li] = carry;
+      chars[li] = [];
+      return;
+    }
+    const from = lineStartRefIdx[li];
+    const len = lineCharLen[li];
+    const slice: number[] = [];
+    let last = carry;
+    for (let k = 0; k < len; k++) {
+      const idx = from + k;
+      const t = Math.max(idx >= 0 && idx < filled.length ? filled[idx] : last, last);
+      last = t;
+      slice.push(Math.round(t * 1000));
+    }
+    starts[li] = Math.max(slice.length ? slice[0] / 1000 : carry, carry);
+    ends[li] = Math.max(slice.length ? slice[slice.length - 1] / 1000 : starts[li], starts[li] + 0.3);
+    chars[li] = slice;
+    carry = starts[li];
+  });
+
+  return { v: 2, starts, ends, chars };
+}
+
+/** Parse whatever is stored in the `timings` column: a v2 timeline, or a legacy `number[]` of starts, or nothing. */
+export function parseTimelineJSON(raw: string | null | undefined): LyricTimeline | number[] | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw);
+    if (Array.isArray(v) && v.every(n => typeof n === 'number')) return v as number[];
+    if (v && typeof v === 'object' && Array.isArray((v as LyricTimeline).starts)) return v as LyricTimeline;
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
+/** The per-line start times, whichever stored shape they came in. */
+export function timelineStarts(t: LyricTimeline | number[] | null): number[] {
+  if (!t) return [];
+  return Array.isArray(t) ? t : t.starts;
 }

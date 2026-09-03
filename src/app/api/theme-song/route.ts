@@ -13,7 +13,13 @@ import {
   gmiKey,
   type AiBinding,
 } from '@/lib/themeSong';
-import { parseLyrics, alignLyricLines } from '@/lib/lyricAlign';
+import {
+  parseLyrics,
+  alignLyricTimeline,
+  parseTimelineJSON,
+  timelineStarts,
+  type LyricTimeline,
+} from '@/lib/lyricAlign';
 
 /**
  * MiniMax Week hackathon feature: generate (and cache) a per-artwork theme song.
@@ -122,13 +128,16 @@ async function patchRow(db: D1Binding, slug: string, locale: Locale, fields: Pat
 }
 
 function ready(row: { audio_url: string; lyrics: string; timings?: string }) {
-  let timings: number[] = [];
-  try {
-    if (row.timings) timings = JSON.parse(row.timings);
-  } catch {
-    timings = [];
-  }
-  return NextResponse.json({ status: 'ready', audioUrl: row.audio_url, lyrics: row.lyrics, timings });
+  const parsed = parseTimelineJSON(row.timings);
+  const timings = timelineStarts(parsed);
+  const timeline: LyricTimeline | null = parsed && !Array.isArray(parsed) ? parsed : null;
+  return NextResponse.json({
+    status: 'ready',
+    audioUrl: row.audio_url,
+    lyrics: row.lyrics,
+    timings,
+    timeline,
+  });
 }
 
 function keysConfigured() {
@@ -182,14 +191,11 @@ async function finish(
   if (!bytes) return NextResponse.json({ status: 'pending' });
   await audio.put(audioKey(slug, locale), bytes, { httpMetadata: { contentType: 'audio/mpeg' } });
 
-  let timings: number[] = [];
+  let timeline: LyricTimeline | null = null;
   if (ai) {
     try {
       const words = await transcribeVocals(bytes, ai);
-      if (words) {
-        const aligned = alignLyricLines(parseLyrics(lyrics), words);
-        if (aligned) timings = aligned;
-      }
+      if (words) timeline = alignLyricTimeline(parseLyrics(lyrics), words);
     } catch (e) {
       console.warn('[theme-song] lyric alignment failed:', e);
     }
@@ -199,9 +205,15 @@ async function finish(
   await patchRow(db, slug, locale, {
     status: 'ready',
     audio_url: audioUrl,
-    timings: timings.length ? JSON.stringify(timings) : '',
+    timings: timeline ? JSON.stringify(timeline) : '',
   });
-  return NextResponse.json({ status: 'ready', audioUrl, lyrics, timings });
+  return NextResponse.json({
+    status: 'ready',
+    audioUrl,
+    lyrics,
+    timings: timelineStarts(timeline),
+    timeline,
+  });
 }
 
 export async function POST(req: NextRequest) {

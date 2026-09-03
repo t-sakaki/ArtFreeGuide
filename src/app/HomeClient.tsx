@@ -4253,8 +4253,10 @@ export default function HomeClient({
     songFullscreen && themeSongSlug && (
       <ThemeSongFullscreen
         locale={locale}
+        slug={themeSongSlug}
         lyrics={song.lyrics}
         timings={song.timings}
+        timeline={song.timeline}
         playing={song.playing}
         ended={song.ended}
         currentTime={song.currentTime}

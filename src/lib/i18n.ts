@@ -2457,6 +2457,19 @@ export interface ThemeSongStrings {
   backToGuide: string;
   /** Open the full-screen "music video" view. */
   fullscreen: string;
+  /** MP4 export of the music video. */
+  exportVideo: string;
+  videoTitle: string;
+  videoHint: string;
+  videoRendering: string;
+  videoSave: string;
+  videoShare: string;
+  videoClose: string;
+  videoUnsupported: string;
+  videoFailed: string;
+  aspectPortrait: string;
+  aspectLandscape: string;
+  aspectSquare: string;
 }
 
 const THEME_SONG_EN: ThemeSongStrings = {
@@ -2474,6 +2487,18 @@ const THEME_SONG_EN: ThemeSongStrings = {
   replay: 'Play again',
   backToGuide: 'Back to the guide',
   fullscreen: 'Full screen',
+  exportVideo: '⬇ Save as video',
+  videoTitle: 'Create a video',
+  videoHint: 'The artwork, the lyrics and the song, rendered to an MP4 you can share.',
+  videoRendering: 'Rendering the video…',
+  videoSave: 'Save video',
+  videoShare: 'Share',
+  videoClose: 'Close',
+  videoUnsupported: 'This browser can’t export video. Try Chrome or Edge on a computer.',
+  videoFailed: 'The video could not be created this time.',
+  aspectPortrait: 'Portrait 9:16',
+  aspectLandscape: 'Landscape 16:9',
+  aspectSquare: 'Square 1:1',
 };
 
 export const THEME_SONG_UI: Partial<Record<Locale, ThemeSongStrings>> = {
@@ -2492,6 +2517,18 @@ export const THEME_SONG_UI: Partial<Record<Locale, ThemeSongStrings>> = {
     replay: 'もう一度',
     backToGuide: '解説にもどる',
     fullscreen: '全画面',
+    exportVideo: '⬇ 動画にする',
+    videoTitle: '動画を作成',
+    videoHint: '絵画・歌詞・歌をまとめて、共有できる MP4 に書き出します。',
+    videoRendering: '動画を書き出し中…',
+    videoSave: '動画を保存',
+    videoShare: '共有',
+    videoClose: '閉じる',
+    videoUnsupported: 'このブラウザは動画の書き出しに対応していません。パソコンの Chrome か Edge をお試しください。',
+    videoFailed: '今回は動画を作成できませんでした。',
+    aspectPortrait: '縦 9:16',
+    aspectLandscape: '横 16:9',
+    aspectSquare: '正方形 1:1',
   },
   en: THEME_SONG_EN,
 };
