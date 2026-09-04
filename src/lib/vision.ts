@@ -1,4 +1,5 @@
 import { Locale, OUTPUT_LANGUAGE_INSTRUCTION } from './i18n';
+import { askVisionJson } from './visionModel';
 
 /**
  * Reading an artwork out of a photo, so a visitor standing in front of a
@@ -22,17 +23,6 @@ export interface Identification {
   source: IdentifySource;
 }
 
-const BASE_URL = process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1';
-
-/**
- * Vision models on NIM, in fallback order. Overridable with VISION_MODEL.
- *
- * gemma-4 leads because it both reads labels well and reliably answers with the
- * JSON object we ask for; the llama vision model is kept only as a last resort
- * and tends to return prose, which `extractJson` then has to salvage.
- */
-const DEFAULT_MODELS = ['google/gemma-4-31b-it', 'meta/llama-3.2-11b-vision-instruct'];
-
 /** Long enough for a JSON object, short enough that the model cannot ramble. */
 const MAX_TOKENS = 256;
 
@@ -43,10 +33,6 @@ const ACCEPTED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
 
 /** Roughly 4 MB of base64, i.e. ~3 MB of image. The client sends far less. */
 const MAX_DATA_URL_LENGTH = 4 * 1024 * 1024;
-
-interface ChatCompletion {
-  choices?: { message?: { content?: string } }[];
-}
 
 /**
  * Checks a `data:` URL without ever logging or storing it.
@@ -85,20 +71,6 @@ function artworkPrompt(locale: Locale): string {
   ].join('\n');
 }
 
-/** Vision models like to wrap JSON in a fenced block or a sentence of preamble. */
-function extractJson(text: string): unknown {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
-  const body = fenced ? fenced[1] : text;
-  const start = body.indexOf('{');
-  const end = body.lastIndexOf('}');
-  if (start === -1 || end <= start) return null;
-  try {
-    return JSON.parse(body.slice(start, end + 1));
-  } catch {
-    return null;
-  }
-}
-
 function cleanField(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.replace(/\s+/g, ' ').trim();
@@ -115,62 +87,8 @@ function cleanConfidence(value: unknown): number {
   return Math.min(1, Math.max(0, numeric));
 }
 
-async function askVision(dataUrl: string, prompt: string, apiKey: string): Promise<unknown> {
-  const models = (process.env.VISION_MODEL || '')
-    .split(',')
-    .map(entry => entry.trim())
-    .filter(Boolean);
-  const chain = models.length ? models : DEFAULT_MODELS;
-
-  let lastError: unknown = null;
-
-  for (const model of chain) {
-    try {
-      const res = await fetch(`${BASE_URL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: prompt },
-                { type: 'image_url', image_url: { url: dataUrl } }
-              ]
-            }
-          ],
-          max_tokens: MAX_TOKENS,
-          temperature: 0.1,
-          response_format: { type: 'json_object' }
-        })
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
-      }
-
-      const data = (await res.json()) as ChatCompletion;
-      const text = data.choices?.[0]?.message?.content ?? '';
-      const parsed = extractJson(text);
-      if (!parsed) throw new Error('Vision model returned no JSON object');
-      return parsed;
-    } catch (error) {
-      lastError = error;
-      console.warn(
-        `Vision model ${model} failed:`,
-        error instanceof Error ? error.message : String(error)
-      );
-    }
-  }
-
-  throw new Error(
-    `Vision call failed: ${lastError instanceof Error ? lastError.message : 'unavailable'}`
-  );
-}
+const askVision = (dataUrl: string, prompt: string): Promise<unknown> =>
+  askVisionJson(dataUrl, prompt, { maxTokens: MAX_TOKENS });
 
 function toIdentification(parsed: unknown, source: IdentifySource): Identification {
   const record = (parsed ?? {}) as Record<string, unknown>;
@@ -189,10 +107,7 @@ function toIdentification(parsed: unknown, source: IdentifySource): Identificati
  * @returns the best reading; `title` is null when neither pass recognised anything.
  */
 export async function identifyArtwork(dataUrl: string, locale: Locale): Promise<Identification> {
-  const apiKey = process.env.NVIDIA_API_KEY;
-  if (!apiKey) throw new Error('NVIDIA_API_KEY environment variable is not set.');
-
-  const parsed = (await askVision(dataUrl, captionPrompt(locale), apiKey)) as Record<string, unknown>;
+  const parsed = (await askVision(dataUrl, captionPrompt(locale))) as Record<string, unknown>;
   // Vision models happily "read" a label that is not in the photo, so a title is
   // only trusted as a transcription when the model also says it saw text.
   if (parsed?.label_visible !== false) {
@@ -200,5 +115,5 @@ export async function identifyArtwork(dataUrl: string, locale: Locale): Promise<
     if (caption.title) return caption;
   }
 
-  return toIdentification(await askVision(dataUrl, artworkPrompt(locale), apiKey), 'artwork');
+  return toIdentification(await askVision(dataUrl, artworkPrompt(locale)), 'artwork');
 }
