@@ -24,8 +24,14 @@ export interface Identification {
 
 const BASE_URL = process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1';
 
-/** Vision models on NIM, in fallback order. Overridable with VISION_MODEL. */
-const DEFAULT_MODELS = ['nvidia/nemotron-nano-12b-v2-vl', 'meta/llama-3.2-11b-vision-instruct'];
+/**
+ * Vision models on NIM, in fallback order. Overridable with VISION_MODEL.
+ *
+ * gemma-4 leads because it both reads labels well and reliably answers with the
+ * JSON object we ask for; the llama vision model is kept only as a last resort
+ * and tends to return prose, which `extractJson` then has to salvage.
+ */
+const DEFAULT_MODELS = ['google/gemma-4-31b-it', 'meta/llama-3.2-11b-vision-instruct'];
 
 /** Long enough for a JSON object, short enough that the model cannot ramble. */
 const MAX_TOKENS = 256;
@@ -138,7 +144,8 @@ async function askVision(dataUrl: string, prompt: string, apiKey: string): Promi
             }
           ],
           max_tokens: MAX_TOKENS,
-          temperature: 0.1
+          temperature: 0.1,
+          response_format: { type: 'json_object' }
         })
       });
 
