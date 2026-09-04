@@ -1,34 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Locale, themeSongStrings } from '@/lib/i18n';
 import { fetchArtworkImage } from '@/lib/artworkThumbnail';
+import { parseLyrics, type LyricTimeline } from '@/lib/lyricAlign';
+import VideoExportModal from '@/components/VideoExportModal';
 
 /**
- * MiniMax Week: the theme song as a small generated "music video".
- *
- * The artwork drifts slowly behind the lyrics, which are highlighted line by
- * line. MiniMax does not return per-line timestamps, so timing is estimated
- * from the track length and each line's length — the same length-weighted
- * pacing the narration falls back to.
+ * The theme song as a full-screen "music video": the artwork drifts (Ken
+ * Burns) behind the scrolling lyric sheet, the active line enlarged. This is a
+ * visual layer only — playback is owned by useThemeSong and driven through the
+ * same transport as the narration.
  */
 
-interface Line {
-  text: string;
-  /** [Verse] / [Chorus] markers — kept for pacing, not shown as a lyric. */
-  section: boolean;
-}
-
-/** Fraction of the track assumed to be intro before the first sung line. */
 const INTRO_FRACTION = 0.06;
-
-function parseLyrics(raw: string): Line[] {
-  return raw
-    .split('\n')
-    .map(l => l.trim())
-    .filter(Boolean)
-    .map(l => ({ text: l.replace(/^\[(.+)\]$/, '$1'), section: /^\[.+\]$/.test(l) }));
-}
 
 function fmt(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) sec = 0;
@@ -37,34 +22,50 @@ function fmt(sec: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function ThemeSongMode({
+export default function ThemeSongFullscreen({
   locale,
-  audioUrl,
+  slug,
   lyrics,
+  timings,
+  timeline,
+  playing,
+  ended,
+  currentTime,
+  duration,
   title,
   artist,
   imageUrl,
+  onToggle,
+  onSeek,
+  onReplay,
+  onBackToGuide,
   onClose,
 }: {
   locale: Locale;
-  audioUrl: string;
+  slug: string;
   lyrics: string;
+  timings?: number[];
+  timeline?: LyricTimeline | null;
+  playing: boolean;
+  ended: boolean;
+  currentTime: number;
+  duration: number;
   title: string;
   artist?: string;
   imageUrl?: string | null;
+  onToggle: () => void;
+  onSeek: (t: number) => void;
+  onReplay: () => void;
+  onBackToGuide: () => void;
   onClose: () => void;
 }) {
   const t = themeSongStrings(locale);
-  const audioRef = useRef<HTMLAudioElement>(null);
   const [img, setImg] = useState<string | null>(imageUrl ?? null);
-  const [playing, setPlaying] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [current, setCurrent] = useState(0);
-
+  const [exporting, setExporting] = useState(false);
   const lines = useMemo(() => parseLyrics(lyrics), [lyrics]);
 
-  // Cumulative start time for every line, weighted by its length.
   const starts = useMemo(() => {
+    if (timings && timings.length === lines.length) return timings;
     if (!duration || lines.length === 0) return [];
     const weights = lines.map(l => Math.max(l.text.length, l.section ? 4 : 10));
     const total = weights.reduce((a, b) => a + b, 0);
@@ -76,18 +77,16 @@ export default function ThemeSongMode({
       acc += w;
       return at;
     });
-  }, [duration, lines]);
+  }, [duration, lines, timings]);
 
   const activeIdx = useMemo(() => {
     if (starts.length === 0) return -1;
     let idx = -1;
-    for (let i = 0; i < starts.length; i++) if (starts[i] <= current + 0.15) idx = i;
+    for (let i = 0; i < starts.length; i++) if (starts[i] <= currentTime + 0.15) idx = i;
     return idx;
-  }, [starts, current]);
+  }, [starts, currentTime]);
 
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
-
-  // Keep the active line centred in the scrolling lyric sheet.
   useEffect(() => {
     if (activeIdx < 0) return;
     lineRefs.current[activeIdx]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -104,13 +103,7 @@ export default function ThemeSongMode({
     };
   }, [imageUrl, title, artist]);
 
-  // Stop any narration that was speaking; lock body scroll.
   useEffect(() => {
-    try {
-      window.speechSynthesis?.cancel();
-    } catch {
-      /* not supported */
-    }
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => {
@@ -123,26 +116,8 @@ export default function ThemeSongMode({
     };
   }, [onClose]);
 
-  // Autoplay on open (best effort — browsers may block until a tap).
-  useEffect(() => {
-    audioRef.current?.play().catch(() => setPlaying(false));
-  }, []);
-
-  const toggle = useCallback(() => {
-    const a = audioRef.current;
-    if (!a) return;
-    if (a.paused) a.play().catch(() => {});
-    else a.pause();
-  }, []);
-
-  const seek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const a = audioRef.current;
-    if (a) a.currentTime = Number(e.target.value);
-  }, []);
-
   return (
     <div className="fixed inset-0 z-[120] bg-black text-white flex flex-col select-none">
-      {/* drifting artwork */}
       <div className="absolute inset-0 overflow-hidden">
         {img && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -159,7 +134,6 @@ export default function ThemeSongMode({
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/45 to-black/85" />
       </div>
 
-      {/* top bar */}
       <div className="relative flex items-center justify-between px-4 pt-4">
         <div className="min-w-0">
           <p className="text-sm font-bold truncate wordmark drop-shadow">🎵 {title}</p>
@@ -167,14 +141,13 @@ export default function ThemeSongMode({
         </div>
         <button
           onClick={onClose}
-          aria-label={t.hideLyrics}
+          aria-label={t.backToGuide}
           className="shrink-0 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 grid place-items-center text-lg"
         >
           ✕
         </button>
       </div>
 
-      {/* lyrics — the whole sheet, active line kept centred */}
       <div className="relative flex-1 overflow-y-auto no-scrollbar">
         <div className="min-h-full flex flex-col items-center justify-start gap-3 px-6 text-center py-[38vh]">
           {lines.map((line, i) => {
@@ -215,45 +188,73 @@ export default function ThemeSongMode({
         </div>
       </div>
 
-      {/* transport */}
       <div className="relative px-5 pb-7 pt-3 space-y-2">
-        <input
-          type="range"
-          min={0}
-          max={duration || 0}
-          value={current}
-          step={0.1}
-          onChange={seek}
-          aria-label={t.ready}
-          className="w-full accent-teal-400 h-1 cursor-pointer"
-        />
-        <div className="flex items-center justify-between text-[11px] text-white/60 tabular-nums">
-          <span>{fmt(current)}</span>
-          <span>{fmt(duration)}</span>
-        </div>
-        <div className="flex items-center justify-center">
+        {ended ? (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={onReplay}
+              className="px-4 py-2 rounded-full bg-teal-500 hover:bg-teal-400 text-black text-sm font-bold active:scale-95 transition"
+            >
+              ▶ {t.replay}
+            </button>
+            <button
+              onClick={onBackToGuide}
+              className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-sm font-semibold active:scale-95 transition"
+            >
+              {t.backToGuide}
+            </button>
+          </div>
+        ) : (
+          <>
+            <input
+              type="range"
+              min={0}
+              max={duration || 0}
+              value={currentTime}
+              step={0.1}
+              onChange={e => onSeek(Number(e.target.value))}
+              aria-label={t.modeSong}
+              className="w-full accent-teal-400 h-1 cursor-pointer"
+            />
+            <div className="flex items-center justify-between text-[11px] text-white/60 tabular-nums">
+              <span>{fmt(currentTime)}</span>
+              <span>{fmt(duration)}</span>
+            </div>
+            <div className="flex items-center justify-center">
+              <button
+                onClick={onToggle}
+                aria-label="play / pause"
+                className="w-14 h-14 rounded-full bg-teal-500 hover:bg-teal-400 text-black text-2xl grid place-items-center shadow-lg active:scale-95 transition"
+              >
+                {playing ? '❚❚' : '▶'}
+              </button>
+            </div>
+          </>
+        )}
+        <div className="flex flex-col items-center gap-1.5">
           <button
-            onClick={toggle}
-            aria-label="play / pause"
-            className="w-14 h-14 rounded-full bg-teal-500 hover:bg-teal-400 text-black text-2xl grid place-items-center shadow-lg active:scale-95 transition"
+            onClick={() => setExporting(true)}
+            className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-[11px] font-semibold active:scale-95 transition"
           >
-            {playing ? '❚❚' : '▶'}
+            {t.exportVideo}
           </button>
+          <p className="text-center text-[10px] text-white/40">{t.credit}</p>
         </div>
-        <p className="text-center text-[10px] text-white/40">{t.credit}</p>
       </div>
 
-      <audio
-        ref={audioRef}
-        src={audioUrl}
-        preload="auto"
-        onLoadedMetadata={e => setDuration(e.currentTarget.duration || 0)}
-        onDurationChange={e => setDuration(e.currentTarget.duration || 0)}
-        onTimeUpdate={e => setCurrent(e.currentTarget.currentTime)}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
-      />
+      {exporting && (
+        <VideoExportModal
+          locale={locale}
+          slug={slug}
+          lyrics={lyrics}
+          timings={timings ?? []}
+          timeline={timeline}
+          title={title}
+          artist={artist}
+          imageUrl={img}
+          onClose={() => setExporting(false)}
+        />
+      )}
     </div>
   );
 }

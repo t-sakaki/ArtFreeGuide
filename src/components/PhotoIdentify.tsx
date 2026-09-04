@@ -28,18 +28,40 @@ interface Reading {
   source: 'caption' | 'artwork';
 }
 
+/** A source to draw from, plus its natural size, however the browser could decode it. */
+async function decode(file: File): Promise<{ source: CanvasImageSource; width: number; height: number }> {
+  // The fast path, but it rejects formats the browser will still paint from an
+  // <img> — most importantly the HEIC that an iPhone saves by default.
+  try {
+    const bitmap = await createImageBitmap(file);
+    return { source: bitmap, width: bitmap.width, height: bitmap.height };
+  } catch {
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      return { source: image, width: image.naturalWidth, height: image.naturalHeight };
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+}
+
 /** Downscales in the browser so the worker never sees a 12 megapixel photo. */
 async function toCompactDataUrl(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+  const { source, width, height } = await decode(file);
+  if (!width || !height) throw new Error('image has no dimensions');
+
+  const scale = Math.min(1, MAX_EDGE / Math.max(width, height));
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
 
   const context = canvas.getContext('2d');
   if (!context) throw new Error('canvas unavailable');
-  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
+  context.drawImage(source, 0, 0, canvas.width, canvas.height);
+  if (source instanceof ImageBitmap) source.close();
 
   return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
 }
@@ -117,7 +139,10 @@ export default function PhotoIdentify({ locale, t, disabled, onPrefill, onApply 
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
+        // No `capture` attribute: on a phone it would force the camera open and
+        // hide the file browser, so a picture already saved to the device — the
+        // usual case when someone is not standing in the gallery — could not be
+        // chosen. Leaving it off lets the OS offer camera and library both.
         className="hidden"
         onChange={event => {
           const file = event.target.files?.[0];

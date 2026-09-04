@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { ensureAnonymousUser } from '@/lib/user';
 import ArtworkStage from '@/components/ArtworkStage';
 import ArtworkPlaque from '@/components/ArtworkPlaque';
@@ -38,13 +38,16 @@ import {
   UI,
   isLocale,
   AI_PROMPTS,
+  themeSongStrings,
 } from '@/lib/i18n';
 import { canonicalName, localizeName } from '@/lib/names';
 import { artworkPath } from '@/lib/site';
 import type { DailyArtwork } from '@/lib/dailyArtwork';
 import { fetchArtworkImage } from '@/lib/artworkThumbnail';
 import ArtworkThumbnail from '@/components/ArtworkThumbnail';
-import ThemeSongButton from '@/components/ThemeSongButton';
+import ThemeSongBar from '@/components/ThemeSongBar';
+import ThemeSongFullscreen from '@/components/ThemeSongFullscreen';
+import { useThemeSong } from '@/hooks/useThemeSong';
 import { artworkSlug } from '@/lib/slug';
 import ReadingApprovals from '@/components/ReadingApprovals';
 import GuideCorrections from '@/components/GuideCorrections';
@@ -167,6 +170,14 @@ const PRESET_ARTISTS = [
 function estimatedSpeechMs(text: string, rate: number, lang: string): number {
   const perChar = lang === 'ja-JP' || lang === 'zh-CN' ? 140 : 62;
   return Math.max(1200, (text.length * perChar) / Math.max(rate, 0.5));
+}
+
+/** m:ss for the theme-song scrubber. */
+function fmtClock(sec: number): string {
+  if (!Number.isFinite(sec) || sec < 0) sec = 0;
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 class AudioController {
@@ -436,6 +447,39 @@ export default function HomeClient({
   const [activeSegmentIndex, setActiveSegmentIndex] = useState<number>(-1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE] ?? 1.7);
+
+  // ── Theme song (MiniMax Week): one player shared with the narration ──────
+  const [playbackMode, setPlaybackMode] = useState<'narration' | 'song'>('narration');
+  const [songFullscreen, setSongFullscreen] = useState(false);
+  const song = useThemeSong({
+    slug: themeSongSlug,
+    locale,
+    enabled: Boolean(responseShort && themeSongSlug),
+  });
+  // A new artwork always starts in narration mode.
+  useEffect(() => {
+    setPlaybackMode('narration');
+    setSongFullscreen(false);
+  }, [themeSongSlug, locale]);
+  // Only one audio stream at a time: entering song mode silences the narration.
+  const enterSongMode = useCallback(() => {
+    setIsPlaying(false);
+    AudioController.clearQueue();
+    stopAmbientSound();
+    setPlaybackMode('song');
+    song.play();
+  }, [song]);
+  const pauseSong = useCallback(() => song.pause(), [song]);
+  const replaySong = useCallback(() => {
+    song.seek(0);
+    enterSongMode();
+  }, [song, enterSongMode]);
+  const backToNarration = useCallback(() => {
+    song.pause();
+    setSongFullscreen(false);
+    setPlaybackMode('narration');
+  }, [song]);
+  const transportPlaying = playbackMode === 'song' ? song.playing : isPlaying;
   const [speechSupported, setSpeechSupported] = useState(false);
   const [voiceUnavailable, setVoiceUnavailable] = useState(false);
 
@@ -1060,6 +1104,7 @@ export default function HomeClient({
   // that sets the guide text, so the segments only exist a render later: this has
   // to react to speakableSegments too, or the bar shows playing in silence.
   useEffect(() => {
+    if (playbackMode === 'song') return;
     if (!isPlaying) {
       spokenKeyRef.current = null;
       return;
@@ -1081,7 +1126,7 @@ export default function HomeClient({
       setNarrationDone(true);
       scheduleTourAdvance();
     }
-  }, [activeSegmentIndex, isPlaying, speakableSegments]);
+  }, [activeSegmentIndex, isPlaying, speakableSegments, playbackMode]);
 
   const questionChips = useMemo(() => {
     const staticChips = suggestedQuestions(canonicalArtwork, canonicalArtist, locale);
@@ -2459,6 +2504,13 @@ export default function HomeClient({
     setHasPlayedOnce(true);
     hints.complete('play');
 
+    // Song mode: the centre button drives the theme song instead.
+    if (playbackMode === 'song') {
+      if (song.playing) song.pause();
+      else enterSongMode();
+      return;
+    }
+
     // 1. Force unlock on user gesture
     AudioController.forceUnlock();
 
@@ -2489,12 +2541,20 @@ export default function HomeClient({
   };
 
   const handleSkipForward = () => {
+    if (playbackMode === 'song') {
+      song.seekBy(15);
+      return;
+    }
     if (activeSegmentIndex < speakableSegments.length - 1) {
       setActiveSegmentIndex(prev => prev + 1);
     }
   };
 
   const handleSkipBackward = () => {
+    if (playbackMode === 'song') {
+      song.seekBy(-15);
+      return;
+    }
     if (activeSegmentIndex > 0) {
       setActiveSegmentIndex(prev => prev - 1);
     }
@@ -3268,15 +3328,46 @@ export default function HomeClient({
             </div>
 
             {/* MiniMax Week: per-artwork theme song, written from this guide */}
-            {responseShort && themeSongSlug && (
-              <div className="pb-1">
-                <ThemeSongButton
-                  slug={themeSongSlug}
+            {responseShort && themeSongSlug && song.phase !== 'unavailable' && (
+              <div className="pb-1 space-y-1.5">
+                <ThemeSongBar
+                  song={song}
                   locale={locale}
-                  title={shownArtwork}
-                  artist={shownArtist}
-                  imageUrl={displayImageUrl}
+                  active={playbackMode === 'song'}
+                  onPlay={enterSongMode}
+                  onPause={pauseSong}
+                  onReplay={replaySong}
+                  onBackToGuide={backToNarration}
+                  onOpenFullscreen={() => {
+                    if (!song.playing && !song.ended) enterSongMode();
+                    else setPlaybackMode('song');
+                    setSongFullscreen(true);
+                  }}
                 />
+                {song.phase === 'ready' && (
+                  <div className="flex gap-1">
+                    <button
+                      onClick={backToNarration}
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
+                        playbackMode === 'narration'
+                          ? 'bg-teal-500/15 border-teal-500/40 text-teal-300'
+                          : 'border-slate-800 text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      {themeSongStrings(locale).modeNarration}
+                    </button>
+                    <button
+                      onClick={enterSongMode}
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
+                        playbackMode === 'song'
+                          ? 'bg-teal-500/15 border-teal-500/40 text-teal-300'
+                          : 'border-slate-800 text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      {themeSongStrings(locale).modeSong}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -3741,29 +3832,48 @@ export default function HomeClient({
 
           {/* 【2段目】 ナレーション進行バー（広々表示） ＋ ⚡ マグネティック・アナログ倍速スライダー */}
           <div className="w-full max-w-lg mx-auto px-1 font-sans flex items-center gap-3">
-            {/* 1. ナレーション進行バー（伸縮領域） */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono mb-1">
-                <span>{Math.max(activeSegmentIndex + 1, 0)} / {speakableSegments.length}</span>
-                <span>{Math.round(narrationProgress * 100)}%</span>
-              </div>
-              <div
-                className="h-1 w-full bg-slate-900 rounded-full overflow-hidden"
-                role="progressbar"
-                aria-valuenow={Math.round(narrationProgress * 100)}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label={t.player.position}
-              >
-                <div
-                  className="h-full bg-gradient-to-r from-teal-500 to-blue-500 transition-all duration-500"
-                  style={{ width: `${narrationProgress * 100}%` }}
+            {/* 1. 進行バー（伸縮領域）— 解説は文の進捗、曲はシークバー */}
+            {playbackMode === 'song' ? (
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono mb-1">
+                  <span>{fmtClock(song.currentTime)}</span>
+                  <span>{fmtClock(song.duration)}</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={song.duration || 0}
+                  value={song.currentTime}
+                  step={0.1}
+                  onChange={e => song.seek(Number(e.target.value))}
+                  aria-label={t.player.position}
+                  className="w-full h-1 accent-teal-400 cursor-pointer"
                 />
               </div>
-            </div>
+            ) : (
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono mb-1">
+                  <span>{Math.max(activeSegmentIndex + 1, 0)} / {speakableSegments.length}</span>
+                  <span>{Math.round(narrationProgress * 100)}%</span>
+                </div>
+                <div
+                  className="h-1 w-full bg-slate-900 rounded-full overflow-hidden"
+                  role="progressbar"
+                  aria-valuenow={Math.round(narrationProgress * 100)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={t.player.position}
+                >
+                  <div
+                    className="h-full bg-gradient-to-r from-teal-500 to-blue-500 transition-all duration-500"
+                    style={{ width: `${narrationProgress * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
-            {/* 2. ⚡ マグネティック・アナログ倍速スライダー ＆ ポップアップ（右側） */}
-            <div className="relative shrink-0 flex items-center">
+            {/* 2. ⚡ マグネティック・アナログ倍速スライダー ＆ ポップアップ（右側）— 解説モードのみ */}
+            <div className={`relative shrink-0 items-center ${playbackMode === 'song' ? 'hidden' : 'flex'}`}>
               <button
                 type="button"
                 onClick={() => setShowSpeedMenu(!showSpeedMenu)}
@@ -3925,10 +4035,10 @@ export default function HomeClient({
             <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.prevWork}</span>
           </button>
 
-          {/* ナレーション：前文へスキップ */}
+          {/* 前文へスキップ / 曲では15秒戻す */}
           <button
             onClick={handleSkipBackward}
-            disabled={activeSegmentIndex <= 0}
+            disabled={playbackMode === 'narration' && activeSegmentIndex <= 0}
             className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90"
             title={t.player.backSentence}
           >
@@ -3946,7 +4056,7 @@ export default function HomeClient({
               onDismiss={hints.dismiss}
             />
             {/* 再生中の波紋（多重リップル波エフェクト）：再生時に外側へ広がるティール色のリング */}
-            {isPlaying && (
+            {transportPlaying && (
               <>
                 <span
                   className="animate-play-pulse pointer-events-none absolute inset-0 rounded-full bg-teal-400/30 border border-teal-300/60"
@@ -3960,12 +4070,12 @@ export default function HomeClient({
             )}
             <button
               onClick={handlePlayPause}
-              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl active:scale-95 relative z-10 overflow-hidden ${isPlaying
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl active:scale-95 relative z-10 overflow-hidden ${transportPlaying
                 ? 'bg-teal-500 text-slate-950 hover:bg-teal-400 hover:shadow-teal-400/30'
                 : 'bg-slate-900 text-teal-400 border border-teal-500/30 hover:border-teal-500 hover:shadow-teal-500/10'
                 }`}
             >
-              {isPlaying ? (
+              {transportPlaying ? (
                 <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                   <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
                 </svg>
@@ -3977,10 +4087,10 @@ export default function HomeClient({
             </button>
           </div>
 
-          {/* ナレーション：次文へスキップ */}
+          {/* 次文へスキップ / 曲では15秒送り */}
           <button
             onClick={handleSkipForward}
-            disabled={activeSegmentIndex >= speakableSegments.length - 1}
+            disabled={playbackMode === 'narration' && activeSegmentIndex >= speakableSegments.length - 1}
             className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90"
             title={t.player.forwardSentence}
           >
@@ -4190,6 +4300,33 @@ export default function HomeClient({
           )}
         </div>
       </div>
+    )
+  }
+
+  {/* MiniMax Week: full-screen theme-song "music video" */ }
+  {
+    songFullscreen && themeSongSlug && (
+      <ThemeSongFullscreen
+        locale={locale}
+        slug={themeSongSlug}
+        lyrics={song.lyrics}
+        timings={song.timings}
+        timeline={song.timeline}
+        playing={song.playing}
+        ended={song.ended}
+        currentTime={song.currentTime}
+        duration={song.duration}
+        title={shownArtwork}
+        artist={shownArtist}
+        imageUrl={displayImageUrl}
+        onToggle={() => (song.playing ? song.pause() : enterSongMode())}
+        onSeek={song.seek}
+        onReplay={replaySong}
+        onBackToGuide={() => {
+          backToNarration();
+        }}
+        onClose={() => setSongFullscreen(false)}
+      />
     )
   }
     </main >
