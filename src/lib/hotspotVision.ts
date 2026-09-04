@@ -1,4 +1,5 @@
 import { GuideHotspot, PlacedHotspot } from './hotspots';
+import { askVisionJson } from './visionModel';
 
 export type { PlacedHotspot };
 
@@ -13,11 +14,6 @@ export type { PlacedHotspot };
  * has the text list to fall back on.
  */
 
-const BASE_URL = process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1';
-
-/** Vision models on NIM, in fallback order. Shares VISION_MODEL with vision.ts. */
-const DEFAULT_MODELS = ['nvidia/nemotron-nano-12b-v2-vl', 'meta/llama-3.2-11b-vision-instruct'];
-
 /** One JSON object with a short array; the model has no room to ramble. */
 const MAX_TOKENS = 700;
 
@@ -29,28 +25,10 @@ const ACCEPTED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
 /** Rough placement, so the focus never punches in as hard as a curated point. */
 const MAX_ZOOM = 2.2;
 
-interface ChatCompletion {
-  choices?: { message?: { content?: string } }[];
-}
-
 function clamp01(value: unknown): number | null {
   const n = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(n) || n < 0 || n > 1) return null;
   return n;
-}
-
-/** Vision models like to wrap JSON in a fence or a sentence of preamble. */
-function extractJson(text: string): unknown {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
-  const body = fenced ? fenced[1] : text;
-  const start = body.indexOf('{');
-  const end = body.lastIndexOf('}');
-  if (start === -1 || end <= start) return null;
-  try {
-    return JSON.parse(body.slice(start, end + 1));
-  } catch {
-    return null;
-  }
 }
 
 /** Downloads the artwork and turns it into a data URL the model accepts. */
@@ -86,52 +64,8 @@ function locatePrompt(points: GuideHotspot[]): string {
   ].join('\n');
 }
 
-async function askVision(dataUrl: string, prompt: string, apiKey: string): Promise<unknown> {
-  const configured = (process.env.VISION_MODEL || '')
-    .split(',')
-    .map(entry => entry.trim())
-    .filter(Boolean);
-  const chain = configured.length ? configured : DEFAULT_MODELS;
-
-  let lastError: unknown = null;
-  for (const model of chain) {
-    try {
-      const res = await fetch(`${BASE_URL}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: prompt },
-                { type: 'image_url', image_url: { url: dataUrl } }
-              ]
-            }
-          ],
-          max_tokens: MAX_TOKENS,
-          temperature: 0
-        }),
-        signal: AbortSignal.timeout(25_000)
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
-      const data = (await res.json()) as ChatCompletion;
-      const parsed = extractJson(data.choices?.[0]?.message?.content ?? '');
-      if (!parsed) throw new Error('Vision model returned no JSON object');
-      return parsed;
-    } catch (error) {
-      lastError = error;
-      console.warn(
-        `Hotspot vision model ${model} failed:`,
-        error instanceof Error ? error.message : String(error)
-      );
-    }
-  }
-  throw new Error(
-    `Hotspot vision call failed: ${lastError instanceof Error ? lastError.message : 'unavailable'}`
-  );
-}
+const askVision = (dataUrl: string, prompt: string): Promise<unknown> =>
+  askVisionJson(dataUrl, prompt, { maxTokens: MAX_TOKENS });
 
 /**
  * Places as many of `points` as the model can find on `imageUrl`.
@@ -143,15 +77,14 @@ export async function locateHotspots(
   imageUrl: string,
   points: GuideHotspot[]
 ): Promise<PlacedHotspot[]> {
-  const apiKey = process.env.NVIDIA_API_KEY;
-  if (!apiKey || points.length === 0) return [];
+  if (points.length === 0) return [];
 
   const dataUrl = await fetchImageAsDataUrl(imageUrl);
   if (!dataUrl) return [];
 
   let parsed: unknown;
   try {
-    parsed = await askVision(dataUrl, locatePrompt(points), apiKey);
+    parsed = await askVision(dataUrl, locatePrompt(points));
   } catch (error) {
     console.warn('locateHotspots gave up:', error instanceof Error ? error.message : error);
     return [];
