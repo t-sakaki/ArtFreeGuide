@@ -531,6 +531,11 @@ export default function HomeClient({
     return () => clearInterval(id);
   }, [aiPrompts]);
 
+  // AI-generated question suggestions for the current guide.
+  const [aiQuestions, setAiQuestions] = useState<string[]>([]);
+  const [aiQuestionsLoading, setAiQuestionsLoading] = useState(false);
+  const aiQuestionsRequestIdRef = useRef(0);
+
   // Marquee drag state to distinguish tap from drag on PC
   const isDraggingMarqueeRef = useRef(false);
   const marqueeStartXRef = useRef(0);
@@ -1123,10 +1128,60 @@ export default function HomeClient({
     }
   }, [activeSegmentIndex, isPlaying, speakableSegments, playbackMode]);
 
-  const questionChips = useMemo(
-    () => suggestedQuestions(canonicalArtwork, canonicalArtist, locale),
-    [canonicalArtwork, canonicalArtist, locale]
-  );
+  const questionChips = useMemo(() => {
+    const staticChips = suggestedQuestions(canonicalArtwork, canonicalArtist, locale);
+    if (aiQuestions.length > 0) {
+      // Merge: AI questions first, fall back to static chips for any remaining slots.
+      return [...aiQuestions, ...staticChips].slice(0, 3);
+    }
+    return staticChips;
+  }, [aiQuestions, canonicalArtwork, canonicalArtist, locale]);
+
+  // When a guide is ready, ask the AI for artwork-specific questions in the
+  // background. Static chips are shown immediately; AI chips replace them
+  // once they arrive. This keeps the UI instant while improving quality.
+  useEffect(() => {
+    if (!responseShort || !canonicalArtwork.trim()) {
+      setAiQuestions([]);
+      return;
+    }
+
+    const requestId = ++aiQuestionsRequestIdRef.current;
+    setAiQuestions([]);
+    setAiQuestionsLoading(true);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/questions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: canonicalArtwork,
+            artist: canonicalArtist,
+            guideText: responseShort,
+            locale
+          })
+        });
+        const data = await res.json();
+        if (!cancelled && requestId === aiQuestionsRequestIdRef.current) {
+          const questions = Array.isArray(data?.questions) ? data.questions : [];
+          setAiQuestions(questions.slice(0, 3));
+        }
+      } catch {
+        // Silently fall back to static chips on any error.
+      } finally {
+        if (!cancelled && requestId === aiQuestionsRequestIdRef.current) {
+          setAiQuestionsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      setAiQuestionsLoading(false);
+    };
+  }, [responseShort, canonicalArtwork, canonicalArtist, locale]);
 
   // 💡サジェスト展開時、または解説終了後に質問チップを順番にゆらゆら揺らす
   useEffect(() => {

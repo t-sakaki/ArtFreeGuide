@@ -1,5 +1,5 @@
 import { getGuideStore } from '@/lib/guideStore';
-import { DEFAULT_LOCALE, Locale, OUTPUT_LANGUAGE_INSTRUCTION } from '@/lib/i18n';
+import { DEFAULT_LOCALE, Locale, outputLanguageInstruction } from '@/lib/i18n';
 import { getLLMProvider } from '@/lib/llm';
 import { createServiceClient } from '@/lib/supabase';
 
@@ -46,7 +46,7 @@ function reviserPrompt(locale: Locale): string {
   const language =
     locale === DEFAULT_LOCALE
       ? '解説は日本語のままにしてください。'
-      : `${OUTPUT_LANGUAGE_INSTRUCTION[locale]} 解説の言語は元の解説と同じに保ってください。`;
+      : `${outputLanguageInstruction(locale)} 解説の言語は元の解説と同じに保ってください。`;
 
   return `あなたは美術館の音声ガイドの編集者です。
 既存の解説と、鑑賞者から届いた指摘を渡します。指摘が妥当な場合のみ、解説を最小限の修正で直してください。

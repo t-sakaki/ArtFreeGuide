@@ -62,14 +62,57 @@ export const DEFAULT_PLAYBACK_SPEED: Partial<Record<Locale, number>> = {
   zh: 1.5,
 };
 
-/** How the guide is asked to write, in the language it must write in. */
-export const OUTPUT_LANGUAGE_INSTRUCTION: Partial<Record<Locale, string>> = {
+/**
+ * How the guide is asked to write, in the language it must write in. Every
+ * locale in `LOCALES` must have an entry — a missing one used to leak the string
+ * "undefined" into the prompt. Read it through `outputLanguageInstruction()`,
+ * never by direct index, so a future locale fails safe.
+ */
+export const OUTPUT_LANGUAGE_INSTRUCTION: Record<Locale, string> = {
   ja: 'すべてのテキストを日本語で書いてください。',
   en: 'Write every field in natural English. Do not use Japanese.',
   fr: 'Rédigez tous les champs en français naturel. N’utilisez pas le japonais.',
   es: 'Redacta todos los campos en español natural. No uses japonés.',
   zh: '请用自然的简体中文撰写所有字段，不要使用日语。',
+  it: 'Scrivi tutti i campi in italiano naturale. Non usare il giapponese.',
+  de: 'Schreibe alle Felder in natürlichem Deutsch. Verwende kein Japanisch.',
+  pt: 'Escreva todos os campos em português natural. Não use japonês.',
+  nl: 'Schrijf alle velden in natuurlijk Nederlands. Gebruik geen Japans.',
+  pl: 'Napisz wszystkie pola naturalną polszczyzną. Nie używaj japońskiego.',
+  tr: 'Tüm alanları doğal bir Türkçe ile yazın. Japonca kullanmayın.',
+  sv: 'Skriv alla fält på naturlig svenska. Använd inte japanska.',
+  hu: 'Írj minden mezőt természetes magyar nyelven. Ne használj japánt.',
 };
+
+/** English name of each locale, for a generic fallback instruction. */
+const LOCALE_ENGLISH_NAME: Record<Locale, string> = {
+  ja: 'Japanese',
+  en: 'English',
+  fr: 'French',
+  es: 'Spanish',
+  zh: 'Simplified Chinese',
+  it: 'Italian',
+  de: 'German',
+  pt: 'Portuguese',
+  nl: 'Dutch',
+  pl: 'Polish',
+  tr: 'Turkish',
+  sv: 'Swedish',
+  hu: 'Hungarian',
+};
+
+/**
+ * The instruction that pins the output language. Always returns a usable
+ * sentence: an unknown locale gets a generic instruction built from its English
+ * name rather than `undefined`.
+ */
+export function outputLanguageInstruction(locale: string): string {
+  if (isLocale(locale)) return OUTPUT_LANGUAGE_INSTRUCTION[locale];
+  const name = LOCALE_ENGLISH_NAME[locale as Locale];
+  return name
+    ? `Write every field in natural ${name}. Do not use Japanese.`
+    : OUTPUT_LANGUAGE_INSTRUCTION[DEFAULT_LOCALE];
+}
 
 /** Names of the sentence-splitting punctuation differ, so does the guide's voice. */
 export interface UIStrings {

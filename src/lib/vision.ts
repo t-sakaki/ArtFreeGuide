@@ -1,4 +1,4 @@
-import { Locale, OUTPUT_LANGUAGE_INSTRUCTION } from './i18n';
+import { Locale, outputLanguageInstruction } from './i18n';
 import { askVisionJson } from './visionModel';
 
 /**
@@ -53,7 +53,7 @@ function captionPrompt(locale: Locale): string {
     'Set label_visible to true only when printed or written text is legible in the photo.',
     'Transcribe the artwork title and the artist name from that text alone.',
     'Never infer them from the picture itself: with no legible text, answer with nulls.',
-    OUTPUT_LANGUAGE_INSTRUCTION[locale],
+    outputLanguageInstruction(locale),
     'Answer with one JSON object and nothing else:',
     '{"label_visible": boolean, "title": string|null, "artist": string|null, "confidence": number between 0 and 1}'
   ].join('\n');
@@ -65,7 +65,7 @@ function artworkPrompt(locale: Locale): string {
     'Name the work and its artist if you recognise it.',
     'If you are not sure which work this is, answer with nulls rather than a plausible guess.',
     'Set confidence to how certain you are that this exact work is the one you named.',
-    OUTPUT_LANGUAGE_INSTRUCTION[locale],
+    outputLanguageInstruction(locale),
     'Answer with one JSON object and nothing else:',
     '{"title": string|null, "artist": string|null, "confidence": number between 0 and 1}'
   ].join('\n');
