@@ -2513,6 +2513,9 @@ export interface ThemeSongStrings {
   aspectPortrait: string;
   aspectLandscape: string;
   aspectSquare: string;
+  qualityHigh: string;
+  qualityMedium: string;
+  qualityLow: string;
 }
 
 const THEME_SONG_EN: ThemeSongStrings = {
@@ -2542,6 +2545,9 @@ const THEME_SONG_EN: ThemeSongStrings = {
   aspectPortrait: 'Portrait 9:16',
   aspectLandscape: 'Landscape 16:9',
   aspectSquare: 'Square 1:1',
+  qualityHigh: 'High',
+  qualityMedium: 'Medium',
+  qualityLow: 'Low (smaller file)',
 };
 
 export const THEME_SONG_UI: Partial<Record<Locale, ThemeSongStrings>> = {
@@ -2572,6 +2578,9 @@ export const THEME_SONG_UI: Partial<Record<Locale, ThemeSongStrings>> = {
     aspectPortrait: '縦 9:16',
     aspectLandscape: '横 16:9',
     aspectSquare: '正方形 1:1',
+    qualityHigh: '高画質',
+    qualityMedium: '標準',
+    qualityLow: '低画質(軽量)',
   },
   en: THEME_SONG_EN,
 };
