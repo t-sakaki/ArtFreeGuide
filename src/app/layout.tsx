@@ -1,7 +1,8 @@
 import './globals.css';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { LOCALES } from '@/lib/i18n';
 import { SITE_URL } from '@/lib/site';
+import PwaRegister from './PwaRegister';
 
 const TITLE = 'ArtFreeGuide | 聴くほど賢くなるAI美術館音声ガイド';
 
@@ -19,6 +20,8 @@ export const metadata: Metadata = {
     languages: Object.fromEntries(LOCALES.map(locale => [locale, `/?lang=${locale}`])),
   },
   robots: { index: true, follow: true },
+  manifest: '/manifest.json',
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'ArtFreeGuide' },
   openGraph: {
     type: 'website',
     siteName: 'ArtFreeGuide',
@@ -33,6 +36,10 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
     images: ['/og-default.png'],
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#020617',
 };
 
 /** Tells a crawler what the single page actually is, since the guide itself is client-rendered. */
@@ -56,6 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(STRUCTURED_DATA) }}
         />
+        <PwaRegister />
         {children}
       </body>
     </html>
