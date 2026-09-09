@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "dev.workers.taira_sakakibara.art_free_guide.twa",
+      "sha256_cert_fingerprints": [
+        "92:A4:3A:77:31:35:99:95:9D:F4:EB:62:E0:1C:7C:37:CA:F6:AA:41:76:45:03:82:0F:5F:7C:A5:DA:E1:2E:CF"
+      ]
+    }
+  }
+]
