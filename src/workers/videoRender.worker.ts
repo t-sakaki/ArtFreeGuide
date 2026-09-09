@@ -22,10 +22,14 @@ import {
   AudioSampleSource,
   AudioSample,
   canEncodeVideo,
+  QUALITY_LOW,
+  QUALITY_MEDIUM,
   QUALITY_HIGH,
 } from 'mediabunny';
 import type { LyricSpan } from '@/lib/lyricTimeline';
 import { activeLyricIndex } from '@/lib/lyricTimeline';
+
+export type VideoQuality = 'low' | 'medium' | 'high';
 
 export interface RenderRequest {
   image: ImageBitmap | null;
@@ -36,10 +40,17 @@ export interface RenderRequest {
   width: number;
   height: number;
   fps: number;
+  quality: VideoQuality;
   title: string;
   artist: string;
   credit: string;
 }
+
+const VIDEO_QUALITY = {
+  low: QUALITY_LOW,
+  medium: QUALITY_MEDIUM,
+  high: QUALITY_HIGH,
+} as const;
 
 export type RenderMessage =
   | { type: 'progress'; value: number }
@@ -165,7 +176,8 @@ self.onmessage = (e: MessageEvent<RenderRequest>) => {
 };
 
 async function run(req: RenderRequest): Promise<void> {
-  const { width, height, fps, duration, spans, image } = req;
+  const { width, height, fps, duration, spans, image, quality } = req;
+  const videoQuality = VIDEO_QUALITY[quality];
 
   const avc = await canEncodeVideo('avc', { width, height });
   const videoCodec: 'avc' | 'vp9' = avc ? 'avc' : 'vp9';
@@ -184,7 +196,7 @@ async function run(req: RenderRequest): Promise<void> {
 
   const videoSource = new CanvasSource(canvas, {
     codec: videoCodec,
-    quality: QUALITY_HIGH,
+    quality: videoQuality,
     keyFrameInterval: 2,
   });
   output.addVideoTrack(videoSource, { frameRate: fps });

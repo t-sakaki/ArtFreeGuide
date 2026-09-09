@@ -10,8 +10,9 @@
 import { Locale, themeSongStrings } from '@/lib/i18n';
 import type { LyricTimeline } from '@/lib/lyricAlign';
 import { buildLyricTimeline } from '@/lib/lyricTimeline';
-import type { RenderRequest, RenderMessage } from '@/workers/videoRender.worker';
+import type { RenderRequest, RenderMessage, VideoQuality } from '@/workers/videoRender.worker';
 
+export type { VideoQuality };
 export type AspectRatio = '9:16' | '16:9' | '1:1';
 
 const DIMS: Record<AspectRatio, { width: number; height: number }> = {
@@ -40,6 +41,7 @@ export interface ExportOptions {
   artist?: string;
   imageUrl?: string | null;
   aspect: AspectRatio;
+  quality?: VideoQuality;
   fps?: number;
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
@@ -136,6 +138,7 @@ export async function exportThemeSongVideo(opts: ExportOptions): Promise<ExportR
         width,
         height,
         fps,
+        quality: opts.quality ?? 'medium',
         title: opts.title,
         artist: opts.artist ?? '',
         credit,

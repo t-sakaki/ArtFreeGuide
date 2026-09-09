@@ -9,6 +9,7 @@ import {
   downloadBlob,
   exportThemeSongVideo,
   ExportResult,
+  VideoQuality,
 } from '@/lib/videoExport';
 
 /**
@@ -18,6 +19,7 @@ import {
  */
 
 const ASPECTS: AspectRatio[] = ['9:16', '16:9', '1:1'];
+const QUALITIES: VideoQuality[] = ['high', 'medium', 'low'];
 
 export default function VideoExportModal({
   locale,
@@ -43,6 +45,7 @@ export default function VideoExportModal({
   const t = themeSongStrings(locale);
   const supported = canExportVideo();
   const [aspect, setAspect] = useState<AspectRatio>('9:16');
+  const [quality, setQuality] = useState<VideoQuality>('medium');
   const [phase, setPhase] = useState<'idle' | 'rendering' | 'done' | 'error'>('idle');
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<ExportResult | null>(null);
@@ -68,6 +71,11 @@ export default function VideoExportModal({
     '16:9': t.aspectLandscape,
     '1:1': t.aspectSquare,
   };
+  const qualityLabel: Record<VideoQuality, string> = {
+    high: t.qualityHigh,
+    medium: t.qualityMedium,
+    low: t.qualityLow,
+  };
 
   async function start() {
     setPhase('rendering');
@@ -86,6 +94,7 @@ export default function VideoExportModal({
         artist,
         imageUrl,
         aspect,
+        quality,
         onProgress: setProgress,
         signal: ctrl.signal,
       });
@@ -153,6 +162,24 @@ export default function VideoExportModal({
                   ].join(' ')}
                 >
                   {aspectLabel[a]}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {QUALITIES.map(q => (
+                <button
+                  key={q}
+                  disabled={phase === 'rendering'}
+                  onClick={() => setQuality(q)}
+                  className={[
+                    'rounded-lg px-2 py-2 text-[11px] font-semibold border transition',
+                    quality === q
+                      ? 'bg-teal-500 text-black border-teal-400'
+                      : 'bg-white/5 border-white/10 hover:bg-white/10',
+                  ].join(' ')}
+                >
+                  {qualityLabel[q]}
                 </button>
               ))}
             </div>
