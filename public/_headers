@@ -8,3 +8,6 @@
 
 /manifest.json
   Content-Type: application/manifest+json
+
+/.well-known/assetlinks.json
+  Content-Type: application/json
