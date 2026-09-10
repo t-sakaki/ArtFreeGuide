@@ -138,7 +138,7 @@ export async function exportThemeSongVideo(opts: ExportOptions): Promise<ExportR
         width,
         height,
         fps,
-        quality: opts.quality ?? 'medium',
+        quality: opts.quality ?? 'low',
         title: opts.title,
         artist: opts.artist ?? '',
         credit,

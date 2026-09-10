@@ -22,14 +22,15 @@ import {
   AudioSampleSource,
   AudioSample,
   canEncodeVideo,
+  Quality,
   QUALITY_LOW,
   QUALITY_MEDIUM,
-  QUALITY_HIGH,
+  QUALITY_VERY_LOW,
 } from 'mediabunny';
 import type { LyricSpan } from '@/lib/lyricTimeline';
 import { activeLyricIndex } from '@/lib/lyricTimeline';
 
-export type VideoQuality = 'low' | 'medium' | 'high';
+export type VideoQuality = 'low' | 'lower' | 'lowest';
 
 export interface RenderRequest {
   image: ImageBitmap | null;
@@ -48,8 +49,8 @@ export interface RenderRequest {
 
 const VIDEO_QUALITY = {
   low: QUALITY_LOW,
-  medium: QUALITY_MEDIUM,
-  high: QUALITY_HIGH,
+  lower: new Quality(0.12),
+  lowest: QUALITY_VERY_LOW,
 } as const;
 
 export type RenderMessage =
@@ -204,7 +205,7 @@ async function run(req: RenderRequest): Promise<void> {
   const numCh = Math.max(1, req.channels.length);
   const audioSource = new AudioSampleSource({
     codec: isMp4 ? 'aac' : 'opus',
-    quality: QUALITY_HIGH,
+    quality: QUALITY_MEDIUM,
   });
   output.addAudioTrack(audioSource);
 
