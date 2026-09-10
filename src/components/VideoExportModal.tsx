@@ -19,7 +19,7 @@ import {
  */
 
 const ASPECTS: AspectRatio[] = ['9:16', '16:9', '1:1'];
-const QUALITIES: VideoQuality[] = ['high', 'medium', 'low'];
+const QUALITIES: VideoQuality[] = ['low', 'lower', 'lowest'];
 
 export default function VideoExportModal({
   locale,
@@ -45,7 +45,7 @@ export default function VideoExportModal({
   const t = themeSongStrings(locale);
   const supported = canExportVideo();
   const [aspect, setAspect] = useState<AspectRatio>('9:16');
-  const [quality, setQuality] = useState<VideoQuality>('medium');
+  const [quality, setQuality] = useState<VideoQuality>('low');
   const [phase, setPhase] = useState<'idle' | 'rendering' | 'done' | 'error'>('idle');
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<ExportResult | null>(null);
@@ -72,9 +72,9 @@ export default function VideoExportModal({
     '1:1': t.aspectSquare,
   };
   const qualityLabel: Record<VideoQuality, string> = {
-    high: t.qualityHigh,
-    medium: t.qualityMedium,
     low: t.qualityLow,
+    lower: t.qualityLower,
+    lowest: t.qualityLowest,
   };
 
   async function start() {
