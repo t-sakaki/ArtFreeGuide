@@ -109,6 +109,15 @@ interface HistoryEntry {
   mood?: string;
 }
 
+/** Identity of the guide `listenedSecondsRef` is currently accumulating time for. */
+interface ListeningContext {
+  title: string;
+  artist: string;
+  description: string | null;
+  imageUrl: string | null;
+  depth: 'short' | 'standard' | 'deep';
+}
+
 // The model's spec wins; then a legacy mood word; then keyword heuristics.
 function resolveMusicSpec(
   music: unknown,
@@ -648,9 +657,12 @@ export default function HomeClient({
     speakableSegmentsRef.current = speakableSegments;
   }, [speakableSegments]);
 
-  // How long the visitor actually listened, used to weight preference learning
+  // How long the visitor actually listened, used to weight preference learning.
   const listenStartRef = useRef<number | null>(null);
   const listenedSecondsRef = useRef(0);
+  // Identity the two refs above are accumulating time for. Set whenever a
+  // guide's content is loaded; read (and cleared) by finalizeListening.
+  const listeningContextRef = useRef<ListeningContext | null>(null);
 
   useEffect(() => {
     if (isPlaying) {
@@ -663,9 +675,13 @@ export default function HomeClient({
     }
   }, [isPlaying]);
 
+  // NOTE: this used to also zero listenedSecondsRef/listenStartRef, but
+  // `artwork`/`artist` are the input-box state, so it fired on every keystroke
+  // — including while a previous guide kept narrating in the background — and
+  // silently threw away the accumulated listen. Resetting those two now lives
+  // solely in finalizeListening, called at the well-defined points where the
+  // guide actually changes (see below).
   useEffect(() => {
-    listenedSecondsRef.current = 0;
-    listenStartRef.current = null;
     setShowReportForm(false);
     setReportComment('');
     setHeartCount(0);
@@ -673,10 +689,13 @@ export default function HomeClient({
   }, [artwork, artist]);
 
   // 作品ごとの累計いいね件数を取得し、ボタンに反映する（バグ修正: セッション内カウントのみで既存件数が表示されなかった）。
+  // artist もクエリに含める: タイトルだけだと別作者の同名作品といいねが混線する。
   useEffect(() => {
-    if (!artwork) return;
+    if (!canonicalArtwork) return;
     let cancelled = false;
-    fetch(`/api/feedback/count?title=${encodeURIComponent(artwork)}`)
+    fetch(
+      `/api/feedback/count?title=${encodeURIComponent(canonicalArtwork)}&artist=${encodeURIComponent(canonicalArtist)}`
+    )
       .then(res => (res.ok ? res.json() : { hearts: 0 }))
       .then(data => {
         if (cancelled) return;
@@ -688,7 +707,7 @@ export default function HomeClient({
     return () => {
       cancelled = true;
     };
-  }, [artwork]);
+  }, [canonicalArtwork, canonicalArtist]);
 
   useEffect(() => {
     ensureAnonymousUser().then(setUserId);
@@ -716,23 +735,54 @@ export default function HomeClient({
     return () => clearInterval(timer);
   }, [loading, t]);
 
-  const recordListening = (completed: boolean) => {
-    const listenedSeconds = listenedSecondsRef.current;
-    if (!userId || !artwork.trim() || listenedSeconds < 1) return;
+  /**
+   * Sends whatever was heard of the current guide to /api/history, then clears
+   * the counters so the next guide starts from zero.
+   *
+   * Called both when narration finishes on its own (`completed: true`) and
+   * whenever the visitor leaves before that — switching artwork, returning to
+   * the hub, backgrounding the tab, or closing it (`completed: false`).
+   * Without the second case only a full completion ever taught the taste
+   * model anything, but a real museum visit is mostly walking off to the next
+   * piece mid-narration — the majority of listening was silently discarded.
+   */
+  const finalizeListening = (completed: boolean) => {
+    const context = listeningContextRef.current;
+    listeningContextRef.current = null;
+
+    const listenedSeconds =
+      listenedSecondsRef.current +
+      (listenStartRef.current !== null ? (Date.now() - listenStartRef.current) / 1000 : 0);
+    listenedSecondsRef.current = 0;
+    listenStartRef.current = null;
+
+    if (!userId || !context || listenedSeconds < 1) return;
+
+    const payload = JSON.stringify({
+      userId,
+      title: context.title,
+      artist: context.artist,
+      description: context.description,
+      imageUrl: context.imageUrl,
+      depth: context.depth,
+      listenedSeconds,
+      completed
+    });
+
+    // A page-unload fetch can be cut off mid-flight; sendBeacon survives it.
+    const sentByBeacon =
+      !completed &&
+      typeof navigator !== 'undefined' &&
+      typeof navigator.sendBeacon === 'function' &&
+      navigator.sendBeacon('/api/history', new Blob([payload], { type: 'application/json' }));
+
+    if (sentByBeacon) return;
 
     fetch('/api/history', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId,
-        title: canonicalArtwork,
-        artist: canonicalArtist,
-        description: responseShort || responseStandard || null,
-        imageUrl,
-        depth: explanationMode,
-        listenedSeconds,
-        completed
-      })
+      body: payload,
+      keepalive: true
     })
       .then(() => {
         // The listen just moved the taste vector; show the new ranking.
@@ -742,6 +792,32 @@ export default function HomeClient({
       })
       .catch(error => console.error('Failed to save viewing history:', error));
   };
+
+  // finalizeListening closes over userId/reload* from the render that defined
+  // it; mirror the latest one into a ref so the unload/visibility handlers
+  // below (registered once, on mount) never call a stale closure.
+  const finalizeListeningRef = useRef(finalizeListening);
+  useEffect(() => {
+    finalizeListeningRef.current = finalizeListening;
+  });
+
+  // The visitor rarely lets a guide finish: they walk to the next piece, lock
+  // the phone, or close the tab. Catch all three so the listen still counts.
+  // (beforeunload barely fires on mobile Safari/PWA, hence visibilitychange.)
+  useEffect(() => {
+    const flush = () => finalizeListeningRef.current(false);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, []);
 
   // Detect browser speech capabilities and prepare recognition instance
   useEffect(() => {
@@ -968,6 +1044,20 @@ export default function HomeClient({
               setGeneratedHotspots(entry.hotspots ?? []);
               setGeneratedMarks(entry.hotspotMarks ?? []);
               setActiveGeneratedHotspot(-1);
+              listeningContextRef.current = {
+                title: entry.title,
+                artist: entry.artist,
+                description: entry.short || entry.standard || null,
+                imageUrl: entry.imageUrl,
+                depth: 'standard'
+              };
+              // A visitor reopening the app is exactly who a correction made
+              // since their last visit needs to reach.
+              revalidateArchivedGuide(entry.title, entry.artist, localeRef.current, {
+                short: sanitizeGuideText(entry.short || ''),
+                standard: sanitizeGuideText(entry.standard || ''),
+                deep: sanitizeGuideText(entry.deep || '')
+              });
             }
           }
         } catch (e) {
@@ -1001,8 +1091,68 @@ export default function HomeClient({
     });
   };
 
+  /**
+   * Checks whatever is on screen (or cached) against the archive and, if a
+   * moderator's correction has landed since, patches it in.
+   *
+   * A guide cached client-side — in `guideCache`, in `history`, or restored
+   * from localStorage on a later visit — never noticed when an approved
+   * `guide_corrections` edit or a "regenerate" overwrote the server's copy: it
+   * kept showing the version it had, indefinitely, to exactly the visitor most
+   * likely to have reported the problem. `/api/guide` only ever reads the
+   * archive (never generates), so this is safe to fire in the background.
+   */
+  const revalidateArchivedGuide = async (
+    targetArtwork: string,
+    targetArtist: string,
+    activeLocale: Locale,
+    known: { short: string; standard: string; deep: string },
+    cacheKey?: string
+  ) => {
+    try {
+      const res = await fetch(
+        `/api/guide?title=${encodeURIComponent(targetArtwork)}&artist=${encodeURIComponent(targetArtist)}&locale=${activeLocale}`
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data?.cached || typeof data.text !== 'string') return;
+
+      const parsed = JSON.parse(data.text);
+      const short = typeof parsed?.short === 'string' ? sanitizeGuideText(parsed.short) : '';
+      const standard = typeof parsed?.standard === 'string' ? sanitizeGuideText(parsed.standard) : '';
+      const deep = typeof parsed?.deep === 'string' ? sanitizeGuideText(parsed.deep) : '';
+      if (!short || !standard || !deep) return;
+      if (short === known.short && standard === known.standard && deep === known.deep) return;
+
+      if (cacheKey) {
+        setGuideCache(prev => {
+          const existing = prev[cacheKey];
+          return existing ? { ...prev, [cacheKey]: { ...existing, short, standard, deep } } : prev;
+        });
+      }
+      updateHistoryEntryByArtwork(targetArtwork, targetArtist, { short, standard, deep });
+
+      // Still the guide on screen, and nothing has narrated it yet — safe to
+      // swap the corrected text in now instead of waiting for the next visit.
+      const stillShowing =
+        listeningContextRef.current?.title === targetArtwork &&
+        listeningContextRef.current?.artist === targetArtist;
+      if (stillShowing && !isPlayingRef.current) {
+        setResponseShort(short);
+        setResponseStandard(standard);
+        setResponseDeep(deep);
+      }
+    } catch (error) {
+      // A correction can land whenever it lands; never let this interrupt the visit.
+      console.warn('Guide revalidation failed:', error);
+    }
+  };
+
   const loadHistoryEntry = (index: number) => {
     if (index < 0 || index >= history.length) return;
+    // Leaving whatever guide was playing — send its partial listen before
+    // switching, or it is lost the moment the new entry's state overwrites it.
+    finalizeListening(false);
     setHistoryIndex(index);
     localStorage.setItem('art_free_guide_history_index', String(index));
 
@@ -1026,6 +1176,18 @@ export default function HomeClient({
     setGeneratedHotspots(entry.hotspots ?? []);
     setGeneratedMarks(entry.hotspotMarks ?? []);
     setActiveGeneratedHotspot(-1);
+    listeningContextRef.current = {
+      title: entry.title,
+      artist: entry.artist,
+      description: entry.short || entry.standard || null,
+      imageUrl: entry.imageUrl,
+      depth: 'standard'
+    };
+    revalidateArchivedGuide(entry.title, entry.artist, localeRef.current, {
+      short: sanitizeGuideText(entry.short || ''),
+      standard: sanitizeGuideText(entry.standard || ''),
+      deep: sanitizeGuideText(entry.deep || '')
+    });
     // An entry stored before its image resolved would leave an empty frame:
     // neither a picture nor the "no image" plaque.
     if (!entry.imageUrl && !entry.imageError) {
@@ -1122,7 +1284,7 @@ export default function HomeClient({
       setIsPlaying(false);
       setActiveSegmentIndex(-1);
       stopAmbientSound();
-      recordListening(true);
+      finalizeListening(true);
       setNarrationDone(true);
       scheduleTourAdvance();
     }
@@ -1396,6 +1558,9 @@ export default function HomeClient({
 
   /** Leaves the guide behind and shows the entrance hall again. */
   const returnToHub = () => {
+    // The visitor is walking away from this piece — the most common way a
+    // museum visit ends a guide, and previously the one that recorded nothing.
+    finalizeListening(false);
     AudioController.clearQueue();
     stopAmbientSound();
     setIsPlaying(false);
@@ -1892,6 +2057,10 @@ export default function HomeClient({
 
     if (!targetArtwork.trim()) return;
 
+    // Whatever was loaded before this call is being replaced — send its
+    // partial listen now, since the state it needs is about to be overwritten.
+    finalizeListening(false);
+
     hints.complete('artwork');
 
     // Any artwork the tour did not ask for means the visitor stepped off the tour.
@@ -1970,6 +2139,24 @@ export default function HomeClient({
       setGeneratedHotspots(cached.hotspots ?? []);
       setGeneratedMarks(cached.hotspotMarks ?? []);
       setActiveGeneratedHotspot(-1);
+      listeningContextRef.current = {
+        title: targetArtwork,
+        artist: targetArtist,
+        description: cached.short || cached.standard || null,
+        imageUrl: cached.imageUrl,
+        depth: targetMode
+      };
+      revalidateArchivedGuide(
+        targetArtwork,
+        targetArtist,
+        activeLocale,
+        {
+          short: sanitizeGuideText(cached.short),
+          standard: sanitizeGuideText(cached.standard),
+          deep: sanitizeGuideText(cached.deep)
+        },
+        cacheKey
+      );
       if (!cached.imageUrl && !cached.imageError) {
         fetchImage(
           cached.searchQuery || `${targetArtwork} ${targetArtist}`.trim(),
@@ -2125,6 +2312,13 @@ export default function HomeClient({
         setGeneratedMarks([]);
         setActiveGeneratedHotspot(-1);
         setExplanationMode(targetMode);
+        listeningContextRef.current = {
+          title: targetArtwork,
+          artist: targetArtist,
+          description: shortText || standardText || null,
+          imageUrl: null,
+          depth: targetMode
+        };
 
         // Store primary metadata in cache
         const newEntry: GuideCacheEntry = {
