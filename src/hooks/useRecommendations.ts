@@ -35,6 +35,37 @@ export function useRecommendations(title: string, artist: string, userId: string
   const [basis, setBasis] = useState<RecommendationBasis>('none');
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Whether a shelf was ever shown, and whether it was taken. This is the
+   * only way to know if the taste vector (`basis: 'blend'`/`'taste'`) earns
+   * more clicks than plain similarity (`basis: 'artwork'`) — never assumed.
+   */
+  const logEvent = useCallback(
+    (kind: 'impression' | 'click', currentBasis: RecommendationBasis, targets: { title: string; artist: string }[]) => {
+      if (!userId || currentBasis === 'none' || targets.length === 0) return;
+      fetch('/api/recommendations/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          kind,
+          basis: currentBasis,
+          sourceTitle: title,
+          sourceArtist: artist,
+          items: targets
+        })
+      }).catch(() => {
+        /* Analytics only; never worth surfacing to the visitor. */
+      });
+    },
+    [userId, title, artist]
+  );
+
+  const logClick = useCallback(
+    (item: { title: string; artist: string }) => logEvent('click', basis, [item]),
+    [logEvent, basis]
+  );
+
   const load = useCallback(async () => {
     const hasArtwork = title.trim().length > 0;
     if (!hasArtwork && !userId) {
@@ -62,8 +93,17 @@ export function useRecommendations(title: string, artist: string, userId: string
       }
 
       const data = (await res.json()) as RecommendationsResponse;
-      setSimilarArtworks(data.recommendations ?? []);
-      setBasis(data.basis ?? 'none');
+      const recommendations = data.recommendations ?? [];
+      const nextBasis = data.basis ?? 'none';
+      setSimilarArtworks(recommendations);
+      setBasis(nextBasis);
+      // A render is treated as a shown impression — cheaper than true
+      // viewport tracking, and enough to compare basis-to-basis click-through.
+      logEvent(
+        'impression',
+        nextBasis,
+        recommendations.map(item => ({ title: item.title, artist: item.artist }))
+      );
     } catch (error) {
       console.error('Failed to load similar artworks:', error);
       setSimilarArtworks([]);
@@ -71,13 +111,13 @@ export function useRecommendations(title: string, artist: string, userId: string
     } finally {
       setLoading(false);
     }
-  }, [title, artist, userId]);
+  }, [title, artist, userId, logEvent]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  return { similarArtworks, basis, loading, reload: load };
+  return { similarArtworks, basis, loading, reload: load, logClick };
 }
 
 export interface TasteProfile {

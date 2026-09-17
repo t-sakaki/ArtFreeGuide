@@ -23,6 +23,7 @@ export interface GuideCorrectionRow {
   note: string | null;
   status: GuideCorrectionStatus;
   created_at: string;
+  resolved_at: string | null;
 }
 
 /**
@@ -42,11 +43,38 @@ const REVISED_FIELD = 'standard' as const;
  */
 const MIN_LENGTH_RATIO = 0.8;
 
-function reviserPrompt(locale: Locale): string {
+/** A correction proposed from listening data, not a visitor's own words. */
+export const DROPOFF_KIND = 'dropoff';
+
+function reviserPrompt(locale: Locale, kind: string): string {
   const language =
     locale === DEFAULT_LOCALE
       ? '解説は日本語のままにしてください。'
       : `${outputLanguageInstruction(locale)} 解説の言語は元の解説と同じに保ってください。`;
+
+  if (kind === DROPOFF_KIND) {
+    // Nobody pointed at a sentence — the fix is "hold attention better", so
+    // trimming or restructuring is exactly what may be needed, unlike a
+    // targeted complaint where anything untouched must stay untouched.
+    return `あなたは美術館の音声ガイドの編集者です。
+既存の解説と、視聴データから分かった問題点を渡します。最後まで聴かれるよう、解説を見直してください。
+
+【ルール】
+- 事実関係やマークダウンの装飾方針は変えないでください。
+- 冒頭が長い・単調・専門的すぎるなど、離脱の原因になりそうな点を見直してください。読みやすくするための文字数の削減は構いません。
+- ※ や （注）のような記号での補足は使わず、読み上げても自然な話し言葉で直してください。
+- 音声ガイドとして読み上げる文章です。記号の羅列や箇条書きの乱用は避けてください。
+- ${language}
+- 見直しの余地が無いと判断したら、"unchanged": true を返してください。
+
+【出力フォーマット】
+純粋なJSONオブジェクトのみを返してください。前置きやマークダウンのコードブロックは禁止です。
+{
+  "standard": "（改善後の解説全文）",
+  "note": "（何をどう改善したかを日本語1文で）",
+  "unchanged": false
+}`;
+  }
 
   return `あなたは美術館の音声ガイドの編集者です。
 既存の解説と、鑑賞者から届いた指摘を渡します。指摘が妥当な場合のみ、解説を最小限の修正で直してください。
@@ -113,12 +141,17 @@ export async function proposeGuideCorrection(
   const current = parseJsonObject(archived.payload);
   if (!current) return null;
 
-  const revision = parseJsonObject(
-    await getLLMProvider('ask').generateResponse(
-      [
-        {
-          role: 'user',
-          content: `${reviserPrompt(locale)}
+  const isDropoff = kind === DROPOFF_KIND;
+  const body = isDropoff
+    ? `${reviserPrompt(locale, kind)}
+
+【作品】${title}${artist ? `（${artist}）` : ''}
+【視聴データから分かった問題点】
+${comment}
+
+【現在の解説】
+${current[REVISED_FIELD]}`
+    : `${reviserPrompt(locale, kind)}
 
 【作品】${title}${artist ? `（${artist}）` : ''}
 【指摘の種類】${kind === 'bug' ? '不具合の報告' : '内容が良くないという報告'}
@@ -129,11 +162,10 @@ ${comment}
 ${excerpt || '(未指定)'}
 
 【現在の解説】
-${current[REVISED_FIELD]}`
-        }
-      ],
-      { json: true }
-    )
+${current[REVISED_FIELD]}`;
+
+  const revision = parseJsonObject(
+    await getLLMProvider('ask').generateResponse([{ role: 'user', content: body }], { json: true })
   );
 
   if (!revision || revision.unchanged === true) return null;
@@ -145,7 +177,10 @@ ${current[REVISED_FIELD]}`
   if (typeof revised !== 'string' || !revised.trim() || revised === archivedText) {
     return null;
   }
+  // A dropoff fix is explicitly allowed to trim the guide down — that guard
+  // only protects a targeted complaint from being answered with a summary.
   if (
+    !isDropoff &&
     typeof archivedText === 'string' &&
     revised.length < archivedText.length * MIN_LENGTH_RATIO
   ) {

@@ -71,9 +71,11 @@ export async function POST(req: Request) {
       await getGuideStore().put(row.title, row.artist, row.proposal, row.locale);
     }
 
+    // The archive changes now, not when the report was filed — this is the
+    // correct before/after cutover for measuring whether the fix helped.
     const { error: updateError } = await supabase
       .from(GUIDE_CORRECTIONS_TABLE)
-      .update({ status: ACTIONS[action as keyof typeof ACTIONS] })
+      .update({ status: ACTIONS[action as keyof typeof ACTIONS], resolved_at: new Date().toISOString() })
       .eq('id', id);
 
     if (updateError) {

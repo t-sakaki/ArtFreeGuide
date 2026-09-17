@@ -51,6 +51,7 @@ import { useThemeSong } from '@/hooks/useThemeSong';
 import { artworkSlug } from '@/lib/slug';
 import ReadingApprovals from '@/components/ReadingApprovals';
 import GuideCorrections from '@/components/GuideCorrections';
+import Insights from '@/components/Insights';
 import AppMenu, { type MenuItem } from '@/components/AppMenu';
 import AccountPanel from '@/components/AccountPanel';
 import PhotoIdentify from '@/components/PhotoIdentify';
@@ -380,7 +381,7 @@ export default function HomeClient({
   // until someone opens the app with ?admin=1 once on this device.
   const [adminMode, setAdminMode] = useState(false);
   const [showReadingApprovals, setShowReadingApprovals] = useState(false);
-  const [adminTab, setAdminTab] = useState<'readings' | 'guides'>('readings');
+  const [adminTab, setAdminTab] = useState<'readings' | 'guides' | 'insights'>('readings');
   const [showAccount, setShowAccount] = useState(false);
   const [artwork, setArtwork] = useState('');
   const [artist, setArtist] = useState('');
@@ -619,15 +620,64 @@ export default function HomeClient({
 
   // Anonymous user + catalogue-based recommendations
   const [userId, setUserId] = useState<string | null>(null);
-  const { similarArtworks, basis: recommendationBasis, reload: reloadRecommendations } =
-    useRecommendations(canonicalArtwork, canonicalArtist, userId);
+  const {
+    similarArtworks,
+    basis: recommendationBasis,
+    reload: reloadRecommendations,
+    logClick: logRecommendationClick
+  } = useRecommendations(canonicalArtwork, canonicalArtist, userId);
   // Taste-only shelf for the browse hub, where no artwork is in context yet.
   const {
     similarArtworks: tasteRecommendations,
     basis: tasteBasis,
-    reload: reloadTasteRecommendations
+    reload: reloadTasteRecommendations,
+    logClick: logTasteRecommendationClick
   } = useRecommendations('', '', userId);
   const { profile: tasteProfile, reload: reloadTasteProfile } = useTasteProfile(userId);
+
+  /**
+   * Speculative prefetch: warm the archive for the top-ranked recommendation
+   * while the visitor is still engaged with the current guide, so a click
+   * into it skips the slow part (LLM generation). A hit is a cheap cache
+   * read either way; a miss just pre-fills the catalogue for whoever visits
+   * that artwork next, so the call is never wasted.
+   */
+  const prefetchedGuidesRef = useRef<Set<string>>(new Set());
+  const prefetchGuide = useCallback(
+    (candidate: { title: string; artist: string } | undefined) => {
+      if (!candidate?.title) return;
+      const key = `${candidate.title.trim().toLowerCase()}::${(candidate.artist || '').trim().toLowerCase()}::${locale}`;
+      if (guideCache[key] || prefetchedGuidesRef.current.has(key)) return;
+      prefetchedGuidesRef.current.add(key);
+
+      fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: candidate.title,
+          artist: candidate.artist,
+          locale,
+          messages: [
+            {
+              role: 'user',
+              content: `作品名: ${candidate.title}${candidate.artist ? `, 作者: ${candidate.artist}` : ''}`
+            }
+          ]
+        })
+      }).catch(() => {
+        /* Best-effort warmup; a miss just means the real click pays full price. */
+      });
+    },
+    [guideCache, locale]
+  );
+
+  useEffect(() => {
+    prefetchGuide(similarArtworks[0]);
+  }, [similarArtworks, prefetchGuide]);
+
+  useEffect(() => {
+    prefetchGuide(tasteRecommendations[0]);
+  }, [tasteRecommendations, prefetchGuide]);
 
   // Refs for tracking properties in async speech callbacks
   /** Read by callbacks and by the mount-time deep link, which run before a state update lands. */
@@ -758,6 +808,11 @@ export default function HomeClient({
 
     if (!userId || !context || listenedSeconds < 1) return;
 
+    // Where in the guide this listen ended, so a drop-off point can be found
+    // from the data instead of waiting for someone to report a boring section.
+    const segmentCount = speakableSegmentsRef.current.length;
+    const segmentIndex = segmentCount > 0 ? Math.max(0, Math.min(activeIndexRef.current, segmentCount)) : null;
+
     const payload = JSON.stringify({
       userId,
       title: context.title,
@@ -766,7 +821,9 @@ export default function HomeClient({
       imageUrl: context.imageUrl,
       depth: context.depth,
       listenedSeconds,
-      completed
+      completed,
+      segmentIndex,
+      segmentCount: segmentCount > 0 ? segmentCount : null
     });
 
     // A page-unload fetch can be cut off mid-flight; sendBeacon survives it.
@@ -2950,7 +3007,10 @@ export default function HomeClient({
             viewCount={tasteProfile?.viewCount ?? 0}
             favoriteTags={tasteProfile?.favoriteTags ?? []}
             locale={locale}
-            onPick={pick2((title, artistName) => generateGuide(title, artistName))}
+            onPick={pick2((title, artistName) => {
+              logTasteRecommendationClick({ title, artist: artistName });
+              generateGuide(title, artistName);
+            })}
           />
         )}
 
@@ -3789,7 +3849,10 @@ export default function HomeClient({
             viewCount={tasteProfile?.viewCount ?? 0}
             favoriteTags={tasteProfile?.favoriteTags ?? []}
             locale={locale}
-            onPick={(title, artistName) => generateGuide(title, artistName)}
+            onPick={(title, artistName) => {
+              logRecommendationClick({ title, artist: artistName });
+              generateGuide(title, artistName);
+            }}
           />
         </div>
 
@@ -4384,7 +4447,8 @@ export default function HomeClient({
             <div className="flex gap-2">
               {([
                 ['readings', '🗣️ 読み'],
-                ['guides', '📝 解説']
+                ['guides', '📝 解説'],
+                ['insights', '📊 分析']
               ] as const).map(([tab, label]) => (
                 <button
                   key={tab}
@@ -4406,7 +4470,13 @@ export default function HomeClient({
             </button>
           </div>
 
-          {adminTab === 'readings' ? <ReadingApprovals /> : <GuideCorrections />}
+          {adminTab === 'readings' ? (
+            <ReadingApprovals />
+          ) : adminTab === 'guides' ? (
+            <GuideCorrections />
+          ) : (
+            <Insights />
+          )}
         </div>
       </div>
     )
