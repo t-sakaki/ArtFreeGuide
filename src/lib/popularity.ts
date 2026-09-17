@@ -22,7 +22,22 @@ const HISTORY_SAMPLE = 5000;
 
 interface D1Row {
   title?: string;
+  artist?: string;
   comment?: string;
+}
+
+export interface ArtworkIdentity {
+  title: string;
+  artist: string;
+}
+
+/**
+ * The same key `findOrCreateArtwork` dedupes on: an artwork is `(title, artist)`,
+ * never `title` alone. Two different artists' "無題"/"Untitled" must not share
+ * a heart count.
+ */
+export function identityKey(title: string, artist: string): string {
+  return `${title.trim()}::${artist.trim()}`;
 }
 
 interface D1Statement {
@@ -45,21 +60,36 @@ async function feedbackDatabase(): Promise<D1Binding | null> {
 }
 
 /**
- * Hearts live in the guide archive (D1), keyed by title, because they are sent
- * from the player before the catalogue row is known.
+ * Hearts live in the guide archive (D1), keyed by `(title, artist)` — the same
+ * identity the catalogue uses — because they are sent from the player before
+ * the catalogue row is known. The map is keyed by `identityKey()`.
  */
-export async function heartCounts(titles: string[]): Promise<Map<string, number>> {
+export async function heartCounts(identities: ArtworkIdentity[]): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
-  if (titles.length === 0) return counts;
+  if (identities.length === 0) return counts;
 
   const db = await feedbackDatabase();
   if (!db) return counts;
+
+  // SQLite has no clean tuple IN(); narrow by title over the wire, then match
+  // the artist in memory against exactly the identities that were asked for.
+  const titles = Array.from(new Set(identities.map(identity => identity.title.trim()).filter(Boolean)));
+  if (titles.length === 0) return counts;
+
+  const wantedArtistsByTitle = new Map<string, Set<string>>();
+  for (const { title, artist } of identities) {
+    const key = title.trim();
+    if (!key) continue;
+    const set = wantedArtistsByTitle.get(key) ?? new Set<string>();
+    set.add(artist.trim());
+    wantedArtistsByTitle.set(key, set);
+  }
 
   try {
     const placeholders = titles.map(() => '?').join(', ');
     const { results } = await db
       .prepare(
-        `SELECT title, comment FROM guide_feedback
+        `SELECT title, artist, comment FROM guide_feedback
          WHERE kind = 'good' AND comment LIKE 'hearts:%' AND title IN (${placeholders})`
       )
       .bind(...titles)
@@ -68,10 +98,13 @@ export async function heartCounts(titles: string[]): Promise<Map<string, number>
     for (const row of results ?? []) {
       const title = (row.title ?? '').trim();
       if (!title) continue;
+      const artist = (row.artist ?? '').trim();
+      if (!wantedArtistsByTitle.get(title)?.has(artist)) continue;
       // The player batches a burst of taps into one row: "hearts:3".
       const burst = /^hearts:(\d+)/.exec(row.comment ?? '');
       if (!burst) continue;
-      counts.set(title, (counts.get(title) ?? 0) + Number(burst[1]));
+      const key = identityKey(title, artist);
+      counts.set(key, (counts.get(key) ?? 0) + Number(burst[1]));
     }
   } catch (error) {
     console.error('Heart count lookup failed:', error);
@@ -111,6 +144,7 @@ async function playCounts(
 interface Candidate {
   id: string;
   title: string;
+  artist: string;
   similarity: number;
 }
 
@@ -128,13 +162,13 @@ export async function rankByPopularity<T extends Candidate>(
 
   const [plays, hearts] = await Promise.all([
     playCounts(supabase, candidates.map(item => item.id)),
-    heartCounts(candidates.map(item => item.title))
+    heartCounts(candidates.map(item => ({ title: item.title, artist: item.artist ?? '' })))
   ]);
 
   const scored = candidates.map(item => {
     const popularity: Popularity = {
       plays: plays.get(item.id) ?? 0,
-      hearts: hearts.get(item.title) ?? 0
+      hearts: hearts.get(identityKey(item.title, item.artist ?? '')) ?? 0
     };
     return {
       item: { ...item, ...popularity },
