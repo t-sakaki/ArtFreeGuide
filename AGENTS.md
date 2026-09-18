@@ -68,7 +68,15 @@
   ※不用意な再レイアウトやコンポーネント構造の破壊は厳禁。
 - **音声ガイドに挨拶は不要**: プロンプト（`src/app/api/chat/route.ts`）で「こんにちは等の挨拶は絶対に入れない」と明記し、防御層 `src/lib/guideText.ts` の `sanitizeGuideText(text, locale?)` で冒頭挨拶およびプロンプト見出し漏れを多言語・複数行で除去する（実装済み）。新規プロンプト調整は環境変数 `GUIDE_SYSTEM_PROMPT` で上書き可能（未設定時は既定値）。
 
-## 6. 既知の課題
+## 6. 管理者用 MCP サーバー
+`scripts/mcp_admin_server.mjs` は、ガイドの音声プロンプト・アーカイブ済み解説を**デプロイ不要**で外部から編集するための stdio MCP サーバー（`@modelcontextprotocol/sdk`）。ローカルで管理者本人が起動する前提で、公開エンドポイントは追加しない。
+- 内部的には既存の `ADMIN_TOKEN`（`denyAdmin`, `src/lib/adminAuth.ts`）で保護された `/api/admin/settings`・`/api/admin/guide` を叩くだけの薄いラッパー。
+- プロンプトは `GUIDE_SYSTEM_PROMPT`（wrangler vars、デプロイ必須）の上に D1 の `app_settings` テーブル（`d1/migrations/0006_app_settings.sql`）を重ね、`src/app/api/chat/route.ts` は D1 override → env var → 組み込みデフォルトの順で解決する（D1 側は Worker isolate ごとに60秒キャッシュ）。
+- 登録例: `claude mcp add art-free-guide-admin -e BASE_URL=... -e ADMIN_TOKEN=... -- node scripts/mcp_admin_server.mjs`（`BASE_URL` は staging/production の URL）。
+- ガイド編集はレビューなしで即時上書き（`guide-corrections` の承認フローとは別）。誤ったプロンプト/解説を配ってしまうリスクがあるため、`ADMIN_TOKEN` は本当に信頼できる管理者にのみ配布すること。
+- デプロイ前に `npx wrangler d1 migrations apply artfreeguide_db_trial --remote --env <staging|production>` で `app_settings` テーブルを作成すること（テーマソング機能と同様）。
+
+## 7. 既知の課題
 - **Supabase クレジット切れリスク（最重要）**: Supabase はハッカソン枠のクレジットで運用中。切れると「視聴履歴・類似推薦・認証」が停止する（解説再生自体は D1 なので影響なし）。詳細と除去ロードマップは `docs/supabase-decoupling.md` 参照。ベクトル検索は `EMBEDDING_PROVIDER=workers-ai` で D1 化可能（既に設計済み）。まず Supabase ダッシュボードで残量確認を。
 - **音源 (mp3) 保存先は R2（D1 ではない）**: D1 はテキスト DB のため音声保存に不適。テーマソング機能で `AUDIO` バケット (`artfreeguide-audio`) を追加済み。`/api/theme-song/audio` 経由で配信（バケットは非公開）。
 - **テーマソング (MiniMax Week)**: 作品ごとに解説文からオリジナル曲を生成。作詞は MiniMax M3 (OpenRouter) 優先・失敗時はアプリの LLM にフォールバック → 作曲 MiniMax Music 3.0 (GMI Cloud)。GMI の submit は ~1〜2 分ブロックするが**接続を切ってもジョブは走り続ける**ので、数秒で切断し `/requests` 一覧から歌詞照合で `request_id` を回収する（`ctx.waitUntil` 不使用・全リクエスト短時間）。`POST /api/theme-song`＝作詞+投入、`GET`＝ポーリング（完了時に音源を R2 へコピーして `ready`）。フロント `ThemeSongButton` は**解説を開いて数秒後に自動開始**（曲は `(slug, locale)` で全訪問者共有キャッシュなので作品あたり1回だけ生成）。要 `GMI_API_KEY`（`OPENROUTER_API_KEY` は任意）。デプロイ前に `npx wrangler r2 bucket create artfreeguide-audio` と `npx wrangler d1 migrations apply artfreeguide_db_trial --remote --env <staging|production>`。
