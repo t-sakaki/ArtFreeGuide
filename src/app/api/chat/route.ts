@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getCachedSetting, SETTINGS_KEYS } from '@/lib/appSettings';
 import { getGuideStore } from '@/lib/guideStore';
 import { DEFAULT_LOCALE, Locale, outputLanguageInstruction, isLocale } from '@/lib/i18n';
 import { getLLMProvider, Message } from '@/lib/llm';
@@ -67,21 +68,34 @@ short・standard・deep はいずれも指定の文字数を守ってくださ�
 }
 `;
 
-const CURATOR_SYSTEM_PROMPT =
-  process.env.GUIDE_SYSTEM_PROMPT ?? DEFAULT_CURATOR_SYSTEM_PROMPT;
+/**
+ * D1 (settable at runtime, e.g. from the admin MCP server) wins over the
+ * wrangler-deployed env var, which wins over the built-in default. A missing
+ * D1 binding (local dev) falls back silently to the env var / default.
+ */
+async function resolveCuratorSystemPrompt(): Promise<string> {
+  try {
+    const override = await getCachedSetting(SETTINGS_KEYS.guideSystemPrompt);
+    if (override && override.trim()) return override;
+  } catch (error) {
+    console.warn('Guide system prompt override read failed:', error);
+  }
+  return process.env.GUIDE_SYSTEM_PROMPT || DEFAULT_CURATOR_SYSTEM_PROMPT;
+}
 
 /**
  * The schema instructions stay in Japanese — they are the same for everyone —
  * while the language of the guide itself is stated separately, twice, because a
  * single line at the top of a long prompt is easy for a model to drop.
  */
-function curatorPrompt(locale: Locale): string {
-  if (locale === 'ja') return CURATOR_SYSTEM_PROMPT;
+async function curatorPrompt(locale: Locale): Promise<string> {
+  const systemPrompt = await resolveCuratorSystemPrompt();
+  if (locale === 'ja') return systemPrompt;
 
   const instruction = outputLanguageInstruction(locale);
   return `${instruction}
 
-${CURATOR_SYSTEM_PROMPT}
+${systemPrompt}
 【言語】${instruction} 作品名・作者名もその言語で一般的に使われる表記にしてください。
 searchQuery だけは従来どおり英語のキーワードにしてください。`;
 }
@@ -166,12 +180,13 @@ export async function POST(req: Request) {
     }
 
     // Modify the first user message to prepend the curator system prompt
+    const systemPrompt = await curatorPrompt(locale);
     const modifiedMessages: Message[] = messages.map((msg, index) => {
       const isFirstUserMessage = index === 0 || (index > 0 && !messages.slice(0, index).some(m => m.role === 'user'));
       if (isFirstUserMessage && msg.role === 'user') {
         return {
           role: 'user',
-          content: `${curatorPrompt(locale)}\n\n対象の美術作品情報：\n${msg.content}${
+          content: `${systemPrompt}\n\n対象の美術作品情報：\n${msg.content}${
             revisionNote
               ? `\n\n【鑑賞者からの指摘】\n${revisionNote}\n※【鑑賞者からの指摘】が与えられた場合は、その指摘を確実に反映して再生成すること。特に「挨拶の削除」が指摘されたら、冒頭の挨拶を完全に除くこと。`
               : ''
