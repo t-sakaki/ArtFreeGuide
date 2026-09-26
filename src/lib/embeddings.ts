@@ -3,7 +3,7 @@ import { getCloudflareContext } from '@opennextjs/cloudflare';
 // Multilingual model: works for the Japanese titles/descriptions in the catalogue.
 export const WORKERS_AI_EMBEDDING_MODEL = '@cf/baai/bge-m3';
 export const NVIDIA_EMBEDDING_MODEL =
-  process.env.NVIDIA_EMBEDDING_MODEL || 'nvidia/llama-nemotron-embed-1b-v2';
+  process.env.NVIDIA_EMBEDDING_MODEL || 'nvidia/llama-nemotron-embed-vl-1b-v2';
 export const EMBEDDING_DIMENSIONS = 1024;
 
 const NVIDIA_BASE_URL = process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1';
