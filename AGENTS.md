@@ -76,6 +76,8 @@
 - ガイド編集はレビューなしで即時上書き（`guide-corrections` の承認フローとは別）。誤ったプロンプト/解説を配ってしまうリスクがあるため、`ADMIN_TOKEN` は本当に信頼できる管理者にのみ配布すること。
 - デプロイ前に `npx wrangler d1 migrations apply artfreeguide_db_trial --remote --env <staging|production>` で `app_settings` テーブルを作成すること（テーマソング機能と同様）。
 
+- 来訪者側の操作用に `scripts/mcp_guide_server.mjs`（MCP名 `art-free-guide`）もある。公開 `/api/guide`・`/api/ask`・`/api/guide/augment`・`/api/feedback`・`/api/recommendations` の薄いラッパーで、トークン不要。`BASE_URL` 未指定時は本番サイトを指す。`add_to_guide` / `ask_and_archive` はアーカイブ済みガイドの deep 層へ追記し、`send_feedback` の bad/bug＋コメントは `guide-corrections` の承認キューへ修正案を出す（ガイド自体は承認なしに変わらない）。
+
 ## 7. 既知の課題
 - **Supabase クレジット切れリスク（最重要）**: Supabase はハッカソン枠のクレジットで運用中。切れると「視聴履歴・類似推薦・認証」が停止する（解説再生自体は D1 なので影響なし）。詳細と除去ロードマップは `docs/supabase-decoupling.md` 参照。ベクトル検索は `EMBEDDING_PROVIDER=workers-ai` で D1 化可能（既に設計済み）。まず Supabase ダッシュボードで残量確認を。
 - **音源 (mp3) 保存先は R2（D1 ではない）**: D1 はテキスト DB のため音声保存に不適。テーマソング機能で `AUDIO` バケット (`artfreeguide-audio`) を追加済み。`/api/theme-song/audio` 経由で配信（バケットは非公開）。
