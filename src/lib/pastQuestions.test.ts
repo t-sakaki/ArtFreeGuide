@@ -47,12 +47,13 @@ describe('recordPastQuestion', () => {
 
   it('absorbs returned and thrown storage failures without logging question text', async () => {
     const { db, query } = mockClient();
-    query.upsert.mockResolvedValueOnce({ error: { message: 'secret question' } });
+    query.upsert.mockResolvedValueOnce({ error: { code: '42501', message: 'secret question' } });
     await expect(recordPastQuestion(db, '星月夜', '', 'Why?')).resolves.toBeUndefined();
     query.upsert.mockRejectedValueOnce(new Error('secret question'));
     await expect(recordPastQuestion(db, '星月夜', '', 'Why?')).resolves.toBeUndefined();
     expect(console.warn).toHaveBeenCalledTimes(2);
-    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining('secret question'));
+    expect(console.warn).toHaveBeenNthCalledWith(1, 'Past question storage unavailable', { code: '42501' });
+    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain('secret question');
   });
 });
 

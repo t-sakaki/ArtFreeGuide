@@ -32,7 +32,7 @@ export async function recordPastQuestion(
     const { error } = await supabase.from(PAST_QUESTIONS_TABLE).upsert({
       ...key, question: text, last_asked_at: new Date().toISOString()
     }, { onConflict: 'title,artist,question' });
-    if (error) console.warn('Past question storage unavailable');
+    if (error) console.warn('Past question storage unavailable', { code: error.code || 'unknown' });
   } catch {
     // Never log the question or credentials; memory must not break an answer.
     console.warn('Past question storage unavailable');

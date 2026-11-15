@@ -50,7 +50,7 @@ ${conditions}
         await recordPastQuestion(createServiceClient(), title, typeof artist === 'string' ? artist : '', question);
       } catch {
         // Missing Supabase configuration must not turn a successful answer into 500.
-        console.warn('Past question storage unavailable');
+        console.warn('Past question service client unavailable');
       }
     }
 

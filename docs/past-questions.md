@@ -23,7 +23,7 @@ Supabase の `artwork_questions` へ記録する。自動の `deep_dive`、空�
 
 テーブルはRLSを有効化し、anon/authenticatedの権限を明示的に取り消す。
 サーバーのservice_roleだけが読み書きする。公開の質問一覧APIは作らない。
-保存・取得エラーで質問文やエラーの生データをログに出さない。
+保存・取得エラーで質問文やエラーの生データをログに出さない。保存失敗時はDBエラーコードのみを記録する。
 保存の失敗や未設定は通常回答を妨げず、質問の取得失敗は空配列に戻す。
 匿名/ログイン済みの区別に関係なく、実際に送信された通常質問が保存対象になる。
 
@@ -38,6 +38,12 @@ Supabase の `artwork_questions` へ記録する。自動の `deep_dive`、空�
 delete from public.artwork_questions
 where last_asked_at < now() - interval '30 days';
 ```
+
+## サーバーの接続設定
+
+質問APIはサーバーの NEXT_PUBLIC_SUPABASE_URL と SUPABASE_SERVICE_ROLE_KEY を使う。
+Workersの各環境で、URLとサービスキーが同じSupabaseプロジェクトに対応している必要がある。
+stagingの設定変更はproductionへ自動では引き継がれない。サービスキーをビルド成果物・ブラウザー・ログへ出さない。
 
 ## 適用と確認
 
