@@ -6,11 +6,10 @@ const BASE_URL = process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.co
 
 // Measured against the curator prompt: nemotron-3-super gives the best mix of
 // natural Japanese, JSON compliance and latency (~46s). gemma-4 is accurate but
-// slow (~110s), llama-3.1-70b is the last resort.
+// slow (~110s).
 const DEFAULT_MODELS = [
   'nvidia/nemotron-3-super-120b-a12b',
-  'google/gemma-4-31b-it',
-  'meta/llama-3.1-70b-instruct'
+  'google/gemma-4-31b-it'
 ];
 
 // A full guide (three tiers, music spec, recommendations) runs past 4k tokens

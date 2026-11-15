@@ -20,8 +20,10 @@
 		// Per-task overrides: LLM_<GUIDE|ASK|SUGGEST>_PROVIDER / _MODEL.
 		// Models are a comma separated priority list (fallback chain).
 		// Guides tolerate ~45s; answers and search chips must feel instant.
+		"LLM_GUIDE_PROVIDER": "gemini,workers-ai",
+		"GEMINI_MODEL": "gemini-4-hydrogen",
 		"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
-		"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
+		"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b",
 		"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,meta/llama-3.1-8b-instruct",
 		// Embedding space: "nvidia" (embedding_nv column, nvidia/llama-nemotron-embed-vl-1b-v2)
 		// or "workers-ai" (embedding column, @cf/baai/bge-m3). Switching back is a
@@ -79,9 +81,11 @@
 			"name": "art-free-guide-staging",
 			"vars": {
 				"LLM_PROVIDER": "workers-ai,nvidia",
-			"WORKERS_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-3.1-8b-instruct-fast",
+				"LLM_GUIDE_PROVIDER": "gemini,workers-ai",
+				"GEMINI_MODEL": "gemini-4-hydrogen",
+				"WORKERS_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-3.1-8b-instruct-fast",
 				"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
-				"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
+				"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b",
 				"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,meta/llama-3.1-8b-instruct",
 				"EMBEDDING_PROVIDER": "workers-ai",
 				"GUIDE_STORE": "d1",
@@ -114,9 +118,11 @@
 			"name": "art-free-guide",
 			"vars": {
 				"LLM_PROVIDER": "workers-ai,nvidia",
-			"WORKERS_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-3.1-8b-instruct-fast",
+				"LLM_GUIDE_PROVIDER": "gemini,workers-ai",
+				"GEMINI_MODEL": "gemini-4-hydrogen",
+				"WORKERS_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-3.1-8b-instruct-fast",
 				"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
-				"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
+				"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b",
 				"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,meta/llama-3.1-8b-instruct",
 				"EMBEDDING_PROVIDER": "workers-ai",
 				"GUIDE_STORE": "d1",
