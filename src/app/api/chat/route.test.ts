@@ -7,12 +7,12 @@ vi.mock('@/lib/appSettings', () => ({ getCachedSetting: vi.fn(), SETTINGS_KEYS: 
 vi.mock('@/lib/guideStore', () => ({ getGuideStore: () => ({ name: 'test', get, put }) }));
 vi.mock('@/lib/llm', () => ({ getLLMProvider: () => ({ generateResponse }) }));
 vi.mock('@/lib/llm/logger', () => ({ logChatRequest }));
-vi.mock('@/lib/i18n', () => ({ DEFAULT_LOCALE: 'ja', isLocale: () => true }));
+vi.mock('@/lib/i18n', () => ({ DEFAULT_LOCALE: 'ja', isLocale: () => true, outputLanguageInstruction: () => 'Write in English.' }));
 import { POST } from './route';
 
 const guide = JSON.stringify({ short: '概要', standard: '文'.repeat(300), deep: '文'.repeat(400) });
-const request = () => new Request('http://localhost/api/chat', {
-  method: 'POST', body: JSON.stringify({ title: '星月夜', messages: [{ role: 'user', content: '星月夜' }] }),
+const request = (locale = 'ja') => new Request('http://localhost/api/chat', {
+  method: 'POST', body: JSON.stringify({ title: '星月夜', locale, messages: [{ role: 'user', content: '星月夜' }] }),
 });
 
 beforeEach(() => {
@@ -63,6 +63,30 @@ describe('guide JSON regeneration', () => {
     expect(generateResponse).not.toHaveBeenCalled();
   });
 
+  it.each([
+    '{ "short": "...", "standard": "...", "music": { ... } }\nNow craft short: Let\'s write the guide.',
+    JSON.stringify({ short: 'summary', standard: 123, deep: ['draft'] }),
+    JSON.stringify({ short: 'summary', standard: '   ', deep: 'detail' }),
+    JSON.stringify({ short: 'summary', standard: 'guide' })
+  ])('regenerates an invalid English cache entry instead of serving it (%s)', async payload => {
+    get.mockResolvedValue({ payload });
+    generateResponse.mockResolvedValue(guide);
+    const response = await POST(request('en'));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ text: guide, cached: false, store: 'test' });
+    expect(get).toHaveBeenCalledWith('星月夜', '', 'en');
+    expect(generateResponse).toHaveBeenCalledTimes(1);
+    expect(put).toHaveBeenCalledWith('星月夜', '', guide, 'en');
+  });
+
+  it('does not return the corrupt cache if regeneration fails', async () => {
+    get.mockResolvedValue({ payload: 'Now craft short: drafting instructions' });
+    generateResponse.mockRejectedValue(new Error('provider unavailable'));
+    const response = await POST(request('en'));
+    expect(response.status).toBe(500);
+    expect((await response.json()).text).toBeUndefined();
+    expect(put).not.toHaveBeenCalled();
+  });
   it('does not add JSON retries to provider failures', async () => {
     generateResponse.mockRejectedValue(new Error('provider unavailable'));
     expect((await POST(request())).status).toBe(500);

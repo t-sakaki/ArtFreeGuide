@@ -125,8 +125,8 @@ function isFullLengthGuide(payload: string): boolean {
 function parseGuide(payload: string): { standard: string; deep: string } | null {
   try {
     const parsed = JSON.parse(payload);
-    if (!parsed?.short || !parsed?.standard || !parsed?.deep) return null;
-    return { standard: String(parsed.standard), deep: String(parsed.deep) };
+    if (!['short', 'standard', 'deep'].every(key => typeof parsed?.[key] === 'string' && parsed[key].trim())) return null;
+    return { standard: parsed.standard, deep: parsed.deep };
   } catch {
     return null;
   }
@@ -168,7 +168,7 @@ export async function POST(req: Request) {
     if (store && refresh !== true) {
       try {
         const cached = await store.get(title, artistName, locale);
-        if (cached) {
+        if (cached && isUsableGuide(cached.payload)) {
           cacheStatus = 'hit';
           return NextResponse.json({ text: cached.payload, cached: true, store: store.name });
         }
