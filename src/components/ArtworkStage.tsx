@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Hotspot } from '@/lib/hotspots';
+import { artworkViewport } from '@/lib/artworkViewport';
 
 interface Frame {
   left: number;
@@ -73,13 +74,10 @@ export default function ArtworkStage({
   }, [imageUrl]);
 
   const active = hotspots.find(h => h.id === activeHotspotId) ?? null;
-  const zoom = active ? active.zoom : 1;
-  // Centring a point near the edge would pull the picture off the frame, so the
-  // pan is clamped to whatever still keeps the image covering the stage.
-  const limit = 0.5 - 0.5 / zoom;
-  const pan = (offset: number) => Math.max(-limit, Math.min(limit, offset)) * 100;
-  const stageTransform = active
-    ? `scale(${zoom}) translate(${pan(0.5 - active.x)}%, ${pan(0.5 - active.y)}%)`
+  const viewport = active && frame ? artworkViewport(frame, active) : null;
+  const zoom = viewport?.zoom ?? 1;
+  const stageTransform = viewport
+    ? `scale(${zoom}) translate(${viewport.x}%, ${viewport.y}%)`
     : 'none';
 
   return (
