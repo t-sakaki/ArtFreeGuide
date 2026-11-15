@@ -202,17 +202,24 @@ export async function POST(req: Request) {
     const provider = getLLMProvider('guide');
 
     // The model truncates its JSON, or answers with an outline, often enough
-    // that a guide would otherwise fail outright; a second ask usually lands.
+    // that a guide would otherwise fail outright; allow up to two JSON retries.
     let cleanText = '';
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       const text = await provider.generateResponse(modifiedMessages, { json: true });
       llmAttempts += 1;
       cleanText = extractJsonObject(text);
-      if (isFullLengthGuide(cleanText)) break;
+      try {
+        JSON.parse(cleanText);
+      } catch (error) {
+        if (attempt === 2) throw error;
+        console.warn(`Retrying guide generation after JSON parse failure (retry ${attempt + 1}/2) for "${title}"`);
+        continue;
+      }
+      if (isFullLengthGuide(cleanText) || attempt >= 1) break;
       console.warn(`Guide unusable or too short on attempt ${attempt + 1} for "${title}"`);
     }
 
-    // A broken payload is still returned — the client salvages what it can —
+    // A parseable but incomplete payload is returned for the client to salvage —
     // but archiving it would serve the same broken guide to everyone after.
     if (store && isUsableGuide(cleanText)) {
       try {
