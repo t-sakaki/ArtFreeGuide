@@ -16,13 +16,13 @@
 		// (Cloudflare, no key but only 10,000 free neurons/day) or "gemini"
 		// (needs GEMINI_API_KEY). Set secrets with `wrangler secret put <NAME>`,
 		// or .dev.vars / .env.local locally.
-		"LLM_PROVIDER": "workers-ai,nvidia",
+		"LLM_PROVIDER": "gemini",
 		// Per-task overrides: LLM_<GUIDE|ASK|SUGGEST>_PROVIDER / _MODEL.
 		// Models are a comma separated priority list (fallback chain).
 		// Guides tolerate ~45s; answers and search chips must feel instant.
-		"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
-		"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
-		"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,meta/llama-3.1-8b-instruct",
+		"LLM_GUIDE_MODEL": "gemini-4-hydrogen",
+		"LLM_ASK_MODEL": "gemini-4-hydrogen",
+		"LLM_SUGGEST_MODEL": "gemini-4-hydrogen",
 		// Embedding space: "nvidia" (embedding_nv column, nvidia/llama-nemotron-embed-vl-1b-v2)
 		// or "workers-ai" (embedding column, @cf/baai/bge-m3). Switching back is a
 		// one-word change: both column sets are kept populated side by side.
@@ -78,11 +78,11 @@
 		"staging": {
 			"name": "art-free-guide-staging",
 			"vars": {
-				"LLM_PROVIDER": "workers-ai,nvidia",
+				"LLM_PROVIDER": "gemini",
 			"WORKERS_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-3.1-8b-instruct-fast",
-				"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
-				"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
-				"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,meta/llama-3.1-8b-instruct",
+				"LLM_GUIDE_MODEL": "gemini-4-hydrogen",
+				"LLM_ASK_MODEL": "gemini-4-hydrogen",
+				"LLM_SUGGEST_MODEL": "gemini-4-hydrogen",
 				"EMBEDDING_PROVIDER": "workers-ai",
 				"GUIDE_STORE": "d1",
 				"GUIDE_SYSTEM_PROMPT": ""
@@ -113,11 +113,11 @@
 		"production": {
 			"name": "art-free-guide",
 			"vars": {
-				"LLM_PROVIDER": "workers-ai,nvidia",
+				"LLM_PROVIDER": "gemini",
 			"WORKERS_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-3.1-8b-instruct-fast",
-				"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
-				"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
-				"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,meta/llama-3.1-8b-instruct",
+				"LLM_GUIDE_MODEL": "gemini-4-hydrogen",
+				"LLM_ASK_MODEL": "gemini-4-hydrogen",
+				"LLM_SUGGEST_MODEL": "gemini-4-hydrogen",
 				"EMBEDDING_PROVIDER": "workers-ai",
 				"GUIDE_STORE": "d1",
 				"GUIDE_SYSTEM_PROMPT": ""
