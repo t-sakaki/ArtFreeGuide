@@ -1,15 +1,21 @@
 import { NextResponse } from 'next/server';
+import { getGuideStore } from '@/lib/guideStore';
+import { DEFAULT_LOCALE, Locale, OUTPUT_LANGUAGE_INSTRUCTION, isLocale } from '@/lib/i18n';
 import { getLLMProvider, Message } from '@/lib/llm';
+import { logChatRequest } from '@/lib/llm/logger';
 
-const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富な音声ガイド・キュレーターです。
+const DEFAULT_CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富な音声ガイド・キュレーターです。
 ユーザーから入力された美術作品（およびその作者）に対して、親しみやすくかつ知的なトーンで、以下の要件を満たす素晴らしい音声ガイドを提供してください。
 
 【ガイドの構成案】
-1. **作品への歓迎と導入**: 作品を目の前にした時のような臨場感のある語りかけから始めます。（例：「こんにちは。今、私たちの目の前にあるのは…」）
+1. **作品の導入と視覚的描写**: 冒頭は作品そのものの描写や、惹きつける導入から始めること。「こんにちは」「ようこそ」「皆様」「視聴者の皆様」「初めまして」などの挨拶は絶対に入れないこと。
 2. **基本情報**: 作品名、作者、制作年代、使用された技法や素材など。
 3. **視覚的な解説（描写）**: 何が描かれているのか、色彩の使い方、光と影のコントラスト、構図など、ユーザーが作品を見る際の視覚的ポイントを案内します。
 4. **画家の想いや背景**: 画家がこの作品を制作した時の状況、心情、歴史的背景、芸術的意図など。
 5. **鑑賞のヒント**: 最後に「この部分を少し近くで見てみてください…」や「この絵の前に立ち、少し目を閉じて感じてみてください…」といった、深い鑑賞体験へ誘う言葉で締めくくります。
+
+【分量】
+short・standard・deep はいずれも指定の文字数を守ってください。数行で終わる解説は音声ガイドとして成立しません。
 
 【トーン＆マナー】
 - 丁寧語（「です」「ます」調）で、穏やかでありながら美術への情熱が伝わる語り口にします。
@@ -18,13 +24,26 @@ const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富�
 
 【出力フォーマットの厳格化】
 必ず指定のJSON構造のみを返してください。会話形式の挨拶、マークダウン記法、余計な前文・後文は一切含めず、純粋なJSONオブジェクト単体としてパース可能なテキストのみを出力してください。
+解説本文の装飾は見出し（## 見出し）だけにしてください。** や * による太字・斜体は、日本語のように単語の区切りが空白でない言語では記号がそのまま画面に出てしまうため、使用しないでください。
+改行は実際の改行文字で表し、\\n のようなエスケープ文字列を本文に書かないでください。
 
 【出力スキーマ】
 {
   "short": "（作品名、作者、制作年などの基本情報を交えた、100〜150文字程度の極めて簡潔な概要解説テキスト。マークダウン記号は含めないでください）",
-  "standard": "（作品の魅力や構図、色彩、画家の想いを美しく解説した、中程度の長さの標準的な解説テキスト。見出しや太字を交えてマークダウンで装飾してください）",
-  "deep": "（技法、歴史的背景、知られざるエピソードや詳細な裏話を交えた、長文の詳細な解説テキスト。見出しや太字を交えてマークダウンで装飾してください）",
+  "standard": "（構成案の 1〜5 をすべて含む、600〜900文字程度の標準的な解説テキスト。作品の魅力や構図、色彩、画家の想いを、耳で聴いて2〜3分になる分量で語ってください。見出し（## 見出し）で2〜4節に区切ってください。太字・斜体は使わないでください）",
+  "deep": "（技法、歴史的背景、知られざるエピソードや詳細な裏話を交えた、1000〜1500文字程度の詳細な解説テキスト。standard の繰り返しではなく、そこで触れなかった話題を掘り下げてください。見出し（## 見出し）で3節以上に区切ってください。太字・斜体は使わないでください）",
   "searchQuery": "（Wikimedia Commonsでこの作品の画像を検索するための英語のキーワード。例：'Vincent van Gogh Sunflowers'、'Mona Lisa'）",
+  "music": {
+    "tonic": "（主音。C, C#, D, D#, E, F, F#, G, G#, A, A#, B のいずれか）",
+    "scale": "（旋法。ionian（長調）/ aeolian（短調）/ dorian / lydian / phrygian / mixolydian / pentatonic / whole_tone / hirajoshi（平調子・和）/ insen（陰旋法・和）のいずれか。日本美術には和の旋法が合います）",
+    "tempoBpm": "（40〜100 の数値。画面の運動量に対応させる。静止した風景は遅く、荒れた海や群像は速く）",
+    "texture": "（音色。strings / choir / bell / pluck / glass / breath のいずれか。素材や時代感に合わせる）",
+    "brightness": "（0〜1 の数値。画面の明るさ・光の量）",
+    "warmth": "（0〜1 の数値。色調の温かさ。暖色や油彩は高く、冷たい色や版画は低く）",
+    "density": "（0〜1 の数値。描き込みの密度・情報量）",
+    "tension": "（0〜1 の数値。主題の緊張度。穏やかな静物は低く、戦争や審判は高く）",
+    "space": "（0〜1 の数値。描かれた空間の広がりと残響。大聖堂や大海原は高く、室内の肖像は低く）"
+  },
   "recommendations": [
     {
       "title": "（関連する作品名。3〜5件）",
@@ -35,12 +54,102 @@ const CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富�
 }
 `;
 
-export async function POST(req: Request) {
+const CURATOR_SYSTEM_PROMPT =
+  process.env.GUIDE_SYSTEM_PROMPT ?? DEFAULT_CURATOR_SYSTEM_PROMPT;
+
+/**
+ * The schema instructions stay in Japanese — they are the same for everyone —
+ * while the language of the guide itself is stated separately, twice, because a
+ * single line at the top of a long prompt is easy for a model to drop.
+ */
+function curatorPrompt(locale: Locale): string {
+  if (locale === 'ja') return CURATOR_SYSTEM_PROMPT;
+
+  const instruction = OUTPUT_LANGUAGE_INSTRUCTION[locale];
+  return `${instruction}
+
+${CURATOR_SYSTEM_PROMPT}
+【言語】${instruction} 作品名・作者名もその言語で一般的に使われる表記にしてください。
+searchQuery だけは従来どおり英語のキーワードにしてください。`;
+}
+
+/** The model wraps its JSON in prose or fences often enough to strip it here. */
+function extractJsonObject(text: string): string {
+  const trimmed = text.trim();
+  const first = trimmed.indexOf('{');
+  const last = trimmed.lastIndexOf('}');
+  return first !== -1 && last > first ? trimmed.substring(first, last + 1) : trimmed;
+}
+
+/** A guide the client can parse and actually read out: all three tiers present. */
+function isUsableGuide(payload: string): boolean {
+  return parseGuide(payload) !== null;
+}
+
+/**
+ * Worth archiving as an audio guide. Models sometimes answer with the schema's
+ * own outline ("## 見出し\n..."), which parses fine but reads as a few lines.
+ */
+function isFullLengthGuide(payload: string): boolean {
+  const parsed = parseGuide(payload);
+  return !!parsed && parsed.standard.length >= 300 && parsed.deep.length >= 400;
+}
+
+function parseGuide(payload: string): { standard: string; deep: string } | null {
   try {
-    const { messages } = await req.json();
+    const parsed = JSON.parse(payload);
+    if (!parsed?.short || !parsed?.standard || !parsed?.deep) return null;
+    return { standard: String(parsed.standard), deep: String(parsed.deep) };
+  } catch {
+    return null;
+  }
+}
+
+export async function POST(req: Request) {
+  let requestStartedAt = 0;
+  let cacheStatus: 'hit' | 'miss-generating' | 'miss-error' = 'miss-generating';
+  let llmAttempts = 0;
+  let title = '';
+  let artist = '';
+  let rawLocale: string | undefined;
+  try {
+    const { messages, refresh, reason, title: jsonTitle, artist: jsonArtist, locale: jsonLocale } =
+      await req.json();
+    title = typeof jsonTitle === 'string' ? jsonTitle : '';
+    artist = typeof jsonArtist === 'string' ? jsonArtist : '';
+    rawLocale = typeof jsonLocale === 'string' ? jsonLocale : undefined;
+    requestStartedAt = performance.now();
+
+    // What the visitor disliked about the guide they just heard, so a rewrite
+    // answers the complaint instead of rolling the dice again.
+    const revisionNote =
+      refresh === true && typeof reason === 'string' && reason.trim()
+        ? reason.trim().slice(0, 500)
+        : '';
+    const locale: Locale =
+      typeof rawLocale === 'string' && isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: 'Messages are required' }, { status: 400 });
+    }
+
+    // Only first-turn requests name an artwork; follow-up turns are not cacheable.
+    const store = title.trim() ? getGuideStore() : null;
+    const artistName = artist;
+
+    // A guide reported as wrong is regenerated and overwrites the archived one.
+    if (store && refresh !== true) {
+      try {
+        const cached = await store.get(title, artistName, locale);
+        if (cached) {
+          cacheStatus = 'hit';
+          return NextResponse.json({ text: cached.payload, cached: true, store: store.name });
+        }
+      } catch (error) {
+        // A cold or misconfigured cache must never block the guide itself.
+        console.warn('Guide cache read failed:', error);
+        cacheStatus = 'miss-error';
+      }
     }
 
     // Modify the first user message to prepend the curator system prompt
@@ -49,7 +158,11 @@ export async function POST(req: Request) {
       if (isFirstUserMessage && msg.role === 'user') {
         return {
           role: 'user',
-          content: `${CURATOR_SYSTEM_PROMPT}\n\n対象の美術作品情報：\n${msg.content}`
+          content: `${curatorPrompt(locale)}\n\n対象の美術作品情報：\n${msg.content}${
+            revisionNote
+              ? `\n\n【鑑賞者からの指摘】\n${revisionNote}\n※【鑑賞者からの指摘】が与えられた場合は、その指摘を確実に反映して再生成すること。特に「挨拶の削除」が指摘されたら、冒頭の挨拶を完全に除くこと。`
+              : ''
+          }`
         };
       }
       return {
@@ -58,19 +171,43 @@ export async function POST(req: Request) {
       };
     });
 
-    const provider = getLLMProvider();
-    const text = await provider.generateResponse(modifiedMessages, { json: true });
+    const provider = getLLMProvider('guide');
 
-    // Bulletproof JSON block extractor
-    let cleanText = text.trim();
-    const firstBrace = cleanText.indexOf('{');
-    const lastBrace = cleanText.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    // The model truncates its JSON, or answers with an outline, often enough
+    // that a guide would otherwise fail outright; a second ask usually lands.
+    let cleanText = '';
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const text = await provider.generateResponse(modifiedMessages, { json: true });
+      llmAttempts += 1;
+      cleanText = extractJsonObject(text);
+      if (isFullLengthGuide(cleanText)) break;
+      console.warn(`Guide unusable or too short on attempt ${attempt + 1} for "${title}"`);
     }
 
-    return NextResponse.json({ text: cleanText });
+    // A broken payload is still returned — the client salvages what it can —
+    // but archiving it would serve the same broken guide to everyone after.
+    if (store && isUsableGuide(cleanText)) {
+      try {
+        await store.put(title, artistName, cleanText, locale);
+      } catch (error) {
+        console.warn('Guide cache write failed:', error);
+      }
+    }
+
+    return NextResponse.json({ text: cleanText, cached: false, store: store?.name ?? null });
   } catch (error: any) {
+    const totalDurationMs = Math.round(performance.now() - requestStartedAt);
+    logChatRequest({
+      title: title || undefined,
+      artist: artist || undefined,
+      locale: rawLocale,
+      cacheStatus,
+      llmAttempts,
+      llmDurationMs: 0,
+      totalDurationMs,
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
     console.error('API Route Error:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }

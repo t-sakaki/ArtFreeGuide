@@ -3,21 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "next build",
+    "build": "opennextjs-cloudflare build",
+    "build:next": "next build",
     "dev": "next dev",
     "start": "next start",
     "build:cf": "opennextjs-cloudflare build",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "deploy:prod": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "deploy:staging": "opennextjs-cloudflare build && npx wrangler deploy -e staging",
-    "deploy:trial": "npm run build:cf && npx wrangler deploy -e trial",
+    "deploy:staging": "opennextjs-cloudflare build && opennextjs-cloudflare deploy -e staging",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@line/bot-sdk": "^11.2.0",
+    "@supabase/supabase-js": "^2.112.3",
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -30,7 +30,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
-    "typescript": "^5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11",
     "wrangler": "^4.112.0"
   }
 }

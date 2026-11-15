@@ -1,8 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { LLMProvider, Message } from './provider';
+import { parseModelList } from './models';
+import { logLlmCall, LlmProviderType } from './logger';
 
 // Fallback models in case the primary one is overloaded (503) or unavailable
-const FALLBACK_MODELS = [
+const DEFAULT_MODELS = [
   'gemini-2.5-flash',
   'gemini-2.0-flash',
   'gemini-3.5-flash',
@@ -11,8 +13,13 @@ const FALLBACK_MODELS = [
 
 export class GeminiProvider implements LLMProvider {
   private genAI: GoogleGenerativeAI;
+  private readonly models: string[];
+  private readonly providerType: LlmProviderType = 'gemini';
 
-  constructor() {
+  constructor(models: string[] = []) {
+    const configured = models.length ? models : parseModelList(process.env.GEMINI_MODEL);
+    this.models = configured.length ? configured : DEFAULT_MODELS;
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY environment variable is not set. Please check your .env.local configuration.');
@@ -27,9 +34,12 @@ export class GeminiProvider implements LLMProvider {
     }));
 
     let lastError: any = null;
+    let lastModelName = '';
 
-    for (const modelName of FALLBACK_MODELS) {
+    for (const modelName of this.models) {
+      lastModelName = modelName;
       for (let attempt = 1; attempt <= 3; attempt++) {
+        const startedAt = performance.now();
         try {
           const model = this.genAI.getGenerativeModel({
             model: modelName,
@@ -44,9 +54,33 @@ export class GeminiProvider implements LLMProvider {
             throw new Error('Empty response from Gemini API');
           }
 
+          logLlmCall({
+            provider: this.providerType,
+            modelName,
+            attempt,
+            totalAttemptsInModel: 3,
+            success: true,
+            durationMs: Math.round(performance.now() - startedAt),
+            kind: 'success',
+          });
+
           return text;
         } catch (error: any) {
           lastError = error;
+          const message = error?.message || String(error);
+          const errorCode = typeof error?.status === 'number' ? error.status : undefined;
+          logLlmCall({
+            provider: this.providerType,
+            modelName,
+            attempt,
+            totalAttemptsInModel: 3,
+            success: false,
+            durationMs: Math.round(performance.now() - startedAt),
+            kind: 'attempt_failure',
+            error: message.slice(0, 1000),
+            errorCode,
+          });
+
           console.warn(`Model ${modelName} failed on attempt ${attempt}/3:`, error.message || error);
 
           // If the model is not found (404), switch to the next fallback model immediately without retrying
@@ -63,6 +97,16 @@ export class GeminiProvider implements LLMProvider {
     }
 
     console.error('All Gemini models in the fallback chain failed.', lastError);
+    logLlmCall({
+      provider: this.providerType,
+      modelName: lastModelName,
+      attempt: 3,
+      totalAttemptsInModel: 3,
+      success: false,
+      durationMs: 0,
+      kind: 'model_exhausted',
+      error: lastError?.message ? String(lastError.message).slice(0, 1000) : 'Service Unavailable',
+    });
     throw new Error(`Gemini API call failed: ${lastError?.message || 'Service Unavailable'}`);
   }
 }

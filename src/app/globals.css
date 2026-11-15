@@ -1,5 +1,89 @@
 @import "tailwindcss";
 
+/*
+ * Scroll bars are browser chrome, not part of the exhibition. Windows and Linux
+ * draw them permanently, which breaks the immersion, so hide them everywhere and
+ * let touch / trackpad / wheel do the scrolling.
+ */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/*
+ * The wordmark, matching the share card and the README hero: a serif in the
+ * gold of a gallery label. System serifs only, so it costs no web font.
+ */
+.wordmark {
+  font-family: 'Noto Serif JP', 'Hiragino Mincho ProN', 'Yu Mincho', ui-serif, Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/*
+ * The gallery spotlight of the share card: a gold beam thrown up at the
+ * wordmark from below, plus the halo it leaves on the letters.
+ */
+.spotlight {
+  position: relative;
+}
+
+.spotlight::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -55%;
+  width: min(150%, 100vw);
+  height: 210%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse 42% 46% at 50% 80%, rgb(253 230 138 / 0.22), transparent 70%);
+  filter: blur(6px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.spotlight::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -95%;
+  width: min(150%, 100vw);
+  height: 230%;
+  transform: translateX(-50%);
+  background: linear-gradient(to top, rgb(253 230 138 / 0.24), rgb(253 230 138 / 0.11) 45%, transparent 80%);
+  clip-path: polygon(46% 100%, 54% 100%, 88% 0%, 12% 0%);
+  -webkit-mask-image: linear-gradient(to top, transparent 6%, rgb(0 0 0 / 0.8) 32%, rgb(0 0 0 / 0.45) 64%, transparent 96%);
+  mask-image: linear-gradient(to top, transparent 6%, rgb(0 0 0 / 0.8) 32%, rgb(0 0 0 / 0.45) 64%, transparent 96%);
+  filter: blur(52px);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Inner panels should not drag the page along once they hit their end. */
+.scroll-area {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Bottom gradient standing in for the hidden scroll bar's "there is more" hint. */
+.scroll-hint {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3rem;
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+  background: linear-gradient(to top, rgb(2 6 23 / 0.9), transparent);
+}
+
 @keyframes slideUp {
   from {
     transform: translateY(100%);
@@ -24,4 +108,271 @@
 
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Slow zoom/pan on the artwork while the guide is being narrated */
+@keyframes kenBurns {
+  from {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.12) translate3d(-1.5%, -1.5%, 0);
+  }
+}
+
+.animate-ken-burns {
+  animation: kenBurns 24s ease-in-out infinite alternate;
+}
+
+/* Three-bar equaliser shown while speech is playing */
+@keyframes equalizerBar {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.animate-equalizer {
+  transform-origin: bottom;
+  animation: equalizerBar 0.9s ease-in-out infinite;
+}
+
+/* Only the point being talked about moves; the others stay transparent */
+@keyframes hotspotBlink {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-hotspot-blink {
+  animation: hotspotBlink 1.8s ease-in-out infinite;
+}
+
+/*
+ * Hearts drifting up from the like button, as on a live stream: they sway from
+ * side to side, grow as they rise, and fade out near the top.
+ */
+@keyframes heartFloat {
+  0% {
+    transform: translate(0, 0) scale(0.4) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  30% {
+    transform: translate(calc(var(--heart-drift, 0px) * -0.6), -70px)
+      scale(calc(var(--heart-scale, 1) * 0.85)) rotate(calc(var(--heart-tilt, 0deg) * -1));
+  }
+  60% {
+    transform: translate(calc(var(--heart-drift, 0px) * 0.9), -145px) scale(var(--heart-scale, 1))
+      rotate(var(--heart-tilt, 0deg));
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(var(--heart-drift, 0px) * 0.2), -235px)
+      scale(calc(var(--heart-scale, 1) * 1.3)) rotate(0deg);
+    opacity: 0;
+  }
+}
+
+.animate-heart-float {
+  animation: heartFloat var(--heart-duration, 2s) cubic-bezier(0.25, 0.6, 0.35, 1) forwards;
+}
+
+/* The button answers every tap, so a burst feels like it is being counted. */
+@keyframes heartPop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.28);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-heart-pop {
+  animation: heartPop 0.35s cubic-bezier(0.25, 1.4, 0.5, 1);
+}
+
+/* Motion-free fallback: the heart is acknowledged, then simply fades. */
+@keyframes heartFadeOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* A question chip wobbles once to invite a tap after the narration ends */
+@keyframes chipNudge {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-3px) rotate(-2deg);
+  }
+  55% {
+    transform: translateY(-1px) rotate(2deg);
+  }
+  80% {
+    transform: translateY(0) rotate(-1deg);
+  }
+}
+
+.animate-chip-nudge {
+  animation: chipNudge 0.7s ease-in-out;
+}
+
+/* Dual-layer horizontal audio wave ripples around the play button while speaking */
+@keyframes playPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: scaleX(1.75) scaleY(1.25);
+    opacity: 0;
+  }
+}
+
+@keyframes playPulseDelayed {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.35;
+  }
+  100% {
+    transform: scaleX(1.9) scaleY(1.35);
+    opacity: 0;
+  }
+}
+
+.animate-play-pulse {
+  animation: playPulse 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+.animate-play-pulse-delayed {
+  animation: playPulseDelayed 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite 1.1s;
+}
+
+/* Gold gallery light sweeping across the deep-dive chip while it is fetched */
+@keyframes shimmerSweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(253, 230, 138, 0.35),
+    rgba(253, 230, 138, 0.1),
+    transparent
+  );
+  animation: shimmerSweep 1.3s ease-in-out infinite;
+}
+
+/* One gold flash the moment the chip is pressed, before the fetch starts */
+@keyframes diveFlash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(253, 230, 138, 0.55);
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.06);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(253, 230, 138, 0);
+    transform: scale(1);
+  }
+}
+
+.animate-dive-flash {
+  animation: diveFlash 0.6s ease-out;
+}
+
+/* The magnifier rummages through the archive while the story is dug up */
+@keyframes digWiggle {
+  0%,
+  100% {
+    transform: rotate(-10deg) scale(1);
+  }
+  50% {
+    transform: rotate(12deg) scale(1.18);
+  }
+}
+
+.animate-dig {
+  animation: digWiggle 0.75s ease-in-out infinite;
+}
+
+/* Seamless infinite ticker marquee for question suggestions */
+@keyframes tickerMarquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-ticker-marquee {
+  display: flex;
+  width: max-content;
+  animation: tickerMarquee 26s linear infinite;
+}
+
+.animate-ticker-marquee:hover,
+.animate-ticker-marquee:active {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ken-burns,
+  .animate-equalizer,
+  .animate-chip-nudge,
+  .animate-dive-flash,
+  .animate-shimmer,
+  .animate-dig,
+  .animate-play-pulse,
+  .animate-play-pulse-delayed {
+    animation: none;
+  }
+
+  /* Held bright rather than blinking, so the point is still identifiable. */
+  .animate-hotspot-blink {
+    animation: none;
+    opacity: 0.9;
+  }
+
+  /* The hearts still need to disappear, so fade rather than freeze them. */
+  .animate-heart-float {
+    animation: heartFadeOut 1.2s linear forwards;
+    transform: none;
+  }
+
+  .animate-heart-pop {
+    animation: none;
+  }
 }

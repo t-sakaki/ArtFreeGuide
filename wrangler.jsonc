@@ -12,8 +12,38 @@
 		"binding": "ASSETS"
 	},
 	"vars": {
-		"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4",
-		"LLM_PROVIDER": "gemini"
+		// "nvidia" (NVIDIA NIM, needs an NVIDIA_API_KEY secret), "workers-ai"
+		// (Cloudflare, no key but only 10,000 free neurons/day) or "gemini"
+		// (needs GEMINI_API_KEY). Set secrets with `wrangler secret put <NAME>`,
+		// or .dev.vars / .env.local locally.
+		"LLM_PROVIDER": "nvidia",
+		// Per-task overrides: LLM_<GUIDE|ASK|SUGGEST>_PROVIDER / _MODEL.
+		// Models are a comma separated priority list (fallback chain).
+		// Guides tolerate ~45s; answers and search chips must feel instant.
+		"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
+		"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
+		"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,meta/llama-3.1-8b-instruct",
+		// Embedding space: "nvidia" (embedding_nv column, nvidia/llama-nemotron-embed-1b-v2)
+		// or "workers-ai" (embedding column, @cf/baai/bge-m3). Switching back is a
+		// one-word change: both column sets are kept populated side by side.
+		"EMBEDDING_PROVIDER": "nvidia",
+		// Where generated guides are archived: "d1" | "supabase" | "memory"
+		"GUIDE_STORE": "d1"
+	},
+	"d1_databases": [
+		{
+			// Guide archive, reusing the database the earlier D1 version filled:
+			// npx wrangler d1 migrations apply artfreeguide_db_trial --remote
+			"binding": "DB",
+			"database_name": "artfreeguide_db_trial",
+			"database_id": "1028e2d0-e5d5-47e7-b828-bacea0c934d0",
+			"migrations_dir": "d1/migrations"
+		}
+	],
+	"ai": {
+		// Workers AI: inference runs on Cloudflare, no API key needed
+		// see https://developers.cloudflare.com/workers-ai/
+		"binding": "AI"
 	},
 	"services": [
 		{
@@ -36,9 +66,36 @@
 			}
 		},
 		"staging": {
+			// Full mirror of the top-level bindings so staging runs the same stack.
+			// Secrets (NVIDIA_API_KEY, Supabase, CLOUDFLARE_ACCOUNT_ID/API_TOKEN...)
+			// must be set per-environment: npx wrangler secret put <NAME> -e staging
 			"vars": {
-				"GEMINI_API_KEY": "AIzaSyC6BcgJK0Nidj4XjqzKfZpv_SyEPF_ffz4",
-				"LLM_PROVIDER": "gemini"
+				"LLM_PROVIDER": "nvidia",
+				"LLM_GUIDE_MODEL": "nvidia/nemotron-3-super-120b-a12b,google/gemma-4-31b-it",
+				"LLM_ASK_MODEL": "nvidia/nemotron-3-nano-30b-a3b,meta/llama-3.1-70b-instruct",
+				"LLM_SUGGEST_MODEL": "mistralai/mistral-nemotron,meta/llama-3.1-8b-instruct",
+				"EMBEDDING_PROVIDER": "nvidia",
+				"GUIDE_STORE": "d1"
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "artfreeguide_db_trial",
+					"database_id": "1028e2d0-e5d5-47e7-b828-bacea0c934d0",
+					"migrations_dir": "d1/migrations"
+				}
+			],
+			"ai": {
+				"binding": "AI"
+			},
+			"services": [
+				{
+					"binding": "WORKER_SELF_REFERENCE",
+					"service": "art-free-guide-staging"
+				}
+			],
+			"images": {
+				"binding": "IMAGES"
 			}
 		}
 	}

@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyLineSignature, replyTextMessage, replyMultipleMessages, lineConfig, createAudioGuideFlex } from '@/lib/line';
+import {
+  lineConfig,
+  verifyLineSignature,
+  replyTextMessage,
+  replyMultipleMessages,
+  createAudioGuideFlex,
+} from '@/lib/line';
 import { getLLMProvider, Message } from '@/lib/llm';
-import { fetchArtworkImage } from '@/lib/image';
+import { fetchArtworkImage } from '@/lib/artworkThumbnail';
+import { verifyMp3Buffer } from '@/lib/audioVerify';
 
 const LINE_SYSTEM_PROMPT = `あなたは美術館の情熱的な音声ガイド・キュレーターです。
 LINEユーザーに対し、入力された美術作品について、親しみやすく、かつ知的なトーンで解説を提供してください。
 
 【重要：LINE専用フォーマットルール】
-1. マークダウン記法を【完全禁止】します。特に \*\*（太字）などの記号は絶対に使用しないでください。
+1. マークダウン記法を【完全禁止】します。特に **（太字）などの記号は絶対に使用しないでください。
 2. LINEの画面で読みやすいよう、以下の視覚的な構造を用いてください。
    - 項目の見出しには 【 】（隅付き括弧）を使用してください。
    - 箇条書きや強調したい点には ■ や ・ などの記号を使用してください。
@@ -29,73 +36,125 @@ LINEユーザーに対し、入力された美術作品について、親しみ�
 
 export async function POST(req: NextRequest) {
   try {
+    // 1. Raw body for Web Crypto signature verification
     const rawBody = await req.text();
     const signature = req.headers.get('x-line-signature') || '';
 
+    if (!signature) {
+      console.error('[LINE Webhook] Missing x-line-signature header');
+      return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
+    }
+
+    // 2. Signature verification using Web Crypto API
     const isValid = await verifyLineSignature(rawBody, signature, lineConfig.channelSecret);
     if (!isValid) {
-      console.error('Invalid LINE signature');
+      console.error('[LINE Webhook] Invalid LINE signature');
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
+    // 3. Parse JSON payload
     const body = JSON.parse(rawBody);
     const events = body.events;
     if (!events || events.length === 0) {
       return NextResponse.json({ message: 'No events' });
     }
 
-    await Promise.all(events.map(async (event: any) => {
-      if (event.type !== 'message' || event.message.type !== 'text') return;
+    // 4. Process incoming webhook events
+    await Promise.all(
+      events.map(async (event: any) => {
+        if (event.type !== 'message' || event.message.type !== 'text') return;
 
-      const replyToken = event.replyToken;
-      const userMessage = event.message.text;
+        const replyToken = event.replyToken;
+        const userMessage = event.message.text?.trim();
+        if (!userMessage) return;
 
-      try {
-        const [aiResponse, imageUrl] = await Promise.all([
-          (async () => {
-            const provider = getLLMProvider();
-            const messages: Message[] = [
-              { role: 'user', content: `${LINE_SYSTEM_PROMPT}\n\n対象の美術作品：\n${userMessage}` }
-            ];
-            return await provider.generateResponse(messages, { json: false });
-          })(),
-          fetchArtworkImage(userMessage)
-        ]);
+        try {
+          // Parallel execution: LLM response + Artwork Image Search
+          const [aiResponse, imageUrl] = await Promise.all([
+            (async () => {
+              const provider = getLLMProvider();
+              const messages: Message[] = [
+                {
+                  role: 'user',
+                  content: `${LINE_SYSTEM_PROMPT}\n\n対象の美術作品：\n${userMessage}`,
+                },
+              ];
+              return await provider.generateResponse(messages, { json: false });
+            })(),
+            fetchArtworkImage(userMessage, '').catch(() => null),
+          ]);
 
-        // メッセージ配列を構築
-        const messagesToReply: any[] = [];
+          const messagesToReply: any[] = [];
 
-        // 1. 画像があれば追加
-        if (imageUrl) {
-          messagesToReply.push({ 
-            type: 'image', 
-            originalContentUrl: imageUrl, 
-            previewImageUrl: imageUrl 
+          // Add image message if found
+          if (imageUrl) {
+            messagesToReply.push({
+              type: 'image',
+              originalContentUrl: imageUrl,
+              previewImageUrl: imageUrl,
+            });
+          }
+
+          // Add AI Curator explanation text
+          messagesToReply.push({
+            type: 'text',
+            text: aiResponse,
           });
+
+          // Safe Audio Generation & Pre-flight Quality Verification
+          const audioUrl = `${lineConfig.appBaseUrl}/api/tts?text=${encodeURIComponent(userMessage.slice(0, 100))}`;
+          let isAudioSafe = false;
+          let durationMs = 5000;
+
+          try {
+            // Pre-flight check: Verify audio endpoint response quality before sending audio message to LINE
+            const ttsVerifyRes = await fetch(audioUrl, { method: 'GET' });
+            if (ttsVerifyRes.ok) {
+              const audioBuf = await ttsVerifyRes.arrayBuffer();
+              const verification = verifyMp3Buffer(audioBuf);
+              if (verification.valid && verification.format === 'mp3') {
+                isAudioSafe = true;
+                durationMs = verification.durationMs || 5000;
+              } else {
+                console.warn('[LINE Webhook] Audio verification failed:', verification.error);
+              }
+            }
+          } catch (audioCheckErr) {
+            console.warn('[LINE Webhook] Audio pre-flight check failed, falling back to text:', audioCheckErr);
+          }
+
+          // Only attach LINE audio message if audio quality verification succeeds
+          if (isAudioSafe) {
+            messagesToReply.push({
+              type: 'audio',
+              originalContentUrl: audioUrl,
+              duration: Math.max(1000, durationMs),
+            });
+          } else {
+            console.log('[LINE Webhook] Audio verification unconfirmed. Gracefully falling back to Text + Flex link.');
+          }
+
+          // Add Web App Audio Guide Flex Message
+          messagesToReply.push(createAudioGuideFlex(userMessage));
+
+          // Reply to LINE Messaging API
+          await replyMultipleMessages(replyToken, messagesToReply);
+        } catch (aiError) {
+          console.error('[LINE Webhook] Response generation error:', aiError);
+          await replyTextMessage(
+            replyToken,
+            'すみません、うまく解説を生成できませんでした。もう一度作品名を教えていただけますか？🎨'
+          );
         }
-
-        // 2. AIの解説テキストを追加
-        messagesToReply.push({ 
-          type: 'text', 
-          text: aiResponse 
-        });
-
-        // 3. 音声ガイドへの誘導ボタン (Flex Message) を追加
-        messagesToReply.push(createAudioGuideFlex(userMessage));
-
-        await replyMultipleMessages(replyToken, messagesToReply);
-      } catch (aiError) {
-        console.error('AI Response or Image Error:', aiError);
-        await replyTextMessage(replyToken, 'すみません、うまく解説を生成できませんでした。🎨');
-      }
-    }));
+      })
+    );
 
     return NextResponse.json({ message: 'OK' });
   } catch (error: any) {
-    console.error('Critical LINE Webhook Error:', error);
-    return NextResponse.json({ 
-      error: 'Internal Server Error', 
-      details: error.message 
-    }, { status: 500 });
+    console.error('[LINE Webhook] Critical Error:', error);
+    return NextResponse.json(
+      { error: 'Internal Server Error', details: error.message },
+      { status: 500 }
+    );
   }
 }
