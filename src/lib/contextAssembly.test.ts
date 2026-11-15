@@ -63,7 +63,7 @@ describe('loadVisitorContext', () => {
     expect(await loadVisitorContext({ from } as unknown as SupabaseClient, 'user', '睡蓮', 'モネ')).toEqual(empty());
   });
 
-  function client(historyResult: unknown, profileResult: unknown) {
+  function client(historyResult: unknown, profileResult: unknown, questionsResult: unknown = { data: [], error: null }) {
     const history = {
       select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(), limit: vi.fn().mockResolvedValue(historyResult)
@@ -72,7 +72,16 @@ describe('loadVisitorContext', () => {
       select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue(profileResult)
     };
-    const supabase = { from: vi.fn((table: string) => table === 'viewing_history' ? history : profile) };
+    const questions = {
+      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue(questionsResult)
+    };
+    const supabase = { from: vi.fn((table: string) => {
+      if (table === 'viewing_history') return history;
+      if (table === 'artwork_questions') return questions;
+      return profile;
+    }) };
     return { supabase: supabase as unknown as SupabaseClient, history, profile };
   }
 
@@ -92,6 +101,24 @@ describe('loadVisitorContext', () => {
     expect(profile.eq).toHaveBeenCalledWith('id', 'visitor');
   });
 
+  it('includes actual past questions and formats them in both locales', async () => {
+    const { supabase } = client({ data: [], error: null }, { data: null, error: null }, {
+      data: [{ question: 'Why blue?' }], error: null
+    });
+    const ctx = await loadVisitorContext(supabase, 'visitor', '星月夜', 'ゴッホ');
+    expect(ctx.pastQuestions).toEqual(['Why blue?']);
+    expect(formatContextBlock(ctx, 'ja')).toBe('この作品への過去の質問:\n- Why blue?');
+    expect(formatContextBlock(ctx, 'en')).toBe('Past questions about this artwork:\n- Why blue?');
+  });
+
+  it('keeps visitor preferences when the optional questions table is unavailable', async () => {
+    const { supabase } = client({ data: [], error: null }, { data: { favorite_tags: ['風景'] }, error: null }, {
+      data: null, error: { message: 'missing table' }
+    });
+    expect(await loadVisitorContext(supabase, 'visitor', '星月夜', 'ゴッホ')).toEqual({
+      history: [], favoriteTags: ['風景'], pastQuestions: []
+    });
+  });
   it('returns empty context for missing rows or a returned query error', async () => {
     const missing = client({ data: null, error: null }, { data: null, error: null });
     expect(await loadVisitorContext(missing.supabase, 'user', '', '')).toEqual(empty());

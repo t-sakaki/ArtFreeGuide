@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { createServiceClient } from '@/lib/supabase';
+import { recordPastQuestion } from '@/lib/pastQuestions';
 import { DEFAULT_LOCALE, Locale, outputLanguageInstruction, isLocale } from '@/lib/i18n';
 import { getLLMProvider, Message } from '@/lib/llm';
 
@@ -41,6 +43,16 @@ ${conditions}
     const messages: Message[] = [{ role: 'user', content: prompt }];
     const provider = getLLMProvider('ask');
     const answer = await provider.generateResponse(messages);
+
+    // Automated deep dives are not visitor questions. Store only answered asks.
+    if (!deepDive && answer.trim()) {
+      try {
+        await recordPastQuestion(createServiceClient(), title, typeof artist === 'string' ? artist : '', question);
+      } catch {
+        // Missing Supabase configuration must not turn a successful answer into 500.
+        console.warn('Past question storage unavailable');
+      }
+    }
 
     return NextResponse.json({ answer: answer.trim() });
   } catch (error: any) {
