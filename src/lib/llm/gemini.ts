@@ -5,6 +5,7 @@ import { logLlmCall, LlmProviderType } from './logger';
 
 // Fallback models in case the primary one is overloaded (503) or unavailable
 const DEFAULT_MODELS = [
+  'gemini-4-hydrogen',
   'gemini-2.5-flash',
   'gemini-2.0-flash',
   'gemini-3.5-flash',
