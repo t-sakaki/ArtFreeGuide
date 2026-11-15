@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Locale } from './i18n';
+import { loadPastQuestions } from './pastQuestions';
 
 export interface VisitorContext {
   /** Oldest to newest. */
@@ -12,12 +13,7 @@ export const MAX_CONTEXT_LENGTH = 1500;
 const HISTORY_LIMIT = 20;
 const emptyContext = (): VisitorContext => ({ history: [], favoriteTags: [], pastQuestions: [] });
 
-/**
- * Read-only preparation for chat integration. Returns empty context on failure.
- * Past-question retrieval is blocked: questions.ts only generates suggestions,
- * and provides no persisted visitor-question reader. Do not substitute those
- * suggestions for actual visitor questions. title/artist reserve the work scope.
- */
+/** Read-only context for server-side use with a service-role client. */
 export async function loadVisitorContext(
   supabase: SupabaseClient,
   userId: string | null | undefined,
@@ -25,11 +21,8 @@ export async function loadVisitorContext(
   artist: string
 ): Promise<VisitorContext> {
   if (!userId) return emptyContext();
-  // TODO: Resolve the existing past-question source for this artwork.
-  void title;
-  void artist;
   try {
-    const [history, profile] = await Promise.all([
+    const [history, profile, pastQuestions] = await Promise.all([
       supabase.from('viewing_history')
         .select('artworks(title, artist)')
         .eq('user_id', userId)
@@ -38,7 +31,8 @@ export async function loadVisitorContext(
       supabase.from('user_profiles')
         .select('favorite_tags')
         .eq('id', userId)
-        .maybeSingle<{ favorite_tags: string[] | null }>()
+        .maybeSingle<{ favorite_tags: string[] | null }>(),
+      loadPastQuestions(supabase, title, artist)
     ]);
     if (history.error || profile.error) return emptyContext();
     type Artwork = VisitorContext['history'][number];
@@ -49,7 +43,7 @@ export async function loadVisitorContext(
         return artwork ? [{ title: artwork.title, artist: artwork.artist }] : [];
       }).reverse(),
       favoriteTags: profile.data?.favorite_tags ?? [],
-      pastQuestions: []
+      pastQuestions
     };
   } catch {
     return emptyContext();
