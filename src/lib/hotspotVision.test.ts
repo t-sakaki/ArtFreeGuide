@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { placePoints } from './hotspotVision';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+const { askVisionJson } = vi.hoisted(() => ({ askVisionJson: vi.fn() }));
+vi.mock('./visionModel', () => ({ askVisionJson }));
+afterEach(() => { vi.unstubAllGlobals(); vi.resetAllMocks(); });
+import { placePoints, locateHotspots } from './hotspotVision';
 import { GuideHotspot } from './hotspots';
 
 const points: GuideHotspot[] = [
@@ -33,5 +36,25 @@ describe('placePoints', () => {
   it('returns an empty array when the model gave nothing usable', () => {
     expect(placePoints(points, undefined)).toEqual([]);
     expect(placePoints(points, [])).toEqual([]);
+  });
+});
+
+describe('placement failure evidence', () => {
+  it('records an HTTP image failure without calling the vision provider', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 403 })));
+    const report = vi.fn();
+    expect(await locateHotspots('https://example.org/image.jpg', points, report)).toEqual([]);
+    expect(report).toHaveBeenCalledWith({ phase: 'image', code: 'http_403' });
+    expect(askVisionJson).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith('https://example.org/image.jpg', expect.objectContaining({
+      headers: { 'User-Agent': expect.stringContaining('ArtFreeGuide/') }
+    }));
+  });
+  it('records invalid model coordinates as a separate failure phase', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/jpeg' } })));
+    askVisionJson.mockResolvedValue({ points: [] });
+    const report = vi.fn();
+    expect(await locateHotspots('https://example.org/image.jpg', points, report)).toEqual([]);
+    expect(report).toHaveBeenCalledWith({ phase: 'coordinates', code: 'no_valid_points' });
   });
 });

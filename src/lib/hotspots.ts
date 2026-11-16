@@ -9,6 +9,7 @@
  */
 
 import { Locale } from './i18n';
+import { OLYMPIA_HOTSPOTS } from './olympiaHotspots';
 
 /** Wording of one point in a language other than Japanese. */
 interface HotspotText {
@@ -850,6 +851,7 @@ export const HOTSPOT_SETS: HotspotSet[] = [
       },
     ],
   },
+  OLYMPIA_HOTSPOTS,
 ];
 
 /**
