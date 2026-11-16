@@ -2,6 +2,11 @@ import { GuideHotspot, PlacedHotspot } from './hotspots';
 import { askVisionJson } from './visionModel';
 
 export type { PlacedHotspot };
+export interface PlacementFailure {
+  phase: 'image' | 'vision' | 'coordinates';
+  code: string;
+}
+type ReportFailure = (failure: PlacementFailure) => void;
 
 /**
  * Phase 2 of the "見どころ" feature: give the marker-less points from
@@ -32,17 +37,21 @@ function clamp01(value: unknown): number | null {
 }
 
 /** Downloads the artwork and turns it into a data URL the model accepts. */
-async function fetchImageAsDataUrl(imageUrl: string): Promise<string | null> {
+async function fetchImageAsDataUrl(imageUrl: string, report?: ReportFailure): Promise<string | null> {
   try {
-    const res = await fetch(imageUrl, { signal: AbortSignal.timeout(10_000) });
-    if (!res.ok) return null;
+    const res = await fetch(imageUrl, {
+      headers: { 'User-Agent': 'ArtFreeGuide/1.0 (+https://github.com/t-sakaki/ArtFreeGuide)' },
+      signal: AbortSignal.timeout(10_000)
+    });
+    if (!res.ok) { report?.({ phase: 'image', code: "http_" + res.status }); return null; }
     const type = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-    if (!ACCEPTED_MIME.includes(type)) return null;
+    if (!ACCEPTED_MIME.includes(type)) { report?.({ phase: 'image', code: 'unsupported_mime' }); return null; }
     const buffer = await res.arrayBuffer();
-    if (buffer.byteLength === 0 || buffer.byteLength > MAX_IMAGE_BYTES) return null;
+    if (buffer.byteLength === 0 || buffer.byteLength > MAX_IMAGE_BYTES) { report?.({ phase: 'image', code: 'invalid_image_size' }); return null; }
     const base64 = Buffer.from(buffer).toString('base64');
     return `data:${type};base64,${base64}`;
   } catch (error) {
+    report?.({ phase: 'image', code: 'fetch_failed' });
     console.warn('Hotspot image fetch failed:', error instanceof Error ? error.message : error);
     return null;
   }
@@ -75,22 +84,26 @@ const askVision = (dataUrl: string, prompt: string): Promise<unknown> =>
  */
 export async function locateHotspots(
   imageUrl: string,
-  points: GuideHotspot[]
+  points: GuideHotspot[],
+  report?: ReportFailure
 ): Promise<PlacedHotspot[]> {
   if (points.length === 0) return [];
 
-  const dataUrl = await fetchImageAsDataUrl(imageUrl);
+  const dataUrl = await fetchImageAsDataUrl(imageUrl, report);
   if (!dataUrl) return [];
 
   let parsed: unknown;
   try {
     parsed = await askVision(dataUrl, locatePrompt(points));
   } catch (error) {
+    report?.({ phase: 'vision', code: 'provider_unavailable' });
     console.warn('locateHotspots gave up:', error instanceof Error ? error.message : error);
     return [];
   }
 
-  return placePoints(points, (parsed as { points?: unknown })?.points);
+  const placed = placePoints(points, (parsed as { points?: unknown })?.points);
+  if (placed.length === 0) report?.({ phase: 'coordinates', code: 'no_valid_points' });
+  return placed;
 }
 
 /**
