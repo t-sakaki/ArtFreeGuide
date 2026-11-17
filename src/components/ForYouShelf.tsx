@@ -24,6 +24,7 @@ function headings(basis: RecommendationBasis, locale: Locale): { title: string; 
     case 'blend':
       return { title: s.tasteTitle, subtitle: s.blendSubtitle };
     case 'artwork':
+    case 'graph':
       return { title: s.artworkTitle, subtitle: s.artworkSubtitle };
     default:
       return { title: '', subtitle: '' };
@@ -63,6 +64,8 @@ export default function ForYouShelf({ items, basis, viewCount, favoriteTags, loc
   const t = UI[locale].shelf;
   // The catalogue is written in Japanese; a translated blurb would need the LLM.
   const showDescription = locale === 'ja';
+  const hasNeo4jLive = items.some(item => item.graphSource === 'neo4j');
+  const hasGraph = items.some(item => Boolean(item.relationLabel || item.graphReason));
 
   return (
     <div className="w-full space-y-3 select-none font-sans">
@@ -126,6 +129,11 @@ export default function ForYouShelf({ items, basis, viewCount, favoriteTags, loc
                   {localizeName(item.artist, locale)}
                   {item.year ? ` ・ ${item.year}` : ''}
                 </p>
+                {item.relationLabel && (
+                  <span className="inline-block mt-1 px-1.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 text-[9px] font-bold">
+                    🔗 {item.relationLabel}
+                  </span>
+                )}
                 {((item.hearts ?? 0) > 0 || (item.plays ?? 0) > 0) && (
                   <p className="text-[10px] text-slate-500 font-mono mt-0.5 flex gap-2">
                     {(item.hearts ?? 0) > 0 && <span className="text-rose-300/80">❤️ {item.hearts}</span>}
@@ -138,9 +146,11 @@ export default function ForYouShelf({ items, basis, viewCount, favoriteTags, loc
                     style={{ width: `${Math.round(Math.min(Math.max(item.similarity, 0), 1) * 100)}%` }}
                   />
                 </div>
-                {showDescription && item.description && (
+                {item.graphReason ? (
+                  <p className="text-[10px] text-cyan-200/80 line-clamp-2 mt-1 leading-relaxed">{item.graphReason}</p>
+                ) : showDescription && item.description ? (
                   <p className="text-[10px] text-slate-400 line-clamp-2 mt-1">{item.description}</p>
-                )}
+                ) : null}
               </div>
             </button>
           );
@@ -148,7 +158,11 @@ export default function ForYouShelf({ items, basis, viewCount, favoriteTags, loc
       </div>
 
       <p className="text-[9px] text-slate-600 text-center font-mono">
-        {t.credit}
+        {hasNeo4jLive
+          ? `Neo4j Knowledge Graph · ${t.credit}`
+          : hasGraph
+            ? `Art Knowledge Graph · ${t.credit}`
+            : t.credit}
       </p>
 
       {/* Enlarged view of a thumbnail, with its title and artist. */}

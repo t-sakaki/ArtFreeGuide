@@ -4,13 +4,14 @@ import { DEFAULT_LOCALE, Locale, outputLanguageInstruction, isLocale } from '@/l
 import { getGuideStore } from '@/lib/guideStore';
 import { getLLMProvider, Message } from '@/lib/llm';
 import { createServiceClient } from '@/lib/supabase';
+import { searchArtworksByGraphConcept } from '@/lib/graph/queries';
 
 const LIMIT = 5;
 /** Below this many real matches, invented titles are better than a short list. */
 const ENOUGH_REAL_MATCHES = 2;
 
 /** Where a suggestion came from, in descending order of trust. */
-type Source = 'guide' | 'catalog' | 'ai';
+type Source = 'guide' | 'catalog' | 'graph' | 'ai';
 
 interface Suggestion {
   title: string;
@@ -112,6 +113,21 @@ export async function POST(req: Request) {
         );
       } catch (error) {
         console.error('Catalogue search failed:', error);
+      }
+    }
+
+    // 2.5. Neo4j / Knowledge Graph concept lookup (movements, motifs, techniques).
+    if (suggestions.size < LIMIT) {
+      try {
+        const graphRows = await searchArtworksByGraphConcept(query, LIMIT);
+        addUnique(
+          suggestions,
+          graphRows
+            .filter(row => !artist || row.artist.includes(artist) || artist.includes(row.artist))
+            .map(row => ({ title: row.title, artist: row.artist, source: 'graph' as const }))
+        );
+      } catch (error) {
+        console.error('Graph concept search failed:', error);
       }
     }
 

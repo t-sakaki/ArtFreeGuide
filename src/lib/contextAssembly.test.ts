@@ -46,6 +46,27 @@ describe('formatContextBlock', () => {
     const ctx = { ...empty(), favoriteTags: ['x'.repeat(2000)], pastQuestions: ['y'.repeat(2000)] };
     expect(formatContextBlock(ctx, 'ja').length).toBeLessThanOrEqual(MAX_CONTEXT_LENGTH);
   });
+
+  it('includes knowledge graph connections when present', () => {
+    const ctx: VisitorContext = {
+      ...empty(),
+      graphConnections: [
+        {
+          relatedTitle: '富嶽三十六景 神奈川沖浪裏',
+          relatedArtist: '葛飾北斎',
+          relationType: 'INFLUENCED_BY',
+          relationLabel: '影響関係',
+          reason: 'モネは北斎らの浮世絵を収集していた。',
+          hops: 1,
+        },
+      ],
+    };
+    const ja = formatContextBlock(ctx, 'ja');
+    expect(ja).toContain('知識グラフによる関連作品:');
+    expect(ja).toContain('富嶽三十六景 神奈川沖浪裏');
+    const en = formatContextBlock(ctx, 'en');
+    expect(en).toContain('Knowledge graph connections:');
+  });
 });
 
 

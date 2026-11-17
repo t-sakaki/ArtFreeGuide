@@ -4,6 +4,8 @@ import { getGuideStore } from '@/lib/guideStore';
 import { DEFAULT_LOCALE, Locale, outputLanguageInstruction, isLocale } from '@/lib/i18n';
 import { getLLMProvider, Message } from '@/lib/llm';
 import { logChatRequest } from '@/lib/llm/logger';
+import { findHistoryGraphConnections } from '../../../lib/graph/queries';
+import type { GraphConnectionHint } from '../../../lib/graph/types';
 
 const DEFAULT_CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富な音声ガイド・キュレーターです。
 ユーザーから入力された美術作品（およびその作者）に対して、親しみやすくかつ知的なトーンで、以下の要件を満たす素晴らしい音声ガイドを提供してください。
@@ -140,7 +142,7 @@ export async function POST(req: Request) {
   let artist = '';
   let rawLocale: string | undefined;
   try {
-    const { messages, refresh, reason, title: jsonTitle, artist: jsonArtist, locale: jsonLocale } =
+    const { messages, refresh, reason, title: jsonTitle, artist: jsonArtist, locale: jsonLocale, recentHistory } =
       await req.json();
     title = typeof jsonTitle === 'string' ? jsonTitle : '';
     artist = typeof jsonArtist === 'string' ? jsonArtist : '';
@@ -160,6 +162,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Messages are required' }, { status: 400 });
     }
 
+    const graphConnectionsPromise: Promise<GraphConnectionHint[]> =
+      title.trim() && Array.isArray(recentHistory) && recentHistory.length > 0
+        ? findHistoryGraphConnections(
+            title,
+            artist || undefined,
+            recentHistory.filter(
+              (h: unknown): h is { title: string; artist?: string } =>
+                Boolean(h && typeof h === 'object' && typeof (h as { title?: unknown }).title === 'string')
+            ),
+            locale,
+            2
+          ).catch(() => [])
+        : Promise.resolve([]);
+
     // Only first-turn requests name an artwork; follow-up turns are not cacheable.
     const store = title.trim() ? getGuideStore() : null;
     const artistName = artist;
@@ -170,7 +186,13 @@ export async function POST(req: Request) {
         const cached = await store.get(title, artistName, locale);
         if (cached && isUsableGuide(cached.payload)) {
           cacheStatus = 'hit';
-          return NextResponse.json({ text: cached.payload, cached: true, store: store.name });
+          const graphConnections = await graphConnectionsPromise;
+          return NextResponse.json({
+            text: cached.payload,
+            cached: true,
+            store: store.name,
+            ...(graphConnections.length > 0 ? { graphConnections } : {}),
+          });
         }
       } catch (error) {
         // A cold or misconfigured cache must never block the guide itself.
@@ -229,7 +251,13 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ text: cleanText, cached: false, store: store?.name ?? null });
+    const graphConnections = await graphConnectionsPromise;
+    return NextResponse.json({
+      text: cleanText,
+      cached: false,
+      store: store?.name ?? null,
+      ...(graphConnections.length > 0 ? { graphConnections } : {}),
+    });
   } catch (error: any) {
     const totalDurationMs = Math.round(performance.now() - requestStartedAt);
     logChatRequest({

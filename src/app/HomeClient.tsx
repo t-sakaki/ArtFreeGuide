@@ -17,6 +17,9 @@ import {
 } from '@/lib/hotspots';
 import { useRecommendations, useTasteProfile } from '@/hooks/useRecommendations';
 import ForYouShelf from '@/components/ForYouShelf';
+import ArtGraphMap from '@/components/ArtGraphMap';
+import { getGraphUIText } from '@/lib/graph/i18n';
+import type { DynamicTourResult, GraphConnectionHint } from '@/lib/graph/types';
 import {
   AmbientPlayer,
   MusicSpec,
@@ -496,6 +499,7 @@ export default function HomeClient({
 
   // Recommendations State
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [graphConnections, setGraphConnections] = useState<GraphConnectionHint[]>([]);
 
   // Next-Gen Audio Control States
   const [segments, setSegments] = useState<string[]>([]);
@@ -703,14 +707,14 @@ export default function HomeClient({
     basis: recommendationBasis,
     reload: reloadRecommendations,
     logClick: logRecommendationClick
-  } = useRecommendations(canonicalArtwork, canonicalArtist, userId);
+  } = useRecommendations(canonicalArtwork, canonicalArtist, userId, locale);
   // Taste-only shelf for the browse hub, where no artwork is in context yet.
   const {
     similarArtworks: tasteRecommendations,
     basis: tasteBasis,
     reload: reloadTasteRecommendations,
     logClick: logTasteRecommendationClick
-  } = useRecommendations('', '', userId);
+  } = useRecommendations('', '', userId, locale);
   const { profile: tasteProfile, reload: reloadTasteProfile } = useTasteProfile(userId);
 
   /**
@@ -1715,6 +1719,11 @@ export default function HomeClient({
     setNextUpCue(null);
   };
 
+  const recentHistoryPayload = useMemo(
+    () => history.slice(-6).map(h => ({ title: h.title, artist: h.artist })),
+    [history]
+  );
+
   const startTour = (tour: Playlist, index = 0) => {
     cancelTourAdvance();
     const item = tour.items[index];
@@ -1723,6 +1732,24 @@ export default function HomeClient({
     setPlaylistIndex(index);
     tourTargetRef.current = `${item.title}::${item.artist}`;
     generateGuide(item.title, item.artist);
+  };
+
+  const startDynamicTour = (tour: DynamicTourResult) => {
+    const fromShown = localizeName(tour.fromTitle, locale);
+    const toShown = localizeName(tour.toTitle, locale);
+    const dynamicPlaylist: Playlist = {
+      id: 'dynamic-graph-tour',
+      title: `${fromShown} → ${toShown}`,
+      subtitle: getGraphUIText(locale).tourTitle,
+      emoji: '🕸️',
+      items: tour.steps.map(step => ({
+        title: step.title,
+        artist: step.artist,
+        cue: step.cue,
+      })),
+      i18n: {},
+    };
+    startTour(dynamicPlaylist, 0);
   };
 
   const exitTour = () => {
@@ -1751,6 +1778,7 @@ export default function HomeClient({
     setImageUrl(null);
     setImageError(false);
     setRecommendations([]);
+    setGraphConnections([]);
     setGeneratedHotspots([]);
     setGeneratedMarks([]);
     setActiveGeneratedHotspot(-1);
@@ -2320,6 +2348,7 @@ export default function HomeClient({
       setImageError(cached.imageError);
       setSearchQuery(cached.searchQuery);
       setRecommendations(cached.recommendations);
+      setGraphConnections([]);
       setGeneratedHotspots(cached.hotspots ?? []);
       setGeneratedMarks(cached.hotspotMarks ?? []);
       setActiveGeneratedHotspot(-1);
@@ -2382,6 +2411,7 @@ export default function HomeClient({
     setImageUrl(null);
     setImageError(false);
     setRecommendations([]);
+    setGraphConnections([]);
     setGeneratedHotspots([]);
     setGeneratedMarks([]);
     setActiveGeneratedHotspot(-1);
@@ -2397,6 +2427,7 @@ export default function HomeClient({
           refresh,
           reason,
           locale: activeLocale,
+          recentHistory: recentHistoryPayload,
           messages: [
             {
               role: 'user',
@@ -2578,6 +2609,7 @@ export default function HomeClient({
           setRecommendations(recs);
           fetchRecommendationImages(recs, targetArtwork, targetArtist);
         }
+        setGraphConnections(Array.isArray(data.graphConnections) ? data.graphConnections : []);
 
         // Close input drawer
         setShowInputDrawer(false);
@@ -2648,7 +2680,8 @@ export default function HomeClient({
           mode: 'deep_dive',
           question: `この作品について、ガイドブックにも載っていないような知られざる裏話や、美術史における深掘りエピソードを聞かせてください。`,
           context: responseStandard || responseShort,
-          locale
+          locale,
+          recentHistory: recentHistoryPayload
         })
       });
       const data = await res.json();
@@ -2746,7 +2779,8 @@ export default function HomeClient({
           artist: shownArtist,
           question: trimmed,
           context: responseStandard || responseShort,
-          locale
+          locale,
+          recentHistory: recentHistoryPayload
         })
       });
       const data = await res.json();
@@ -3224,6 +3258,21 @@ export default function HomeClient({
             {renderInputForm(onPick)}
           </div>
         </div>
+
+        {/* Neo4j Knowledge Graph Dynamic Tour Builder */}
+        <ArtGraphMap
+          locale={locale}
+          onSelectArtwork={pick2((title, artistName) => {
+            exitTour();
+            setArtwork(title);
+            setArtist(artistName);
+            generateGuide(title, artistName);
+          })}
+          onStartDynamicTour={tour => {
+            startDynamicTour(tour);
+            onPick?.();
+          }}
+        />
 
         <div className="flex justify-center">
           <button
@@ -3985,7 +4034,47 @@ export default function HomeClient({
           </div>
         )}
 
-        {/* Catalogue similarity recommendations (Supabase pgvector) */}
+        {/* GraphRAG connections to visitor's recent listening history */}
+        {graphConnections.length > 0 && (
+          <div className="pt-2 space-y-2.5 select-none font-sans">
+            <h3 className="text-xs font-bold text-cyan-300/90 tracking-wider uppercase flex items-center gap-1.5">
+              <span>🕸️</span>
+              <span>{getGraphUIText(locale).graphBridgeTitle}</span>
+            </h3>
+            <div className="space-y-2">
+              {graphConnections.map((conn, idx) => (
+                <button
+                  key={`${conn.relatedTitle}-${idx}`}
+                  type="button"
+                  onClick={() => {
+                    exitTour();
+                    setArtwork(conn.relatedTitle);
+                    setArtist(conn.relatedArtist);
+                    generateGuide(conn.relatedTitle, conn.relatedArtist);
+                  }}
+                  className="w-full text-left bg-cyan-950/20 hover:bg-cyan-950/35 border border-cyan-500/25 hover:border-cyan-400/50 rounded-xl p-3 transition-all group"
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-slate-100 group-hover:text-cyan-300 transition-colors">
+                      {localizeName(conn.relatedTitle, locale)}
+                      <span className="text-slate-400 font-normal ml-1.5">
+                        ({localizeName(conn.relatedArtist, locale)})
+                      </span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[10px] font-bold">
+                      {conn.relationLabel}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300/85 mt-1 leading-relaxed">
+                    {conn.reason}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Catalogue similarity recommendations (Supabase pgvector + Neo4j Knowledge Graph) */}
         <div className="pt-4">
           <ForYouShelf
             items={similarArtworks}
@@ -3997,6 +4086,22 @@ export default function HomeClient({
               logRecommendationClick({ title, artist: artistName });
               generateGuide(title, artistName);
             }}
+          />
+        </div>
+
+        {/* Interactive Knowledge Graph Explorer & Dynamic Path Tour */}
+        <div className="pt-2">
+          <ArtGraphMap
+            title={canonicalArtwork}
+            artist={canonicalArtist}
+            locale={locale}
+            onSelectArtwork={(title, artistName) => {
+              exitTour();
+              setArtwork(title);
+              setArtist(artistName);
+              generateGuide(title, artistName);
+            }}
+            onStartDynamicTour={startDynamicTour}
           />
         </div>
 

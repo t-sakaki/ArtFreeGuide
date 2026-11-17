@@ -1,12 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Locale } from './i18n';
 import { loadPastQuestions } from './pastQuestions';
+import type { GraphConnectionHint } from './graph/types';
 
 export interface VisitorContext {
   /** Oldest to newest. */
   history: { title: string; artist: string }[];
   favoriteTags: string[];
   pastQuestions: string[];
+  graphConnections?: GraphConnectionHint[];
 }
 
 export const MAX_CONTEXT_LENGTH = 1500;
@@ -51,9 +53,21 @@ export async function loadVisitorContext(
 }
 
 const HEADINGS = {
-  ja: ['鑑賞履歴（古い順）', '好みのタグ', 'この作品への過去の質問'],
-  en: ['Listening history (oldest first)', 'Favorite tags', 'Past questions about this artwork']
+  ja: ['鑑賞履歴（古い順）', '好みのタグ', 'この作品への過去の質問', '知識グラフによる関連作品'],
+  en: ['Listening history (oldest first)', 'Favorite tags', 'Past questions about this artwork', 'Knowledge graph connections']
 };
+
+export function formatGraphConnectionsBlock(
+  connections: GraphConnectionHint[],
+  locale: Locale = 'ja'
+): string {
+  if (!connections.length) return '';
+  const heading = locale === 'ja' ? HEADINGS.ja[3] : HEADINGS.en[3];
+  const lines = connections.map(
+    c => `- ${c.relatedTitle} (${c.relatedArtist}) [${c.relationLabel}]: ${c.reason}`
+  );
+  return `${heading}:\n${lines.join('\n')}`;
+}
 
 /** Pure prompt fragment; no sections for missing data, at most 1500 UTF-16 units. */
 export function formatContextBlock(ctx: VisitorContext, locale: Locale = 'ja'): string {
@@ -61,7 +75,10 @@ export function formatContextBlock(ctx: VisitorContext, locale: Locale = 'ja'): 
   const history = ctx.history.map(({ title, artist }) => `${title} (${artist})`);
   const tags = [...ctx.favoriteTags];
   const questions = [...ctx.pastQuestions];
-  const render = () => [history, tags, questions]
+  const graph = (ctx.graphConnections ?? []).map(
+    c => `${c.relatedTitle} (${c.relatedArtist}) [${c.relationLabel}]: ${c.reason}`
+  );
+  const render = () => [history, tags, questions, graph]
     .map((items, index) => items.length ? `${headings[index]}:\n${items.map(item => `- ${item}`).join('\n')}` : '')
     .filter(Boolean).join('\n\n');
 
@@ -71,10 +88,11 @@ export function formatContextBlock(ctx: VisitorContext, locale: Locale = 'ja'): 
     history.shift();
     block = render();
   }
-  // Tags/questions alone can also exceed the budget. Remove whole trailing items.
-  while (block.length > MAX_CONTEXT_LENGTH && (questions.length || tags.length)) {
+  // Tags/questions/graph can also exceed the budget. Remove whole trailing items.
+  while (block.length > MAX_CONTEXT_LENGTH && (questions.length || tags.length || graph.length)) {
     if (questions.length) questions.pop();
-    else tags.pop();
+    else if (tags.length) tags.pop();
+    else graph.pop();
     block = render();
   }
   return block;
