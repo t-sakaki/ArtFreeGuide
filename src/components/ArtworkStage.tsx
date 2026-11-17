@@ -44,6 +44,7 @@ export default function ArtworkStage({
   className = '',
 }: ArtworkStageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [frame, setFrame] = useState<Frame | null>(null);
 
@@ -69,7 +70,12 @@ export default function ArtworkStage({
   }, [measure]);
 
   useEffect(() => {
-    setNatural(null);
+    // A cached image can finish before this effect runs (for example when
+    // generated hotspots replace the plain image). Do not discard its size.
+    const image = imageRef.current;
+    setNatural(image?.complete && image.naturalWidth > 0
+      ? { w: image.naturalWidth, h: image.naturalHeight }
+      : null);
     setFrame(null);
   }, [imageUrl]);
 
@@ -95,13 +101,14 @@ export default function ArtworkStage({
         }
       >
         <img
+          ref={imageRef}
           src={imageUrl}
           alt={alt}
           onLoad={event => {
             const img = event.currentTarget;
             setNatural({ w: img.naturalWidth || 1, h: img.naturalHeight || 1 });
           }}
-          className={`w-full h-full ${frame ? 'object-fill' : 'object-contain'} ${
+          className={`w-full h-full object-contain ${
             kenBurns && !active ? 'animate-ken-burns' : ''
           }`}
         />
