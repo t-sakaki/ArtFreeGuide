@@ -48,6 +48,8 @@ import ArtworkThumbnail from '@/components/ArtworkThumbnail';
 import ThemeSongBar from '@/components/ThemeSongBar';
 import ThemeSongFullscreen from '@/components/ThemeSongFullscreen';
 import { useThemeSong } from '@/hooks/useThemeSong';
+import { useNarrationAudio } from '@/hooks/useNarrationAudio';
+import { composeGuideModeText, extractSpeakableSegments, parseGuideSegments } from '@/lib/narrationText';
 import { artworkSlug } from '@/lib/slug';
 import ReadingApprovals from '@/components/ReadingApprovals';
 import GuideCorrections from '@/components/GuideCorrections';
@@ -444,6 +446,7 @@ export default function HomeClient({
   const [responseShort, setResponseShort] = useState('');
   const [responseStandard, setResponseStandard] = useState('');
   const [responseDeep, setResponseDeep] = useState('');
+  const [baseResponseDeep, setBaseResponseDeep] = useState('');
   const [explanationMode, setExplanationMode] = useState<'short' | 'standard' | 'deep'>('standard');
 
   // Client-side cache for fetched guides
@@ -501,9 +504,40 @@ export default function HomeClient({
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE] ?? 1.7);
 
-  // ── Theme song (MiniMax Week): one player shared with the narration ──────
   const [playbackMode, setPlaybackMode] = useState<'narration' | 'song'>('narration');
   const [songFullscreen, setSongFullscreen] = useState(false);
+
+  const baseGuideText = useMemo(
+    () =>
+      composeGuideModeText(
+        { short: responseShort, standard: responseStandard, deep: baseResponseDeep },
+        explanationMode,
+      ),
+    [responseShort, responseStandard, baseResponseDeep, explanationMode],
+  );
+  const narrationEndedRef = useRef<() => void>(() => {});
+  const narrationMediaErrorRef = useRef<() => void>(() => {});
+  const narration = useNarrationAudio({
+    title: canonicalArtwork,
+    artist: canonicalArtist,
+    locale,
+    mode: explanationMode,
+    baseGuideText,
+    playbackSpeed,
+    enabled: Boolean(responseShort && canonicalArtwork.trim()),
+    isPlaying: isPlaying && playbackMode === 'narration',
+    onSegmentChange: useCallback((idx: number) => {
+      setActiveSegmentIndex(idx);
+    }, []),
+    onEnded: useCallback(() => {
+      narrationEndedRef.current();
+    }, []),
+    onMediaError: useCallback(() => {
+      narrationMediaErrorRef.current();
+    }, []),
+  });
+
+  // ── Theme song (MiniMax Week): one player shared with the narration ──────
   const song = useThemeSong({
     slug: themeSongSlug,
     locale,
@@ -517,11 +551,12 @@ export default function HomeClient({
   // Only one audio stream at a time: entering song mode silences the narration.
   const enterSongMode = useCallback(() => {
     setIsPlaying(false);
+    narration.pause();
     AudioController.clearQueue();
     stopAmbientSound();
     setPlaybackMode('song');
     song.play();
-  }, [song]);
+  }, [song, narration]);
   const pauseSong = useCallback(() => song.pause(), [song]);
   const replaySong = useCallback(() => {
     song.seek(0);
@@ -1132,9 +1167,11 @@ export default function HomeClient({
               if (!draftArtist) setArtist(entry.artist);
 
               // Restore output states
+              const restoredDeep = sanitizeGuideText(entry.deep || '');
               setResponseShort(sanitizeGuideText(entry.short || ''));
               setResponseStandard(sanitizeGuideText(entry.standard || ''));
-              setResponseDeep(sanitizeGuideText(entry.deep || ''));
+              setResponseDeep(restoredDeep);
+              setBaseResponseDeep(restoredDeep);
               musicSpecRef.current = resolveMusicSpec(entry.music, entry.mood, `${entry.title} ${entry.artist}`);
               setExplanationMode('standard');
               setImageUrl(entry.imageUrl);
@@ -1241,6 +1278,7 @@ export default function HomeClient({
         setResponseShort(short);
         setResponseStandard(standard);
         setResponseDeep(deep);
+        setBaseResponseDeep(deep);
       }
     } catch (error) {
       // A correction can land whenever it lands; never let this interrupt the visit.
@@ -1264,9 +1302,11 @@ export default function HomeClient({
     localStorage.setItem('art_free_guide_draft_artwork', entry.title);
     localStorage.setItem('art_free_guide_draft_artist', entry.artist);
 
+    const restoredDeep = sanitizeGuideText(entry.deep || '');
     setResponseShort(sanitizeGuideText(entry.short || ''));
     setResponseStandard(sanitizeGuideText(entry.standard || ''));
-    setResponseDeep(sanitizeGuideText(entry.deep || ''));
+    setResponseDeep(restoredDeep);
+    setBaseResponseDeep(restoredDeep);
     musicSpecRef.current = resolveMusicSpec(entry.music, entry.mood, `${entry.title} ${entry.artist}`);
     setExplanationMode('standard');
     setImageUrl(entry.imageUrl);
@@ -1303,31 +1343,18 @@ export default function HomeClient({
     // Stop speaking immediately on navigation
     setActiveSegmentIndex(-1);
     setIsPlaying(false);
+    narration.pause();
     AudioController.clearQueue();
     stopAmbientSound();
   };
 
   // Split explanation markdown into clean sentence segments
-  const parseSegments = (text: string) => {
-    if (!text) return [];
-    const splitList: string[] = [];
-    let current = '';
+  const parseSegments = (text: string) => parseGuideSegments(text);
 
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i];
-      current += char;
-      if (char === '。' || char === '\n') {
-        if (current.trim()) {
-          splitList.push(current);
-        }
-        current = '';
-      }
-    }
-    if (current.trim()) {
-      splitList.push(current);
-    }
-    return splitList;
-  };
+  const baseSegmentCount = useMemo(
+    () => (baseGuideText ? extractSpeakableSegments(baseGuideText).length : 0),
+    [baseGuideText],
+  );
 
   // Compute displayed text based on mode
   const getActiveExplanation = () => {
@@ -1362,6 +1389,26 @@ export default function HomeClient({
     }
   }, [activeSegmentIndex]);
 
+  narrationEndedRef.current = () => {
+    if (playbackMode === 'song' || !isPlayingRef.current) return;
+    const baseLen = narration.manifest?.segments.length ?? baseSegmentCount;
+    if (speakableSegments.length > baseLen) {
+      setActiveSegmentIndex(baseLen);
+      return;
+    }
+    setIsPlaying(false);
+    setActiveSegmentIndex(-1);
+    stopAmbientSound();
+    finalizeListening(true);
+    setNarrationDone(true);
+    scheduleTourAdvance();
+  };
+
+  narrationMediaErrorRef.current = () => {
+    if (playbackMode === 'song' || !isPlayingRef.current) return;
+    spokenKeyRef.current = null;
+  };
+
   // Trigger speech for active index. Autoplay flips isPlaying in the same render
   // that sets the guide text, so the segments only exist a render later: this has
   // to react to speakableSegments too, or the bar shows playing in silence.
@@ -1369,11 +1416,29 @@ export default function HomeClient({
     if (playbackMode === 'song') return;
     if (!isPlaying) {
       spokenKeyRef.current = null;
+      narration.pause();
       return;
     }
     if (speakableSegments.length === 0) return;
 
     if (activeSegmentIndex >= 0 && activeSegmentIndex < speakableSegments.length) {
+      if (narration.canPlayOpusSegment(activeSegmentIndex)) {
+        const opusKey = `opus::${activeSegmentIndex}::${speakableSegments[activeSegmentIndex]}`;
+        if (spokenKeyRef.current === opusKey) return;
+        spokenKeyRef.current = opusKey;
+        AudioController.clearQueue();
+        void narration.playSegment(activeSegmentIndex).then(ok => {
+          if (!ok && isPlayingRef.current && narration.isReady) {
+            setIsPlaying(false);
+          }
+        });
+        return;
+      }
+
+      if (narration.status === 'loading' && activeSegmentIndex < baseSegmentCount) {
+        return;
+      }
+
       // Appending an answer re-runs this effect; don't restart the current segment.
       const key = `${activeSegmentIndex}::${speakableSegments[activeSegmentIndex]}`;
       if (spokenKeyRef.current === key) return;
@@ -1388,7 +1453,18 @@ export default function HomeClient({
       setNarrationDone(true);
       scheduleTourAdvance();
     }
-  }, [activeSegmentIndex, isPlaying, speakableSegments, playbackMode]);
+  }, [
+    activeSegmentIndex,
+    isPlaying,
+    speakableSegments,
+    playbackMode,
+    narration.status,
+    narration.isReady,
+    narration.canPlayOpusSegment,
+    narration.playSegment,
+    narration.pause,
+    baseSegmentCount,
+  ]);
 
   const questionChips = useMemo(() => {
     const staticChips = suggestedQuestions(canonicalArtwork, canonicalArtist, locale);
@@ -1661,6 +1737,7 @@ export default function HomeClient({
     // The visitor is walking away from this piece — the most common way a
     // museum visit ends a guide, and previously the one that recorded nothing.
     finalizeListening(false);
+    narration.pause();
     AudioController.clearQueue();
     stopAmbientSound();
     setIsPlaying(false);
@@ -1670,6 +1747,7 @@ export default function HomeClient({
     setResponseShort('');
     setResponseStandard('');
     setResponseDeep('');
+    setBaseResponseDeep('');
     setImageUrl(null);
     setImageError(false);
     setRecommendations([]);
@@ -2202,8 +2280,12 @@ export default function HomeClient({
       console.warn('Web Audio unlock failed:', e);
     }
 
+    narration.pause();
     if (speechSupported) {
       AudioController.clearQueue();
+      setIsPlaying(false);
+      stopAmbientSound();
+    } else {
       setIsPlaying(false);
       stopAmbientSound();
     }
@@ -2228,9 +2310,11 @@ export default function HomeClient({
     // CHECK CLIENT-SIDE CACHE
     if (guideCache[cacheKey] && !refresh) {
       const cached = guideCache[cacheKey];
+      const cachedDeep = sanitizeGuideText(cached.deep);
       setResponseShort(sanitizeGuideText(cached.short));
       setResponseStandard(sanitizeGuideText(cached.standard));
-      setResponseDeep(sanitizeGuideText(cached.deep));
+      setResponseDeep(cachedDeep);
+      setBaseResponseDeep(cachedDeep);
       setExplanationMode(targetMode);
       setImageUrl(cached.imageUrl);
       setImageError(cached.imageError);
@@ -2292,6 +2376,7 @@ export default function HomeClient({
     setResponseShort('');
     setResponseStandard('');
     setResponseDeep('');
+    setBaseResponseDeep('');
     setExplanationMode(targetMode);
     setActiveSegmentIndex(-1);
     setImageUrl(null);
@@ -2331,10 +2416,12 @@ export default function HomeClient({
           setResponseShort(UI[activeLocale].guide.busy);
           setResponseStandard('');
           setResponseDeep('');
+          setBaseResponseDeep('');
         } else {
           setResponseShort(UI[activeLocale].guide.unavailable);
           setResponseStandard('');
           setResponseDeep('');
+          setBaseResponseDeep('');
         }
       } else {
         let rawExplanation = data.text;
@@ -2408,6 +2495,7 @@ export default function HomeClient({
         setResponseShort(shortText);
         setResponseStandard(standardText);
         setResponseDeep(deepText);
+        setBaseResponseDeep(deepText);
         setGeneratedHotspots(guideHotspots);
         setGeneratedMarks([]);
         setActiveGeneratedHotspot(-1);
@@ -2505,10 +2593,12 @@ export default function HomeClient({
         setResponseShort(UI[activeLocale].guide.busy);
         setResponseStandard('');
         setResponseDeep('');
+        setBaseResponseDeep('');
       } else {
         setResponseShort(UI[activeLocale].guide.unavailable);
         setResponseStandard('');
         setResponseDeep('');
+        setBaseResponseDeep('');
       }
     } finally {
       setLoading(false);
@@ -2542,6 +2632,7 @@ export default function HomeClient({
     setDeepDiveLoading(true);
     // Temporarily pause guide
     setIsPlaying(false);
+    narration.pause();
     AudioController.clearQueue();
 
     try {
@@ -2643,6 +2734,7 @@ export default function HomeClient({
     setVoiceText(trimmed);
     setQuestionInput('');
     setIsPlaying(false);
+    narration.pause();
     AudioController.clearQueue();
 
     try {
@@ -2819,10 +2911,11 @@ export default function HomeClient({
       }
     } catch (e) { }
 
-    if (!speechSupported || speakableSegments.length === 0) return;
+    if ((!speechSupported && !narration.isReady) || speakableSegments.length === 0) return;
 
     if (isPlaying) {
       setIsPlaying(false);
+      narration.pause();
       AudioController.clearQueue();
       stopAmbientSound();
     } else {
@@ -2840,7 +2933,11 @@ export default function HomeClient({
       return;
     }
     if (activeSegmentIndex < speakableSegments.length - 1) {
-      setActiveSegmentIndex(prev => prev + 1);
+      const nextIdx = activeSegmentIndex + 1;
+      if (!isPlaying && narration.canPlayOpusSegment(nextIdx)) {
+        narration.seekToSegment(nextIdx);
+      }
+      setActiveSegmentIndex(nextIdx);
     }
   };
 
@@ -2850,7 +2947,11 @@ export default function HomeClient({
       return;
     }
     if (activeSegmentIndex > 0) {
-      setActiveSegmentIndex(prev => prev - 1);
+      const prevIdx = activeSegmentIndex - 1;
+      if (!isPlaying && narration.canPlayOpusSegment(prevIdx)) {
+        narration.seekToSegment(prevIdx);
+      }
+      setActiveSegmentIndex(prevIdx);
     }
   };
 

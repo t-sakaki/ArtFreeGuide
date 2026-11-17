@@ -1,4 +1,4 @@
-import baseReadings from '@/data/readings.json';
+import baseReadings from '../data/readings.json';
 
 /**
  * Reading dictionary for the speech synthesiser.
