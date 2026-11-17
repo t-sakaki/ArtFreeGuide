@@ -153,6 +153,153 @@
       "fr": "Gustav Klimt",
       "zh": "古斯塔夫·克里姆特",
       "es": "Gustav Klimt"
+    },
+    {
+      "ja": "ウジェーヌ・ドラクロワ",
+      "en": "Eugène Delacroix",
+      "fr": "Eugène Delacroix",
+      "zh": "欧仁·德拉克罗瓦",
+      "es": "Eugène Delacroix"
+    },
+    {
+      "ja": "テオドール・ジェリコー",
+      "en": "Théodore Géricault",
+      "fr": "Théodore Géricault",
+      "zh": "泰奥多尔·席里柯",
+      "es": "Théodore Géricault"
+    },
+    {
+      "ja": "ディエゴ・ベラスケス",
+      "en": "Diego Velázquez",
+      "fr": "Diego Vélasquez",
+      "zh": "迭戈·委拉斯开兹",
+      "es": "Diego Velázquez"
+    },
+    {
+      "ja": "ヤン・ファン・エイク",
+      "en": "Jan van Eyck",
+      "fr": "Jan van Eyck",
+      "zh": "扬·凡·艾克",
+      "es": "Jan van Eyck"
+    },
+    {
+      "ja": "ヒエロニムス・ボス",
+      "en": "Hieronymus Bosch",
+      "fr": "Jérôme Bosch",
+      "zh": "希罗尼穆斯·博斯",
+      "es": "El Bosco"
+    },
+    {
+      "ja": "ピーテル・ブリューゲル",
+      "en": "Pieter Bruegel the Elder",
+      "fr": "Pieter Brueghel l'Ancien",
+      "zh": "老彼得·勃鲁盖尔",
+      "es": "Pieter Bruegel el Viejo"
+    },
+    {
+      "ja": "ジャン＝フランソワ・ミレー",
+      "en": "Jean-François Millet",
+      "fr": "Jean-François Millet",
+      "zh": "让-弗朗索瓦·米勒",
+      "es": "Jean-François Millet"
+    },
+    {
+      "ja": "エドゥアール・マネ",
+      "en": "Édouard Manet",
+      "fr": "Édouard Manet",
+      "zh": "爱德华·马奈",
+      "es": "Édouard Manet"
+    },
+    {
+      "ja": "ジョルジュ・スーラ",
+      "en": "Georges Seurat",
+      "fr": "Georges Seurat",
+      "zh": "乔治·修拉",
+      "es": "Georges Seurat"
+    },
+    {
+      "ja": "ポール・ゴーギャン",
+      "en": "Paul Gauguin",
+      "fr": "Paul Gauguin",
+      "zh": "保罗·高更",
+      "es": "Paul Gauguin"
+    },
+    {
+      "ja": "アンリ・マティス",
+      "en": "Henri Matisse",
+      "fr": "Henri Matisse",
+      "zh": "亨利·马蒂斯",
+      "es": "Henri Matisse"
+    },
+    {
+      "ja": "ポール・セザンヌ",
+      "en": "Paul Cézanne",
+      "fr": "Paul Cézanne",
+      "zh": "保罗·塞尚",
+      "es": "Paul Cézanne"
+    },
+    {
+      "ja": "アンリ・ルソー",
+      "en": "Henri Rousseau",
+      "fr": "Henri Rousseau",
+      "zh": "亨利·卢梭",
+      "es": "Henri Rousseau"
+    },
+    {
+      "ja": "ジョン・エヴァレット・ミレイ",
+      "en": "John Everett Millais",
+      "fr": "John Everett Millais",
+      "zh": "约翰·埃弗里特·米莱斯",
+      "es": "John Everett Millais"
+    },
+    {
+      "ja": "エドワード・ホッパー",
+      "en": "Edward Hopper",
+      "fr": "Edward Hopper",
+      "zh": "爱德华·霍普",
+      "es": "Edward Hopper"
+    },
+    {
+      "ja": "グラント・ウッド",
+      "en": "Grant Wood",
+      "fr": "Grant Wood",
+      "zh": "格兰特·伍德",
+      "es": "Grant Wood"
+    },
+    {
+      "ja": "ワシリー・カンディンスキー",
+      "en": "Wassily Kandinsky",
+      "fr": "Wassily Kandinsky",
+      "zh": "瓦西里·康定斯基",
+      "es": "Wassily Kandinsky"
+    },
+    {
+      "ja": "ピエト・モンドリアン",
+      "en": "Piet Mondrian",
+      "fr": "Piet Mondrian",
+      "zh": "皮埃特·蒙德里安",
+      "es": "Piet Mondrian"
+    },
+    {
+      "ja": "ルネ・マグリット",
+      "en": "René Magritte",
+      "fr": "René Magritte",
+      "zh": "勒内·马格里特",
+      "es": "René Magritte"
+    },
+    {
+      "ja": "フリーダ・カーロ",
+      "en": "Frida Kahlo",
+      "fr": "Frida Kahlo",
+      "zh": "弗里达·卡罗",
+      "es": "Frida Kahlo"
+    },
+    {
+      "ja": "尾形光琳",
+      "en": "Ogata Kōrin",
+      "fr": "Ogata Kōrin",
+      "zh": "尾形光琳",
+      "es": "Ogata Kōrin"
     }
   ],
   "artworks": [
@@ -442,6 +589,216 @@
       "fr": "La Dentellière",
       "zh": "花边女工",
       "es": "La encajera"
+    },
+    {
+      "ja": "アダムの創造",
+      "en": "The Creation of Adam",
+      "fr": "La Création d'Adam",
+      "zh": "创造亚当",
+      "es": "La creación de Adán"
+    },
+    {
+      "ja": "ピエタ",
+      "en": "Pietà",
+      "fr": "La Pietà",
+      "zh": "圣殇",
+      "es": "La Piedad"
+    },
+    {
+      "ja": "プリマヴェーラ",
+      "en": "Primavera",
+      "fr": "Le Printemps",
+      "zh": "春",
+      "es": "La primavera"
+    },
+    {
+      "ja": "民衆を導く自由の女神",
+      "en": "Liberty Leading the People",
+      "fr": "La Liberté guidant le peuple",
+      "zh": "自由引导人民",
+      "es": "La Libertad guiando al pueblo"
+    },
+    {
+      "ja": "メドゥーサの筏",
+      "en": "The Raft of the Medusa",
+      "fr": "Le Radeau de La Méduse",
+      "zh": "梅杜萨之筏",
+      "es": "La balsa de la Medusa"
+    },
+    {
+      "ja": "ラス・メニーナス",
+      "en": "Las Meninas",
+      "fr": "Les Ménines",
+      "zh": "宫娥",
+      "es": "Las meninas"
+    },
+    {
+      "ja": "アルノルフィーニ夫妻像",
+      "en": "The Arnolfini Portrait",
+      "fr": "Les Époux Arnolfini",
+      "zh": "阿尔诺菲尼夫妇像",
+      "es": "El matrimonio Arnolfini"
+    },
+    {
+      "ja": "快楽の園",
+      "en": "The Garden of Earthly Delights",
+      "fr": "Le Jardin des délices",
+      "zh": "人间乐园",
+      "es": "El jardín de las delicias"
+    },
+    {
+      "ja": "雪中の狩人",
+      "en": "The Hunters in the Snow",
+      "fr": "Chasseurs dans la neige",
+      "zh": "雪中猎人",
+      "es": "Los cazadores en la nieve"
+    },
+    {
+      "ja": "バベルの塔",
+      "en": "The Tower of Babel",
+      "fr": "La Tour de Babel",
+      "zh": "巴别塔",
+      "es": "La torre de Babel"
+    },
+    {
+      "ja": "落ち穂拾い",
+      "en": "The Gleaners",
+      "fr": "Des glaneuses",
+      "zh": "拾穗者",
+      "es": "Las espigadoras"
+    },
+    {
+      "ja": "草上の昼食",
+      "en": "Le Déjeuner sur l'herbe",
+      "fr": "Le Déjeuner sur l'herbe",
+      "zh": "草地上的午餐",
+      "es": "Almuerzo sobre la hierba"
+    },
+    {
+      "ja": "オランピア",
+      "en": "Olympia",
+      "fr": "Olympia",
+      "zh": "奥林匹亚",
+      "es": "Olympia"
+    },
+    {
+      "ja": "グランド・ジャット島の日曜日の午後",
+      "en": "A Sunday Afternoon on the Island of La Grande Jatte",
+      "fr": "Un dimanche après-midi à l'Île de la Grande Jatte",
+      "zh": "大碗岛的星期天下午",
+      "es": "Tarde de domingo en la isla de la Grande Jatte"
+    },
+    {
+      "ja": "我々はどこから来たのか 我々は何者か 我々はどこへ行くのか",
+      "en": "Where Do We Come From? What Are We? Where Are We Going?",
+      "fr": "D'où venons-nous ? Que sommes-nous ? Où allons-nous ?",
+      "zh": "我们从哪里来？我们是谁？我们到哪里去？",
+      "es": "¿De dónde venimos? ¿Quiénes somos? ¿Adónde vamos?"
+    },
+    {
+      "ja": "日傘をさす女",
+      "en": "Woman with a Parasol",
+      "fr": "La Promenade, la femme à l'ombrelle",
+      "zh": "撑阳伞的女人",
+      "es": "Mujer con sombrilla"
+    },
+    {
+      "ja": "舟遊びの人々の昼食",
+      "en": "Luncheon of the Boating Party",
+      "fr": "Le Déjeuner des canotiers",
+      "zh": "船上的午宴",
+      "es": "El almuerzo de los remeros"
+    },
+    {
+      "ja": "ダンス",
+      "en": "Dance",
+      "fr": "La Danse",
+      "zh": "舞蹈",
+      "es": "La danza"
+    },
+    {
+      "ja": "サント＝ヴィクトワール山",
+      "en": "Mont Sainte-Victoire",
+      "fr": "La Montagne Sainte-Victoire",
+      "zh": "圣维克多山",
+      "es": "La montaña Sainte-Victoire"
+    },
+    {
+      "ja": "眠るジプシー女",
+      "en": "The Sleeping Gypsy",
+      "fr": "La Bohémienne endormie",
+      "zh": "沉睡的吉普赛人",
+      "es": "La gitana dormida"
+    },
+    {
+      "ja": "オフィーリア",
+      "en": "Ophelia",
+      "fr": "Ophélie",
+      "zh": "奥菲莉娅",
+      "es": "Ofelia"
+    },
+    {
+      "ja": "ナイトホークス",
+      "en": "Nighthawks",
+      "fr": "Nighthawks",
+      "zh": "夜游者",
+      "es": "Noctámbulos"
+    },
+    {
+      "ja": "アメリカン・ゴシック",
+      "en": "American Gothic",
+      "fr": "American Gothic",
+      "zh": "美国哥特式",
+      "es": "Gótico estadounidense"
+    },
+    {
+      "ja": "キャンベルのスープ缶",
+      "en": "Campbell's Soup Cans",
+      "fr": "Campbell's Soup Cans",
+      "zh": "坎贝尔汤罐头",
+      "es": "Latas de sopa Campbell"
+    },
+    {
+      "ja": "マリリン・ディプティク",
+      "en": "Marilyn Diptych",
+      "fr": "Diptyque Marilyn",
+      "zh": "玛丽莲双联画",
+      "es": "Díptico de Marilyn"
+    },
+    {
+      "ja": "コンポジション VIII",
+      "en": "Composition VIII",
+      "fr": "Composition VIII",
+      "zh": "构成第八号",
+      "es": "Composición VIII"
+    },
+    {
+      "ja": "赤・青・黄のコンポジション",
+      "en": "Composition with Red, Blue, and Yellow",
+      "fr": "Composition avec rouge, bleu et jaune",
+      "zh": "红黄蓝的构成",
+      "es": "Composición en rojo, amarillo y azul"
+    },
+    {
+      "ja": "イメージの裏切り",
+      "en": "The Treachery of Images",
+      "fr": "La Trahison des images",
+      "zh": "形象的叛逆",
+      "es": "La traición de las imágenes"
+    },
+    {
+      "ja": "二人のフリーダ",
+      "en": "The Two Fridas",
+      "fr": "Les Deux Fridas",
+      "zh": "两个弗里达",
+      "es": "Las dos Fridas"
+    },
+    {
+      "ja": "燕子花図屏風",
+      "en": "Irises",
+      "fr": "Paravent aux iris",
+      "zh": "燕子花图屏风",
+      "es": "Lirios"
     }
   ],
   "aliases": [
