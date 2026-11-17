@@ -30,7 +30,9 @@
 		// Where generated guides are archived: "d1" | "supabase" | "memory"
 		"GUIDE_STORE": "d1",
 		// Optional override for the system prompt used in /api/chat
-		"GUIDE_SYSTEM_PROMPT": ""
+		"GUIDE_SYSTEM_PROMPT": "",
+		// R2 prefix for pre-generated Opus narration ("staging" | "production")
+		"NARRATION_ENV": "production"
 	},
 	"d1_databases": [
 		{
@@ -85,7 +87,8 @@
 				"LLM_SUGGEST_MODEL": "gemini-4-hydrogen",
 				"EMBEDDING_PROVIDER": "workers-ai",
 				"GUIDE_STORE": "d1",
-				"GUIDE_SYSTEM_PROMPT": ""
+				"GUIDE_SYSTEM_PROMPT": "",
+				"NARRATION_ENV": "staging"
 			},
 			"d1_databases": [
 				{
@@ -120,7 +123,8 @@
 				"LLM_SUGGEST_MODEL": "gemini-4-hydrogen",
 				"EMBEDDING_PROVIDER": "workers-ai",
 				"GUIDE_STORE": "d1",
-				"GUIDE_SYSTEM_PROMPT": ""
+				"GUIDE_SYSTEM_PROMPT": "",
+				"NARRATION_ENV": "production"
 			},
 			"d1_databases": [
 				{
