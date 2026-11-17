@@ -3457,9 +3457,14 @@ export default function HomeClient({
 
       {/* Upper Fixed Layer */}
       {(responseShort || loading) && (
-        <div className="fixed top-0 left-0 right-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-900 px-4 py-3 flex flex-col items-center select-none shadow-md">
+        <div className="gallery-stage-panel fixed top-0 left-0 right-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-900 px-4 py-3 flex flex-col items-center select-none shadow-md">
+          {displayImageUrl && (
+            <div className="gallery-reflection" aria-hidden="true">
+              <div style={{ backgroundImage: `url(${JSON.stringify(displayImageUrl)})` }} />
+            </div>
+          )}
           {/* Top Row Navigation */}
-          <div className="flex items-center justify-between w-full max-w-md mb-2">
+          <div className="gallery-caption flex items-center justify-between w-full max-w-md mb-2">
             <h1 className="text-xl tracking-tight">
               <button
                 onClick={returnToHub}
@@ -3484,7 +3489,7 @@ export default function HomeClient({
           </div>
 
           {/* Large Artwork Thumbnail (fixed) */}
-          <div className="relative w-full max-w-md h-48 sm:h-60 rounded-2xl overflow-hidden bg-slate-900 border border-slate-800/80 shadow-inner flex items-center justify-center group shrink-0">
+          <div className="gallery-artwork relative w-full max-w-md h-48 sm:h-60 rounded-2xl overflow-hidden bg-slate-900 border border-slate-800/80 shadow-inner flex items-center justify-center group shrink-0">
             {imageLoading && (
               <div className="absolute inset-0 bg-slate-900/60 flex flex-col items-center justify-center gap-2">
                 <div className="animate-pulse flex space-x-2">
@@ -3648,7 +3653,7 @@ export default function HomeClient({
       )}
 
       {/* Scrollable Center Content */}
-      <div className={`w-full max-w-2xl px-4 mx-auto ${responseShort || loading ? 'pt-[19rem] sm:pt-[22rem] pb-44' : 'py-12 md:py-20 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]'}`}>
+      <div className={`w-full max-w-2xl px-4 mx-auto ${responseShort || loading ? 'gallery-guide-panel pt-[19rem] sm:pt-[22rem] pb-44' : 'py-12 md:py-20 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]'}`}>
 
         {/* Empty state: Hero landing / initial search card */}
         {!responseShort && !loading && (
@@ -4111,7 +4116,7 @@ export default function HomeClient({
 
       {/* 画面下部 固定コントローラーパネル（案1：3段コンパクト統合UI） */}
       {responseShort && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 backdrop-blur-md border-t border-slate-800 px-4 pt-2.5 pb-5 shadow-[0_-12px_32px_rgba(2,6,23,0.9)] flex flex-col justify-center gap-2 select-none">
+        <div className="gallery-player-panel fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 backdrop-blur-md border-t border-slate-800 px-4 pt-2.5 pb-5 shadow-[0_-12px_32px_rgba(2,6,23,0.9)] flex flex-col justify-center gap-2 select-none">
           {voiceUnavailable && (
             <div className="w-full max-w-lg mx-auto px-1 text-[10px] leading-tight text-amber-300/80 font-sans">
               {t.voiceUnavailable}
