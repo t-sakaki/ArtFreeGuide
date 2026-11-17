@@ -3503,6 +3503,7 @@ export default function HomeClient({
             {displayImageUrl && (
               stageHotspots.length > 0 ? (
                 <ArtworkStage
+                  key={displayImageUrl}
                   imageUrl={displayImageUrl}
                   alt={artwork}
                   hotspots={stageHotspots}
@@ -3514,7 +3515,7 @@ export default function HomeClient({
                 <img
                   src={displayImageUrl}
                   alt={artwork}
-                  className={`w-full h-full object-contain transition-all duration-700 ease-out ${isPlaying ? 'animate-ken-burns' : ''
+                  className={`absolute inset-0 w-full h-full object-contain transition-all duration-700 ease-out ${isPlaying ? 'animate-ken-burns' : ''
                     }`}
                 />
               )
@@ -3591,6 +3592,7 @@ export default function HomeClient({
           <div className="relative flex-1 mx-4 mb-3 rounded-2xl overflow-hidden bg-slate-900/40 border border-slate-800">
             {stageHotspots.length > 0 ? (
               <ArtworkStage
+                key={displayImageUrl}
                 imageUrl={displayImageUrl}
                 alt={artwork}
                 hotspots={stageHotspots}

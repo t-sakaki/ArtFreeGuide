@@ -302,18 +302,28 @@ function rankCommonsMatches(files: string[], titleEn: string | null, artistEn: s
   );
   if (titleWords.length === 0) return [];
 
-  const scored: { file: string; score: number }[] = [];
+  // Commons often names a single work "Weaver" while a guide says "The Weavers".
+  const titleTerms = titleWords.map(word =>
+    word.length > 4 && word.endsWith('s') && !word.endsWith('ss') ? word.slice(0, -1) : word
+  );
+  const fileMetadata = new Set(['google', 'art', 'project']);
+  const scored: { file: string; score: number; extraWords: number }[] = [];
   for (const file of files) {
     if (NOT_AN_ARTWORK.test(file)) continue;
     const haystack = file.toLowerCase();
-    const titleHits = titleWords.filter(word => haystack.includes(word)).length;
+    const titleHits = titleTerms.filter(word => haystack.includes(word)).length;
     if (titleHits === 0) continue;
     scored.push({
       file,
-      score: titleHits + (artistWords.some(word => haystack.includes(word)) ? 2 : 0)
+      score: titleHits + (artistWords.some(word => haystack.includes(word)) ? 2 : 0),
+      // Prefer "Weaver" over "A Weaver's Cottage" when the title match ties.
+      extraWords: nameTokens(file.replace(/^File:/i, '').replace(/\.[^.]+$/, '')).filter(word =>
+        !artistWords.includes(word) && !GENERIC_WORDS.has(word) && !fileMetadata.has(word) &&
+        !titleTerms.some(term => word.includes(term))
+      ).length,
     });
   }
-  return scored.sort((a, b) => b.score - a.score).map(entry => entry.file);
+  return scored.sort((a, b) => b.score - a.score || a.extraWords - b.extraWords).map(entry => entry.file);
 }
 
 /** Categories that say "this file reproduces a painting". */
