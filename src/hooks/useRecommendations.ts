@@ -14,23 +14,32 @@ export interface SimilarArtwork {
   plays?: number;
   /** Hearts other listeners tapped on this guide. */
   hearts?: number;
+  /** Graph relation type & curated reason when enriched by Neo4j / Knowledge Graph. */
+  relationType?: string;
+  relationLabel?: string;
+  graphReason?: string;
+  graphSource?: 'neo4j' | 'snapshot';
 }
 
-/** Which vector produced the list: the artwork, the taste vector, or both. */
-export type RecommendationBasis = 'artwork' | 'blend' | 'taste' | 'none';
+/** Which source produced the list: artwork vector, blend, taste vector, graph, or none. */
+export type RecommendationBasis = 'artwork' | 'blend' | 'taste' | 'graph' | 'none';
 
 interface RecommendationsResponse {
   recommendations?: SimilarArtwork[];
   basis?: RecommendationBasis;
+  graphSource?: 'neo4j' | 'snapshot';
 }
 
 /**
- * Similar-artwork recommendations from the Supabase catalogue (pgvector),
- * personalised with the anonymous user's taste vector when one exists and
- * nudged by what other visitors played and hearted.
- * With an empty title the taste vector alone drives the search.
+ * Similar-artwork recommendations from the Supabase catalogue (pgvector)
+ * enriched and backed up by the Neo4j Art Knowledge Graph.
  */
-export function useRecommendations(title: string, artist: string, userId: string | null) {
+export function useRecommendations(
+  title: string,
+  artist: string,
+  userId: string | null,
+  locale: string = 'ja'
+) {
   const [similarArtworks, setSimilarArtworks] = useState<SimilarArtwork[]>([]);
   const [basis, setBasis] = useState<RecommendationBasis>('none');
   const [loading, setLoading] = useState(false);
@@ -82,7 +91,8 @@ export function useRecommendations(title: string, artist: string, userId: string
         body: JSON.stringify({
           title: hasArtwork ? title : undefined,
           artist: hasArtwork && artist ? artist : undefined,
-          userId: userId || undefined
+          userId: userId || undefined,
+          locale
         })
       });
 
@@ -111,7 +121,7 @@ export function useRecommendations(title: string, artist: string, userId: string
     } finally {
       setLoading(false);
     }
-  }, [title, artist, userId, logEvent]);
+  }, [title, artist, userId, locale, logEvent]);
 
   useEffect(() => {
     load();

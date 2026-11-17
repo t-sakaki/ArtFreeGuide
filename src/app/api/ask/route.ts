@@ -3,10 +3,12 @@ import { createServiceClient } from '@/lib/supabase';
 import { recordPastQuestion } from '@/lib/pastQuestions';
 import { DEFAULT_LOCALE, Locale, outputLanguageInstruction, isLocale } from '@/lib/i18n';
 import { getLLMProvider, Message } from '@/lib/llm';
+import { formatGraphConnectionsBlock } from '../../../lib/contextAssembly';
+import { findHistoryGraphConnections } from '../../../lib/graph/queries';
 
 export async function POST(req: Request) {
   try {
-    const { title, artist, question, context, mode, locale: rawLocale } = await req.json();
+    const { title, artist, question, context, mode, locale: rawLocale, recentHistory } = await req.json();
     const deepDive = mode === 'deep_dive';
     const locale: Locale =
       typeof rawLocale === 'string' && isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
@@ -16,6 +18,26 @@ export async function POST(req: Request) {
     }
     if (typeof title !== 'string' || !title.trim()) {
       return NextResponse.json({ error: '作品が指定されていません' }, { status: 400 });
+    }
+
+    // GraphRAG: surface connections between this artwork and the visitor's recent history.
+    let graphContext = '';
+    if (Array.isArray(recentHistory) && recentHistory.length > 0) {
+      try {
+        const connections = await findHistoryGraphConnections(
+          title,
+          typeof artist === 'string' ? artist : undefined,
+          recentHistory.filter(
+            (h: unknown): h is { title: string; artist?: string } =>
+              Boolean(h && typeof h === 'object' && typeof (h as { title?: unknown }).title === 'string')
+          ),
+          locale,
+          3
+        );
+        graphContext = formatGraphConnectionsBlock(connections, locale);
+      } catch {
+        graphContext = '';
+      }
     }
 
     // The answer is spoken aloud straight after the guide, so it must sound like
@@ -31,7 +53,7 @@ export async function POST(req: Request) {
 鑑賞者から作品「${title}」${artist ? `（${artist}）` : ''}について質問を受けました。
 
 質問: ${question.trim()}
-${excerpt ? `\nこれまでの解説（参考）:\n${excerpt}\n` : ''}
+${excerpt ? `\nこれまでの解説（参考）:\n${excerpt}\n` : ''}${graphContext ? `\n${graphContext}\n※鑑賞者が最近見た作品とのつながりが話題に合う場合は、自然に一文触れてください。\n` : ''}
 【回答の条件】
 ${conditions}
 - 見出し・箇条書き・マークダウン記号・絵文字は使わないでください。

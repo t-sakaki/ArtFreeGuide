@@ -8,6 +8,9 @@ import {
   MATCH_THRESHOLD,
   PROFILE_EMBEDDING_COLUMN
 } from '@/lib/embeddings';
+import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n';
+import { getGraphRecommendations } from '@/lib/graph/queries';
+import type { GraphRecommendation } from '@/lib/graph/types';
 
 const MATCH_COUNT = 6;
 const HEARD_LIMIT = 50;
@@ -21,6 +24,93 @@ interface ArtworkRow {
   title: string;
   artist: string;
   embedding: number[] | string | null;
+}
+
+interface RecommendationCandidate {
+  id: string;
+  title: string;
+  artist: string;
+  year?: string | null;
+  description?: string | null;
+  image_url?: string | null;
+  similarity: number;
+  plays?: number;
+  hearts?: number;
+  relationType?: string;
+  relationLabel?: string;
+  graphReason?: string;
+  graphSource?: 'neo4j' | 'snapshot';
+}
+
+function mergeGraphRecommendations(
+  vectorItems: RecommendationCandidate[],
+  graphItems: GraphRecommendation[],
+  limit: number
+): RecommendationCandidate[] {
+  if (graphItems.length === 0) return vectorItems.slice(0, limit);
+
+  const byTitle = new Map<string, GraphRecommendation>();
+  for (const item of graphItems) {
+    byTitle.set(item.title.trim().toLowerCase(), item);
+  }
+
+  const merged: RecommendationCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (const vec of vectorItems) {
+    const key = vec.title.trim().toLowerCase();
+    seen.add(key);
+    const graphMatch = byTitle.get(key);
+    merged.push(
+      graphMatch
+        ? {
+            ...vec,
+            similarity: Math.min(0.99, Math.max(vec.similarity, graphMatch.score)),
+            relationType: graphMatch.relationType,
+            relationLabel: graphMatch.relationLabel,
+            graphReason: graphMatch.reason,
+            graphSource: graphMatch.source,
+          }
+        : vec
+    );
+  }
+
+  // Interleave top graph connections (especially cross-movement links like Hokusai <-> Monet)
+  // that vector embeddings alone may rank lower or lack in Supabase.
+  const graphOnly: RecommendationCandidate[] = [];
+  for (const item of graphItems) {
+    const key = item.title.trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    graphOnly.push({
+      id: `graph:${item.key}`,
+      title: item.title,
+      artist: item.artist,
+      year: item.year,
+      description: item.description,
+      image_url: null,
+      similarity: item.score,
+      relationType: item.relationType,
+      relationLabel: item.relationLabel,
+      graphReason: item.reason,
+      graphSource: item.source,
+    });
+  }
+
+  const combined: RecommendationCandidate[] = [];
+  const maxGraphSlots = merged.length === 0 ? limit : Math.min(3, graphOnly.length);
+  for (let i = 0; i < maxGraphSlots; i++) {
+    combined.push(graphOnly[i]);
+  }
+  for (const item of merged) {
+    if (combined.length >= limit) break;
+    combined.push(item);
+  }
+  for (let i = maxGraphSlots; i < graphOnly.length && combined.length < limit; i++) {
+    combined.push(graphOnly[i]);
+  }
+
+  return combined.slice(0, limit);
 }
 
 async function preferenceEmbedding(
@@ -38,15 +128,25 @@ async function preferenceEmbedding(
 
 export async function POST(req: Request) {
   try {
-    const { artworkId, title, artist, userId } = await req.json();
+    const { artworkId, title, artist, userId, locale: rawLocale } = await req.json();
+    const locale: Locale =
+      typeof rawLocale === 'string' && isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
 
-    const supabase = createServiceClient();
+    let supabase: ReturnType<typeof createServiceClient> | null = null;
+    try {
+      supabase = createServiceClient();
+    } catch {
+      supabase = null;
+    }
 
     // Taste-only mode: no artwork in context (the landing hub), so the visitor's
     // own preference vector is the query.
     if (!artworkId && !title) {
       if (!userId) {
         return NextResponse.json({ error: 'artworkId, title or userId is required' }, { status: 400 });
+      }
+      if (!supabase) {
+        return NextResponse.json({ recommendations: [], basis: 'none' });
       }
 
       const preference = await preferenceEmbedding(supabase, userId);
@@ -86,58 +186,79 @@ export async function POST(req: Request) {
       });
     }
 
-    let query = supabase
-      .from('artworks')
-      .select(`id, title, artist, embedding:${ARTWORK_EMBEDDING_COLUMN}`)
-      .limit(1);
-    query = artworkId ? query.eq('id', artworkId) : query.eq('title', title);
-    if (!artworkId && artist) {
-      query = query.eq('artist', artist);
-    }
+    const graphPromise =
+      typeof title === 'string' && title.trim()
+        ? getGraphRecommendations(title, typeof artist === 'string' ? artist : undefined, MATCH_COUNT, locale)
+        : Promise.resolve({ recommendations: [], source: 'snapshot' as const });
 
-    const { data: rows, error } = await query;
+    let vectorRecommendations: RecommendationCandidate[] = [];
+    let resolvedArtworkId: string | undefined = typeof artworkId === 'string' ? artworkId : undefined;
+    let basis: 'artwork' | 'blend' | 'graph' | 'none' = 'none';
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    if (supabase) {
+      try {
+        let query = supabase
+          .from('artworks')
+          .select(`id, title, artist, embedding:${ARTWORK_EMBEDDING_COLUMN}`)
+          .limit(1);
+        query = artworkId ? query.eq('id', artworkId) : query.eq('title', title);
+        if (!artworkId && artist) {
+          query = query.eq('artist', artist);
+        }
 
-    const artwork = rows?.[0] as ArtworkRow | undefined;
-    if (!artwork) {
-      return NextResponse.json({ recommendations: [], basis: 'none', reason: 'artwork_not_found' });
-    }
+        const { data: rows, error } = await query;
+        const artwork = !error ? (rows?.[0] as ArtworkRow | undefined) : undefined;
+        let queryEmbedding = artwork ? parseEmbedding(artwork.embedding) : null;
 
-    let queryEmbedding = parseEmbedding(artwork.embedding);
-    if (!queryEmbedding) {
-      return NextResponse.json({ recommendations: [], basis: 'none', reason: 'embedding_missing' });
-    }
+        if (artwork && queryEmbedding) {
+          resolvedArtworkId = artwork.id;
+          basis = 'artwork';
 
-    let basis: 'artwork' | 'blend' = 'artwork';
+          if (userId) {
+            const preference = await preferenceEmbedding(supabase, userId);
+            if (preference && preference.length === queryEmbedding.length) {
+              queryEmbedding = queryEmbedding.map(
+                (value, index) => value * ARTWORK_WEIGHT + preference[index] * (1 - ARTWORK_WEIGHT)
+              );
+              basis = 'blend';
+            }
+          }
 
-    if (userId) {
-      const preference = await preferenceEmbedding(supabase, userId);
-      if (preference && preference.length === queryEmbedding.length) {
-        queryEmbedding = queryEmbedding.map(
-          (value, index) => value * ARTWORK_WEIGHT + preference[index] * (1 - ARTWORK_WEIGHT)
-        );
-        basis = 'blend';
+          const { data: matches, error: matchError } = await supabase.rpc(MATCH_FUNCTION, {
+            query_embedding: queryEmbedding,
+            match_threshold: MATCH_THRESHOLD,
+            match_count: MATCH_COUNT + POPULARITY_POOL
+          });
+
+          if (!matchError && matches) {
+            const neighbours = matches.filter((match: { id: string }) => match.id !== artwork.id);
+            vectorRecommendations = await rankByPopularity(supabase, neighbours, MATCH_COUNT);
+          } else if (matchError) {
+            console.error(`${MATCH_FUNCTION} error:`, matchError);
+          }
+        }
+      } catch (supabaseError) {
+        console.warn('Supabase recommendations unavailable, using graph fallback:', supabaseError);
       }
     }
 
-    const { data: matches, error: matchError } = await supabase.rpc(MATCH_FUNCTION, {
-      query_embedding: queryEmbedding,
-      match_threshold: MATCH_THRESHOLD,
-      match_count: MATCH_COUNT + POPULARITY_POOL
-    });
+    const graphResult = await graphPromise;
+    const recommendations = mergeGraphRecommendations(
+      vectorRecommendations,
+      graphResult.recommendations,
+      MATCH_COUNT
+    );
 
-    if (matchError) {
-      console.error(`${MATCH_FUNCTION} error:`, matchError);
-      return NextResponse.json({ recommendations: [], basis: 'none' });
+    if (basis === 'none' && recommendations.length > 0) {
+      basis = 'graph';
     }
 
-    const neighbours = (matches ?? []).filter((match: { id: string }) => match.id !== artwork.id);
-    const recommendations = await rankByPopularity(supabase, neighbours, MATCH_COUNT);
-
-    return NextResponse.json({ artworkId: artwork.id, recommendations, basis });
+    return NextResponse.json({
+      artworkId: resolvedArtworkId,
+      recommendations,
+      basis,
+      graphSource: graphResult.recommendations.length > 0 ? graphResult.source : undefined,
+    });
   } catch (error: any) {
     console.error('Recommendations API Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
