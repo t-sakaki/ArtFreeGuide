@@ -50,6 +50,13 @@ narration/{NARRATION_ENV}/{artworkId}/{locale}/{mode}/{contentHash}/{voiceConfig
   - **No blind retries** on timeout or 5xx to prevent duplicate credit billing.
   - Local backup under `tmp/narration-archive/` (gitignored) + R2 upload in `audio.opus` -> `manifest.json` -> `latest.json` order.
 
+### Multi-TTS Provider Adapters (`scripts/tts-adapters/`)
+- `scripts/pregenerate_narration.mjs` supports pluggable adapters via `--provider=<name>` and per-locale overrides (`--provider-<loc>=<name>`, `--voice-<loc>=<id>` or comma-separated pool `--voice-<loc>=id1,id2`, `--model-<loc>=<id>`):
+  - `elevenlabs` (`scripts/tts-adapters/elevenlabs.mjs`): `/with-timestamps` + automatic chunking above 9,000 chars.
+  - `azure` (`scripts/tts-adapters/azure.mjs`): Azure AI Speech SSML (`ogg-48khz-16bit-mono-opus`) via `AZURE_SPEECH_KEY` / `AZURE_SPEECH_REGION` (single-request F0-safe default or `strategy: 'per-segment'`).
+  - `gemini` (`scripts/tts-adapters/gemini.mjs`): Gemini Flash TTS (`gemini-2.5-flash-preview-tts`) via `GEMINI_API_KEY`, transcoded + concatenated to Ogg/Opus via `ffmpeg`.
+- Because `voiceConfigHash` hashes `{ provider, modelId, voiceId, outputFormat, voiceSettings }`, multiple providers coexist in R2 and `latest.json` switches the active voice per `(artworkId, locale, mode, contentHash)` without redeploying the worker.
+
 ### Initial Staging Verification (2026-11-17)
 - Selected voice: **Ren** (`d4Vuj6wQOxvRyQ320L3k`, `eleven_multilingual_v2`, `opus_48000_64`).
 - Pre-generated **24** top-priority `ja/standard` guides (`19,865` input chars; ~`7,568` ElevenLabs `character-cost`) and verified on `art-free-guide-staging.taira-sakakibara.workers.dev`:

@@ -259,7 +259,104 @@ export function mapCharacterAlignmentToSegments(
   return finalizeTimings(rawTimings, totalAudioMs);
 }
 
-function buildUniformSegmentTimings(
+export interface BoundaryTimingEvent {
+  audioOffsetMs: number;
+  durationMs?: number;
+  textOffset?: number;
+  textLength?: number;
+  text?: string;
+}
+
+/**
+ * Maps sequential per-segment durations (e.g. from concatenated segment-by-segment
+ * TTS output from Gemini/NIM/etc.) into cumulative segment timings.
+ */
+export function buildSegmentTimingsFromDurations(
+  segments: NarrationSpokenSegment[],
+  segmentDurationsMs: number[],
+  gapMs = 0,
+  totalAudioMs = 0,
+): NarrationSegmentTiming[] {
+  if (segments.length === 0) return [];
+  const safeGap = Math.max(0, Math.round(gapMs));
+  let cursorMs = 0;
+  const raw: NarrationSegmentTiming[] = [];
+
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    const dur = Math.max(0, Math.round(segmentDurationsMs[i] ?? 0));
+    if (!seg.spoken || dur <= 0) {
+      raw.push({ index: seg.index, startMs: -1, endMs: -1 });
+      continue;
+    }
+    const startMs = cursorMs;
+    const endMs = startMs + dur;
+    raw.push({ index: seg.index, startMs, endMs });
+    cursorMs = endMs + safeGap;
+  }
+
+  return finalizeTimings(raw, totalAudioMs);
+}
+
+/**
+ * Maps Azure-style WordBoundary / SentenceBoundary events to speakable segments.
+ * Falls back to proportional distribution if boundary events are empty or unusable.
+ */
+export function mapBoundaryEventsToSegments(
+  input: NarrationSynthesisInput,
+  events: BoundaryTimingEvent[] | null | undefined,
+  fallbackDurationMs = 0,
+): NarrationSegmentTiming[] {
+  const { segments } = input;
+  if (segments.length === 0) return [];
+  if (!events || events.length === 0) {
+    return buildUniformSegmentTimings(segments, fallbackDurationMs);
+  }
+
+  const sorted = [...events]
+    .filter(e => Number.isFinite(e.audioOffsetMs) && e.audioOffsetMs >= 0)
+    .sort((a, b) => a.audioOffsetMs - b.audioOffsetMs);
+
+  if (sorted.length === 0) {
+    return buildUniformSegmentTimings(segments, fallbackDurationMs);
+  }
+
+  const hasTextOffsets = sorted.some(
+    e => typeof e.textOffset === 'number' && e.textOffset >= 0,
+  );
+
+  if (hasTextOffsets) {
+    const raw: NarrationSegmentTiming[] = segments.map(seg => {
+      if (!seg.spoken || seg.endChar <= seg.startChar) {
+        return { index: seg.index, startMs: -1, endMs: -1 };
+      }
+      const hits = sorted.filter(e => {
+        const off = e.textOffset ?? -1;
+        return off >= seg.startChar && off < seg.endChar;
+      });
+      if (hits.length === 0) {
+        return { index: seg.index, startMs: -1, endMs: -1 };
+      }
+      const first = hits[0];
+      const last = hits[hits.length - 1];
+      const startMs = Math.max(0, Math.round(first.audioOffsetMs));
+      const endMs = Math.max(
+        startMs,
+        Math.round(last.audioOffsetMs + Math.max(0, last.durationMs ?? 0)),
+      );
+      return { index: seg.index, startMs, endMs };
+    });
+
+    const anyHit = raw.some(r => r.startMs >= 0);
+    if (anyHit) {
+      return finalizeTimings(raw, fallbackDurationMs);
+    }
+  }
+
+  return buildUniformSegmentTimings(segments, fallbackDurationMs);
+}
+
+export function buildUniformSegmentTimings(
   segments: NarrationSpokenSegment[],
   totalDurationMs: number,
 ): NarrationSegmentTiming[] {

@@ -10,11 +10,23 @@
  *   node scripts/pregenerate_narration.mjs --copy-to-prod --from-env=staging --to-env=production
  */
 
+import dns from 'node:dns';
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import esbuild from 'esbuild';
+import { getTtsAdapter, listTtsProviders, resolveJobTtsConfig } from './tts-adapters/registry.mjs';
+
+// Avoid Node Happy Eyeballs / NAT64 IPv6 timeouts in WSL2 environments
+dns.setDefaultResultOrder('ipv4first');
+if (typeof net.setDefaultAutoSelectFamily === 'function') {
+  net.setDefaultAutoSelectFamily(false);
+}
+
+const execFileAsync = promisify(execFile);
 
 const REPO_ROOT = process.cwd();
 const ARCHIVE_ROOT = path.resolve(REPO_ROOT, 'tmp/narration-archive');
@@ -50,10 +62,15 @@ function parseArgs(argv) {
     dryRun: false,
     locales: ['ja', 'en'],
     modes: ['standard', 'short', 'deep'],
-    voiceId: 'oRjJxMXs2RKFFbRt3qwK', // Hana
+    provider: 'elevenlabs',
+    providerOverrides: {},
+    voiceId: '',
     voiceOverrides: {},
-    modelId: 'eleven_multilingual_v2',
-    format: 'opus_48000_64',
+    modelId: '',
+    modelOverrides: {},
+    format: '',
+    formatOverrides: {},
+    voiceSettingsOverrides: {},
     maxChars: 0,
     deadline: DEFAULT_DEADLINE,
     limit: 0,
@@ -65,6 +82,9 @@ function parseArgs(argv) {
     copyToProd: false,
     fromEnv: 'staging',
     toEnv: 'production',
+    filterVoices: [],
+    filterModel: '',
+    filterProvider: '',
     localD1Json: '',
   };
 
@@ -77,19 +97,43 @@ function parseArgs(argv) {
     else if (raw.startsWith('--env=')) opts.env = raw.slice('--env='.length);
     else if (raw.startsWith('--from-env=')) opts.fromEnv = raw.slice('--from-env='.length);
     else if (raw.startsWith('--to-env=')) opts.toEnv = raw.slice('--to-env='.length);
-    else if (raw.startsWith('--locales=')) {
+    else if (raw.startsWith('--filter-voices=')) {
+      opts.filterVoices = raw.slice('--filter-voices='.length).split(',').map(s => s.trim()).filter(Boolean);
+    } else if (raw.startsWith('--filter-model=')) {
+      opts.filterModel = raw.slice('--filter-model='.length).trim();
+    } else if (raw.startsWith('--filter-provider=')) {
+      opts.filterProvider = raw.slice('--filter-provider='.length).trim().toLowerCase();
+    } else if (raw.startsWith('--locales=')) {
       opts.locales = raw.slice('--locales='.length).split(',').map(s => s.trim()).filter(Boolean);
     } else if (raw.startsWith('--modes=')) {
       opts.modes = raw.slice('--modes='.length).split(',').map(s => s.trim()).filter(Boolean);
+    } else if (raw.startsWith('--provider=')) {
+      opts.provider = raw.slice('--provider='.length).trim().toLowerCase();
+    } else if (raw.startsWith('--provider-')) {
+      const m = /^--provider-([a-z]{2})=(.+)$/.exec(raw);
+      if (m) opts.providerOverrides[m[1]] = m[2].trim().toLowerCase();
     } else if (raw.startsWith('--voice-id=')) {
       opts.voiceId = raw.slice('--voice-id='.length).trim();
+    } else if (raw.startsWith('--voice-settings=')) {
+      try {
+        opts.voiceSettingsOverrides = JSON.parse(raw.slice('--voice-settings='.length));
+      } catch (err) {
+        console.error(`Invalid JSON for --voice-settings: ${err?.message || err}`);
+        process.exit(1);
+      }
     } else if (raw.startsWith('--voice-')) {
       const m = /^--voice-([a-z]{2})=(.+)$/.exec(raw);
       if (m) opts.voiceOverrides[m[1]] = m[2].trim();
     } else if (raw.startsWith('--model-id=')) {
       opts.modelId = raw.slice('--model-id='.length).trim();
+    } else if (raw.startsWith('--model-')) {
+      const m = /^--model-([a-z]{2})=(.+)$/.exec(raw);
+      if (m) opts.modelOverrides[m[1]] = m[2].trim();
     } else if (raw.startsWith('--format=')) {
       opts.format = raw.slice('--format='.length).trim();
+    } else if (raw.startsWith('--format-')) {
+      const m = /^--format-([a-z]{2})=(.+)$/.exec(raw);
+      if (m) opts.formatOverrides[m[1]] = m[2].trim();
     } else if (raw.startsWith('--max-chars=')) {
       opts.maxChars = Math.max(0, Number.parseInt(raw.slice('--max-chars='.length), 10) || 0);
     } else if (raw.startsWith('--deadline=')) {
@@ -99,7 +143,7 @@ function parseArgs(argv) {
     } else if (raw.startsWith('--titles=')) {
       opts.titles = raw.slice('--titles='.length).split(',').map(s => s.trim()).filter(Boolean);
     } else if (raw.startsWith('--concurrency=')) {
-      opts.concurrency = Math.max(1, Math.min(2, Number.parseInt(raw.slice('--concurrency='.length), 10) || 1));
+      opts.concurrency = Math.max(1, Math.min(4, Number.parseInt(raw.slice('--concurrency='.length), 10) || 1));
     } else if (raw.startsWith('--local-d1-json=')) {
       opts.localD1Json = raw.slice('--local-d1-json='.length).trim();
     } else if (raw === '--help' || raw === '-h') {
@@ -115,34 +159,31 @@ function parseArgs(argv) {
 
 function printUsage() {
   console.log(`Usage: node scripts/pregenerate_narration.mjs [options]
-  --dry-run                Inspect D1 guides and estimate chars/jobs without calling ElevenLabs
+  --dry-run                Inspect D1 guides and estimate chars/jobs without calling TTS APIs
   --env=staging|production Target R2 environment prefix (default: staging)
   --locales=ja,en          Comma-separated locales in priority order (default: ja,en)
   --modes=standard,short,deep Comma-separated modes (default: standard,short,deep)
-  --voice-id=<id>          Default ElevenLabs voice_id (default: Hana oRjJxMXs2RKFFbRt3qwK)
-  --voice-<loc>=<id>       Per-locale voice_id override (e.g. --voice-en=...)
-  --model-id=<id>          ElevenLabs model_id (default: eleven_multilingual_v2)
-  --format=<fmt>           output_format (default: opus_48000_64)
+  --provider=<name>        TTS adapter (${listTtsProviders().join('|')}, default: elevenlabs)
+  --provider-<loc>=<name>  Per-locale TTS adapter override (e.g. --provider-ja=azure --provider-en=elevenlabs)
+  --voice-id=<id>          Default voice_id (or comma-separated pool for per-artwork rotation)
+  --voice-<loc>=<id>       Per-locale voice_id or pool (e.g. --voice-ja=id1,id2)
+  --model-id=<id>          Model override for the active provider
+  --model-<loc>=<id>       Per-locale model override
+  --format=<fmt>           Output format override for the active provider
+  --voice-settings=<json>  JSON object merged into provider default voiceSettings
   --max-chars=<N>          Hard cap on cumulative input characters synthesized in this run
   --deadline=<ISO>         Hard UTC stop timestamp (default: ${DEFAULT_DEADLINE})
   --limit=<N>              Max number of synthesis jobs to run
   --titles=a,b             Filter to matching titles
-  --concurrency=1|2        Parallelism (default: 1)
+  --concurrency=1..4       Parallelism (default: 1; capped at 2 for live synthesis)
   --check-remote-r2        Also check remote R2 for existing latest.json when local archive misses
   --skip-r2                Keep generated files locally without uploading to R2
-  --confirm-budget         Required for live synthesis if subscription endpoint lacks user_read
+  --confirm-budget         Required for live ElevenLabs synthesis if subscription lacks user_read
   --copy-to-prod           Upload local/staging archive artifacts under production prefix (no TTS calls)
+  --filter-voices=id1,id2  Only copy artifacts/pointers whose manifest.voiceId is in this list
+  --filter-model=<id>      Only copy artifacts/pointers whose manifest.modelId matches
+  --filter-provider=<name> Only copy artifacts/pointers whose manifest.provider matches
 `);
-}
-
-function loadElevenLabsKey() {
-  if (process.env.ELEVENLABS_API_KEY) return process.env.ELEVENLABS_API_KEY.trim();
-  const envPath = path.resolve(REPO_ROOT, '.env.local');
-  if (!fs.existsSync(envPath)) return '';
-  const content = fs.readFileSync(envPath, 'utf8');
-  const match = content.match(/^ELEVENLABS_API_KEY=(.+)$/m);
-  if (!match) return '';
-  return match[1].trim().replace(/^['"]|['"]$/g, '');
 }
 
 async function loadAppModules() {
@@ -244,6 +285,27 @@ function remoteR2Exists(key) {
   }
 }
 
+async function uploadR2FileAsync(key, localPath, contentType, cacheControl) {
+  await execFileAsync(
+    'npx',
+    [
+      'wrangler',
+      'r2',
+      'object',
+      'put',
+      `${R2_BUCKET}/${key}`,
+      '--file',
+      localPath,
+      '--content-type',
+      contentType,
+      '--cache-control',
+      cacheControl,
+      '--remote',
+    ],
+    { cwd: REPO_ROOT },
+  );
+}
+
 function uploadR2File(key, localPath, contentType, cacheControl) {
   execFileSync(
     'npx',
@@ -263,36 +325,6 @@ function uploadR2File(key, localPath, contentType, cacheControl) {
     ],
     { stdio: ['ignore', 'pipe', 'pipe'], cwd: REPO_ROOT },
   );
-}
-
-async function checkElevenLabsCredit(apiKey) {
-  try {
-    const res = await fetch('https://api.elevenlabs.io/v1/user/subscription', {
-      headers: { 'xi-api-key': apiKey },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) {
-      return { ok: false, status: res.status, message: await res.text() };
-    }
-    const sub = await res.json();
-    const limit = Number(sub.character_limit ?? 0);
-    const count = Number(sub.character_count ?? 0);
-    return {
-      ok: true,
-      tier: sub.tier,
-      status: sub.status,
-      characterCount: count,
-      characterLimit: limit,
-      remainingChars: Math.max(0, limit - count),
-      canExtend: Boolean(sub.can_extend_character_limit),
-      allowedToExtend: Boolean(sub.allowed_to_extend_character_limit),
-      nextResetIso: sub.next_character_count_reset_unix
-        ? new Date(sub.next_character_count_reset_unix * 1000).toISOString()
-        : null,
-    };
-  } catch (err) {
-    return { ok: false, status: 0, message: err?.message || String(err) };
-  }
 }
 
 function buildPriorityScore(job, opts, playlistTitleSet, canonicalName) {
@@ -327,7 +359,27 @@ async function copyArchiveEnvironment(opts, helpers) {
     process.exit(1);
   }
 
-  let copied = 0;
+  const hasFilters =
+    opts.filterVoices.length > 0 || Boolean(opts.filterModel) || Boolean(opts.filterProvider);
+
+  function matchesManifestFilter(manifestPath) {
+    if (!hasFilters) return true;
+    if (!fs.existsSync(manifestPath)) return false;
+    try {
+      const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      if (opts.filterVoices.length > 0 && !opts.filterVoices.includes(m.voiceId)) return false;
+      if (opts.filterModel && m.modelId !== opts.filterModel) return false;
+      if (opts.filterProvider && String(m.provider || '').toLowerCase() !== opts.filterProvider) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  const artifacts = [];
+  const pointers = [];
+  let skipped = 0;
+
   function walk(dir) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
@@ -336,95 +388,83 @@ async function copyArchiveEnvironment(opts, helpers) {
         continue;
       }
       if (!['audio.opus', 'manifest.json', 'latest.json'].includes(entry.name)) continue;
+
+      if (hasFilters) {
+        if (entry.name === 'latest.json') {
+          let pointedHash = '';
+          try {
+            pointedHash = JSON.parse(fs.readFileSync(full, 'utf8')).voiceConfigHash || '';
+          } catch {
+            pointedHash = '';
+          }
+          const manifestPath = pointedHash ? path.join(path.dirname(full), pointedHash, 'manifest.json') : '';
+          if (!matchesManifestFilter(manifestPath)) {
+            skipped++;
+            continue;
+          }
+        } else {
+          const manifestPath = path.join(path.dirname(full), 'manifest.json');
+          if (!matchesManifestFilter(manifestPath)) {
+            skipped++;
+            continue;
+          }
+        }
+      }
+
       const rel = path.relative(path.join(ARCHIVE_ROOT, 'narration', fromEnv), full);
       const destKey = `narration/${toEnv}/${rel.split(path.sep).join('/')}`;
       const destLocal = localFileForKey(destKey);
       fs.mkdirSync(path.dirname(destLocal), { recursive: true });
       fs.copyFileSync(full, destLocal);
 
-      if (!opts.skipR2) {
-        const ct = entry.name === 'audio.opus' ? 'audio/ogg; codecs=opus' : 'application/json';
-        const cc = entry.name === 'latest.json' ? 'public, max-age=300' : 'public, max-age=31536000, immutable';
-        uploadR2File(destKey, destLocal, ct, cc);
-      }
-      copied++;
+      const item = {
+        destKey,
+        destLocal,
+        ct: entry.name === 'audio.opus' ? 'audio/ogg; codecs=opus' : 'application/json',
+        cc: entry.name === 'latest.json' ? 'public, max-age=300' : 'public, max-age=31536000, immutable',
+      };
+      if (entry.name === 'latest.json') pointers.push(item);
+      else artifacts.push(item);
     }
   }
 
   walk(fromRoot);
-  console.log(`Copied ${copied} narration objects from ${fromEnv} -> ${toEnv} (skipR2=${opts.skipR2}).`);
+
+  if (!opts.skipR2) {
+    const uploadBatch = async items => {
+      let idx = 0;
+      const workers = Array.from({ length: Math.min(opts.concurrency, items.length || 1) }, async () => {
+        while (idx < items.length) {
+          const item = items[idx++];
+          await uploadR2FileAsync(item.destKey, item.destLocal, item.ct, item.cc);
+        }
+      });
+      await Promise.all(workers);
+    };
+    await uploadBatch(artifacts);
+    await uploadBatch(pointers);
+  }
+
+  const copied = artifacts.length + pointers.length;
+  console.log(
+    `Copied ${copied} narration objects (${artifacts.length} artifacts, ${pointers.length} pointers, ${skipped} filtered out) from ${fromEnv} -> ${toEnv} (skipR2=${opts.skipR2}).`,
+  );
 }
 
-async function synthesizeAndPersist(job, apiKey, opts, helpers) {
+async function synthesizeAndPersist(job, opts, helpers) {
   const {
-    buildNarrationSynthesisInput,
-    mapCharacterAlignmentToSegments,
-    verifyOpusBuffer,
     narrationAudioKey,
     narrationManifestKey,
     narrationLatestKey,
   } = helpers;
 
-  const synthInput = buildNarrationSynthesisInput(job.guideText, job.locale);
-  if (!synthInput.synthesisText) {
-    return { status: 'skipped-empty', charCost: 0 };
+  const adapter = getTtsAdapter(job.provider);
+  const synth = await adapter.synthesize(job, { helpers, repoRoot: REPO_ROOT });
+  if (synth.status !== 'ok') {
+    return synth;
   }
 
-  const url = `https://api.elevenlabs.io/v1/text-to-speech/${job.voiceId}/with-timestamps?output_format=${encodeURIComponent(opts.format)}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'xi-api-key': apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      text: synthInput.synthesisText,
-      model_id: opts.modelId,
-      language_code: job.locale,
-      voice_settings: job.voiceSettings,
-    }),
-    signal: AbortSignal.timeout(90_000),
-  });
-
-  const headerCost = Number.parseInt(
-    res.headers.get('character-cost') || res.headers.get('x-character-count') || '0',
-    10,
-  ) || 0;
-
-  if (!res.ok) {
-    const errBody = await res.text();
-    const fatal =
-      res.status === 401 ||
-      res.status === 402 ||
-      res.status === 429 ||
-      /quota|credit|limit|payment/i.test(errBody);
-    return {
-      status: 'error',
-      httpStatus: res.status,
-      fatal,
-      error: errBody.slice(0, 400),
-      charCost: headerCost,
-    };
-  }
-
-  const data = await res.json();
-  const audioBuf = Buffer.from(data.audio_base64 || '', 'base64');
-  const opusCheck = verifyOpusBuffer(audioBuf);
-  if (!opusCheck.valid) {
-    return {
-      status: 'error',
-      fatal: false,
-      error: `Opus verification failed: ${opusCheck.error}`,
-      charCost: headerCost || job.charCount,
-    };
-  }
-
-  const segments = mapCharacterAlignmentToSegments(
-    synthInput,
-    data.alignment,
-    opusCheck.durationMs,
-  );
-
+  const { audioBuf, opusCheck, segments, alignment, charCost, inputChars } = synth;
   const manifest = {
     version: 1,
     artworkId: job.artworkId,
@@ -434,10 +474,10 @@ async function synthesizeAndPersist(job, apiKey, opts, helpers) {
     mode: job.mode,
     contentHash: job.contentHash,
     voiceConfigHash: job.voiceConfigHash,
-    provider: 'elevenlabs',
-    modelId: opts.modelId,
+    provider: job.provider,
+    modelId: job.modelId,
     voiceId: job.voiceId,
-    outputFormat: opts.format,
+    outputFormat: job.outputFormat,
     durationMs: opusCheck.durationMs,
     byteLength: audioBuf.length,
     segments,
@@ -463,12 +503,26 @@ async function synthesizeAndPersist(job, apiKey, opts, helpers) {
   fs.writeFileSync(audioLocal, audioBuf);
   fs.writeFileSync(manifestLocal, JSON.stringify(manifest, null, 2), 'utf8');
   fs.writeFileSync(latestLocal, JSON.stringify(latest, null, 2), 'utf8');
-  fs.writeFileSync(alignmentLocal, JSON.stringify(data.alignment ?? null, null, 2), 'utf8');
+  if (alignment) {
+    fs.writeFileSync(alignmentLocal, JSON.stringify(alignment, null, 2), 'utf8');
+  }
 
   if (!opts.skipR2) {
-    uploadR2File(audioKey, audioLocal, 'audio/ogg; codecs=opus', 'public, max-age=31536000, immutable');
-    uploadR2File(manifestKey, manifestLocal, 'application/json', 'public, max-age=31536000, immutable');
-    uploadR2File(latestKey, latestLocal, 'application/json', 'public, max-age=300');
+    try {
+      await uploadR2FileAsync(audioKey, audioLocal, 'audio/ogg; codecs=opus', 'public, max-age=31536000, immutable');
+      await uploadR2FileAsync(manifestKey, manifestLocal, 'application/json', 'public, max-age=31536000, immutable');
+      await uploadR2FileAsync(latestKey, latestLocal, 'application/json', 'public, max-age=300');
+    } catch (err) {
+      return {
+        status: 'error',
+        httpStatus: 0,
+        fatal: false,
+        error: `R2 upload failed (saved locally): ${err?.message || err}`,
+        charCost: charCost || job.charCount,
+        inputChars: inputChars || job.charCount,
+        audioKey,
+      };
+    }
   }
 
   return {
@@ -476,8 +530,8 @@ async function synthesizeAndPersist(job, apiKey, opts, helpers) {
     bytes: audioBuf.length,
     durationMs: opusCheck.durationMs,
     segmentCount: segments.length,
-    charCost: headerCost || job.charCount,
-    inputChars: job.charCount,
+    charCost: charCost || job.charCount,
+    inputChars: inputChars || job.charCount,
     audioKey,
   };
 }
@@ -508,13 +562,6 @@ async function main() {
     }
   }
 
-  const voiceSettings = {
-    stability: 0.55,
-    similarity_boost: 0.75,
-    style: 0.0,
-    use_speaker_boost: true,
-  };
-
   const titleFilters = opts.titles.map(t => t.toLowerCase());
   const jobs = [];
   const localeTotals = {};
@@ -541,13 +588,13 @@ async function main() {
     if (!parts || !parts.short) continue;
 
     const artworkId = helpers.resolveNarrationArtworkId(canonicalTitle, canonicalArtist);
-    const voiceId = opts.voiceOverrides[locale] || opts.voiceId;
+    const ttsConfig = resolveJobTtsConfig(opts, locale, artworkId);
     const voiceConfigHash = helpers.computeVoiceConfigHash({
-      provider: 'elevenlabs',
-      modelId: opts.modelId,
-      voiceId,
-      outputFormat: opts.format,
-      voiceSettings,
+      provider: ttsConfig.provider,
+      modelId: ttsConfig.modelId,
+      voiceId: ttsConfig.voiceId,
+      outputFormat: ttsConfig.outputFormat,
+      voiceSettings: ttsConfig.voiceSettings,
     });
 
     for (const mode of opts.modes) {
@@ -594,8 +641,11 @@ async function main() {
         mode,
         guideText,
         contentHash,
-        voiceId,
-        voiceSettings,
+        provider: ttsConfig.provider,
+        modelId: ttsConfig.modelId,
+        voiceId: ttsConfig.voiceId,
+        outputFormat: ttsConfig.outputFormat,
+        voiceSettings: ttsConfig.voiceSettings,
         voiceConfigHash,
         charCount,
         alreadyCached,
@@ -615,7 +665,7 @@ async function main() {
   const summaryByLocaleMode = {};
   let totalInputChars = 0;
   for (const j of limitedJobs) {
-    const k = `${j.locale}/${j.mode}`;
+    const k = `${j.locale}/${j.mode} (${j.provider}:${j.voiceId})`;
     if (!summaryByLocaleMode[k]) summaryByLocaleMode[k] = { count: 0, chars: 0 };
     summaryByLocaleMode[k].count += 1;
     summaryByLocaleMode[k].chars += j.charCount;
@@ -633,61 +683,72 @@ async function main() {
     console.log('\nFirst 15 priority jobs (dry-run):');
     for (const j of limitedJobs.slice(0, 15)) {
       console.log(
-        `  - [${j.locale}/${j.mode}] ${j.canonicalTitle} (${j.artworkId}) | chars=${j.charCount} | hash=${j.contentHash}`,
+        `  - [${j.locale}/${j.mode}] (${j.provider}/${j.modelId}/${j.voiceId}) ${j.canonicalTitle} (${j.artworkId}) | chars=${j.charCount} | hash=${j.contentHash}`,
       );
     }
     return;
   }
 
-  const apiKey = loadElevenLabsKey();
-  if (!apiKey) {
-    console.error('ELEVENLABS_API_KEY is missing in env or .env.local.');
-    process.exit(1);
-  }
-
-  const credit = await checkElevenLabsCredit(apiKey);
-  if (credit.ok) {
-    console.log('ElevenLabs subscription:', JSON.stringify(credit));
-    if (credit.allowedToExtend) {
-      console.error('ABORT: allowed_to_extend_character_limit is true (overage billing enabled). Disable overage first.');
+  const activeProviders = [...new Set(limitedJobs.map(j => j.provider))];
+  for (const providerName of activeProviders) {
+    const adapter = getTtsAdapter(providerName);
+    const preflight = await adapter.checkPreflight({ repoRoot: REPO_ROOT });
+    if (preflight.missingKey) {
+      console.error(preflight.message);
       process.exit(1);
     }
-    if (opts.maxChars === 0) {
-      opts.maxChars = credit.remainingChars;
-    }
-  } else {
-    console.warn(`Could not read /v1/user/subscription (status=${credit.status}).`);
-    if (!opts.confirmBudget || opts.maxChars <= 0) {
-      console.error(
-        'ABORT: Pass both --confirm-budget and --max-chars=<N> when subscription credit cannot be verified via API.',
-      );
+    if (providerName === 'elevenlabs') {
+      if (preflight.ok) {
+        console.log('ElevenLabs subscription:', JSON.stringify({ ...preflight, apiKey: undefined }));
+        if (preflight.allowedToExtend) {
+          console.error('ABORT: allowed_to_extend_character_limit is true (overage billing enabled). Disable overage first.');
+          process.exit(1);
+        }
+        if (opts.maxChars === 0) {
+          opts.maxChars = preflight.remainingChars;
+        }
+      } else {
+        console.warn(`Could not read /v1/user/subscription (status=${preflight.status}).`);
+        if (!opts.confirmBudget || opts.maxChars <= 0) {
+          console.error(
+            'ABORT: Pass both --confirm-budget and --max-chars=<N> when subscription credit cannot be verified via API.',
+          );
+          process.exit(1);
+        }
+      }
+    } else if (!preflight.ok) {
+      console.error(`Preflight failed for ${providerName}: ${preflight.message}`);
       process.exit(1);
+    } else {
+      console.log(`Provider ${providerName} preflight:`, JSON.stringify(preflight));
     }
   }
 
+  const synthConcurrency = Math.min(2, Math.max(1, opts.concurrency));
   let usedInputChars = 0;
   let reportedCharCost = 0;
   let completed = 0;
   let errors = 0;
   const report = [];
 
-  for (let i = 0; i < limitedJobs.length; i += opts.concurrency) {
+  for (let i = 0; i < limitedJobs.length; i += synthConcurrency) {
     if (Date.now() >= deadlineMs) {
       console.log(`Reached deadline (${opts.deadline}). Stopping cleanly.`);
       break;
     }
 
     const batch = [];
-    for (let k = 0; k < opts.concurrency && i + k < limitedJobs.length; k++) {
+    let provisionalChars = 0;
+    for (let k = 0; k < synthConcurrency && i + k < limitedJobs.length; k++) {
       const job = limitedJobs[i + k];
-      if (opts.maxChars > 0 && usedInputChars + job.charCount > opts.maxChars) {
+      if (opts.maxChars > 0 && usedInputChars + provisionalChars + job.charCount > opts.maxChars) {
         console.log(
-          `Credit/char cap reached (${usedInputChars} + ${job.charCount} > --max-chars=${opts.maxChars}). Stopping cleanly.`,
+          `Credit/char cap reached (${usedInputChars + provisionalChars} + ${job.charCount} > --max-chars=${opts.maxChars}). Stopping cleanly.`,
         );
         i = limitedJobs.length;
         break;
       }
-      usedInputChars += job.charCount;
+      provisionalChars += job.charCount;
       batch.push(job);
     }
     if (batch.length === 0) break;
@@ -695,22 +756,25 @@ async function main() {
     const results = await Promise.all(
       batch.map(async job => ({
         job,
-        res: await synthesizeAndPersist(job, apiKey, opts, helpers),
+        res: await synthesizeAndPersist(job, opts, helpers),
       })),
     );
 
     let fatalStop = false;
     for (const { job, res } of results) {
       reportedCharCost += res.charCost || 0;
+      if (res.status === 'ok' || (res.httpStatus && res.httpStatus > 0) || (res.charCost && res.charCost > 0)) {
+        usedInputChars += job.charCount;
+      }
       if (res.status === 'ok') {
         completed++;
         console.log(
-          `[OK ${completed}/${limitedJobs.length}] [${job.locale}/${job.mode}] ${job.canonicalTitle} | ${(res.durationMs / 1000).toFixed(1)}s | ${(res.bytes / 1024).toFixed(1)} KB | input=${res.inputChars} cost=${res.charCost}`,
+          `[OK ${completed}/${limitedJobs.length}] [${job.locale}/${job.mode}] (${job.provider}) ${job.canonicalTitle} | ${(res.durationMs / 1000).toFixed(1)}s | ${(res.bytes / 1024).toFixed(1)} KB | input=${res.inputChars} cost=${res.charCost}`,
         );
       } else {
         errors++;
         console.error(
-          `[ERR] [${job.locale}/${job.mode}] ${job.canonicalTitle}: ${res.error || res.status}`,
+          `[ERR] [${job.locale}/${job.mode}] (${job.provider}) ${job.canonicalTitle}: ${res.error || res.status}`,
         );
         if (res.fatal) fatalStop = true;
       }
@@ -719,8 +783,20 @@ async function main() {
         title: job.canonicalTitle,
         locale: job.locale,
         mode: job.mode,
+        provider: job.provider,
+        modelId: job.modelId,
+        voiceId: job.voiceId,
         contentHash: job.contentHash,
-        ...res,
+        status: res.status,
+        bytes: res.bytes,
+        durationMs: res.durationMs,
+        segmentCount: res.segmentCount,
+        charCost: res.charCost,
+        inputChars: res.inputChars,
+        audioKey: res.audioKey,
+        httpStatus: res.httpStatus,
+        fatal: res.fatal,
+        error: res.error,
       });
     }
 

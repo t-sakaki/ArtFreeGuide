@@ -101,6 +101,15 @@ describe('narration utilities and Opus verification', () => {
     expect(isValidHash(contentHash)).toBe(true);
     expect(isValidHash(voiceHash)).toBe(true);
 
+    const azureHash = computeVoiceConfigHash({
+      provider: 'azure',
+      modelId: 'neural',
+      voiceId: 'ja-JP-NanamiNeural',
+      outputFormat: 'ogg-48khz-16bit-mono-opus',
+      voiceSettings: { rate: '0%', pitch: '0%', strategy: 'single' },
+    });
+    expect(azureHash).not.toBe(voiceHash);
+
     expect(narrationLatestKey('staging', 'the-starry-night', 'ja', 'standard', contentHash)).toBe(
       `narration/staging/the-starry-night/ja/standard/${contentHash}/latest.json`,
     );
