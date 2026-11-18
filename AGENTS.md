@@ -48,6 +48,7 @@
 - `src/lib/guideStore/`: D1/Supabase へのデータアクセス層。
 
 ## 5. ワークフロー
+- **Issue 運用**: 新機能・コンテンツ拡充・中長期課題は GitHub Issue を起点に管理し、設計メモは `docs/` に残す。作業ブランチの PR には関連 Issue（`Refs #...` / `Closes #...`）を紐づける（軽微な typo・単発の小修正は省略可）。エージェントが Issue 未作成の大きな提案・計画をまとめた場合は、起票を提案するか起票用テキストを提示する。
 - **ブランチ戦略**: `main`（本番）。作業は `feat/` または `devin/` ブランチで行い、PR 経由で `main` へ。`main` へ直接 push しない。
 - **デプロイ**: staging 確認後に main へマージ。main への push で Cloudflare が自動デプロイ（production）。手動デプロイは `npx wrangler deploy --env staging`（staging 確認用）／ `npx wrangler deploy --env production`（本番）。wrangler は Node 22 以上が必要。
 - **確認コマンド**: `npm ci` → `npx tsc --noEmit` → `npm run build`（OpenNext ビルドまで通ること）。
