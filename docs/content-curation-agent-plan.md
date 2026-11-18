@@ -54,6 +54,7 @@
     --url=https://www.nmwa.go.jp/jp/exhibitions/2026turner.html \
     --candidates="戦艦テメレール/J.M.W. ターナー,雨、蒸気、速度――グレート・ウェスタン鉄道/J.M.W. ターナー"
   ```
+- **週次自動実行**: `.github/workflows/weekly-art-scout.yml`（毎週月曜 09:00 JST および手動実行）により、`scripts/scout_art_topics.mjs --follow-links=2` の結果を GitHub Issue として自動提案する。
 
 ### Phase 3: 再デプロイ不要の動的特集ツアー（手応えが出たら検討）
 - 現在は `src/lib/playlists.ts` と `names.data.json` がビルド時確定のため、ツアー追加のたびにデプロイが必要。
