@@ -32,7 +32,7 @@ const REPO_ROOT = process.cwd();
 const ARCHIVE_ROOT = path.resolve(REPO_ROOT, 'tmp/narration-archive');
 const R2_BUCKET = 'artfreeguide-audio';
 const D1_DB_NAME = 'artfreeguide_db_trial';
-const DEFAULT_DEADLINE = '2026-11-18T00:00:00Z';
+const DEFAULT_DEADLINE = '';
 
 // Known curated works (matches src/lib/dailyArtwork.ts + playlists order)
 const PRIORITY_TITLES = [
@@ -88,6 +88,8 @@ function parseArgs(argv) {
     requireArtist: false,
     playlistOnly: false,
     dedupeArtwork: false,
+    skipExistingLatest: false,
+    checkEnv: '',
     localD1Json: '',
   };
 
@@ -100,7 +102,9 @@ function parseArgs(argv) {
     else if (raw === '--require-artist') opts.requireArtist = true;
     else if (raw === '--playlist-only') opts.playlistOnly = true;
     else if (raw === '--dedupe-artwork') opts.dedupeArtwork = true;
+    else if (raw === '--skip-existing-latest') opts.skipExistingLatest = true;
     else if (raw.startsWith('--env=')) opts.env = raw.slice('--env='.length);
+    else if (raw.startsWith('--check-env=')) opts.checkEnv = raw.slice('--check-env='.length);
     else if (raw.startsWith('--from-env=')) opts.fromEnv = raw.slice('--from-env='.length);
     else if (raw.startsWith('--to-env=')) opts.toEnv = raw.slice('--to-env='.length);
     else if (raw.startsWith('--filter-voices=')) {
@@ -178,7 +182,7 @@ function printUsage() {
   --format=<fmt>           Output format override for the active provider
   --voice-settings=<json>  JSON object merged into provider default voiceSettings
   --max-chars=<N>          Hard cap on cumulative input characters synthesized in this run
-  --deadline=<ISO>         Hard UTC stop timestamp (default: ${DEFAULT_DEADLINE})
+  --deadline=<ISO>         Optional hard UTC stop timestamp (e.g. 2026-12-01T00:00:00Z)
   --limit=<N>              Max number of synthesis jobs to run
   --titles=a,b             Filter to matching titles
   --concurrency=1..4       Parallelism (default: 1; capped at 2 for live synthesis)
@@ -192,6 +196,8 @@ function printUsage() {
   --require-artist         Skip D1 rows without an artist (avoids legacy empty-artist duplicates)
   --playlist-only          Only include curated/playlist artworks
   --dedupe-artwork         Keep at most one D1 row per (artworkId, locale, mode), skipping works already cached
+  --skip-existing-latest   Treat any valid latest.json (regardless of provider/voice) as already cached
+  --check-env=<env>        Environment to inspect when checking --skip-existing-latest (default: --env)
 `);
 }
 
@@ -569,8 +575,8 @@ async function main() {
     return;
   }
 
-  const deadlineMs = Date.parse(opts.deadline);
-  if (!Number.isFinite(deadlineMs)) {
+  const deadlineMs = opts.deadline ? Date.parse(opts.deadline) : Number.POSITIVE_INFINITY;
+  if (opts.deadline && !Number.isFinite(deadlineMs)) {
     console.error(`Invalid --deadline timestamp: ${opts.deadline}`);
     process.exit(1);
   }
@@ -657,6 +663,35 @@ async function main() {
       let alreadyCached =
         fs.existsSync(localFileForKey(audioKey)) &&
         fs.existsSync(localFileForKey(manifestKey));
+
+      if (!alreadyCached && opts.skipExistingLatest) {
+        const inspectEnv = opts.checkEnv ? helpers.resolveNarrationEnvironment(opts.checkEnv) : opts.env;
+        const existingLatestKey = helpers.narrationLatestKey(
+          inspectEnv,
+          artworkId,
+          locale,
+          mode,
+          contentHash,
+        );
+        const existingLatestPath = localFileForKey(existingLatestKey);
+        if (fs.existsSync(existingLatestPath)) {
+          try {
+            const latestJson = JSON.parse(fs.readFileSync(existingLatestPath, 'utf8'));
+            const pointedHash = latestJson?.voiceConfigHash;
+            if (pointedHash) {
+              const pointedManifest = localFileForKey(
+                helpers.narrationManifestKey(inspectEnv, artworkId, locale, mode, contentHash, pointedHash),
+              );
+              const pointedAudio = localFileForKey(
+                helpers.narrationAudioKey(inspectEnv, artworkId, locale, mode, contentHash, pointedHash),
+              );
+              alreadyCached = fs.existsSync(pointedManifest) && fs.existsSync(pointedAudio);
+            }
+          } catch {
+            alreadyCached = false;
+          }
+        }
+      }
 
       if (!alreadyCached && opts.checkRemoteR2) {
         alreadyCached = remoteR2Exists(manifestKey) && remoteR2Exists(audioKey);
