@@ -300,6 +300,13 @@
       "fr": "Ogata Kōrin",
       "zh": "尾形光琳",
       "es": "Ogata Kōrin"
+    },
+    {
+      "ja": "ギュスターヴ・カイユボット",
+      "en": "Gustave Caillebotte",
+      "fr": "Gustave Caillebotte",
+      "zh": "古斯塔夫·卡耶博特",
+      "es": "Gustave Caillebotte"
     }
   ],
   "artworks": [
@@ -799,6 +806,34 @@
       "fr": "Paravent aux iris",
       "zh": "燕子花图屏风",
       "es": "Lirios"
+    },
+    {
+      "ja": "床削り",
+      "en": "The Floor Scrapers",
+      "fr": "Les Raboteurs de parquet",
+      "zh": "刨地板的工人",
+      "es": "Los acuchilladores de parqué"
+    },
+    {
+      "ja": "パリ、モントルグイユ通り、1878年6月30日の祝祭",
+      "en": "La Rue Montorgueil",
+      "fr": "La Rue Montorgueil",
+      "zh": "1878年6月30日的蒙托尔盖伊街",
+      "es": "La calle Montorgueil"
+    },
+    {
+      "ja": "アレアレア",
+      "en": "Arearea",
+      "fr": "Arearea",
+      "zh": "欢乐",
+      "es": "Arearea"
+    },
+    {
+      "ja": "ローヌ川の星月夜",
+      "en": "Starry Night Over the Rhône",
+      "fr": "La Nuit étoilée",
+      "zh": "罗纳河上的星夜",
+      "es": "Noche estrellada sobre el Ródano"
     }
   ],
   "aliases": [
@@ -825,6 +860,18 @@
     {
       "spoken": "画家のアトリエ",
       "catalogue": "アトリエの中の画家"
+    },
+    {
+      "spoken": "落穂拾い",
+      "catalogue": "落ち穂拾い"
+    },
+    {
+      "spoken": "モントルグイユ通り",
+      "catalogue": "パリ、モントルグイユ通り、1878年6月30日の祝祭"
+    },
+    {
+      "spoken": "モントルギュイユ街、1878年6月30日の祝日",
+      "catalogue": "パリ、モントルグイユ通り、1878年6月30日の祝祭"
     }
   ]
 }
