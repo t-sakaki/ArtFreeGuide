@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { ensureAnonymousUser } from '@/lib/user';
 import ArtworkStage from '@/components/ArtworkStage';
+import ResilientArtworkImage from '@/components/ResilientArtworkImage';
 import ArtworkPlaque from '@/components/ArtworkPlaque';
 import {
   cleanGuideHotspots,
@@ -1597,6 +1598,15 @@ export default function HomeClient({
   };
   // Coordinates were measured on one specific reproduction, so it wins over search results.
   const displayImageUrl = hotspotSet ? hotspotImageUrl(hotspotSet.file) : imageUrl;
+  const imageUnavailablePlaque = (
+    <ArtworkPlaque
+      title={shownArtwork}
+      artist={shownArtist}
+      note={t.image.noImage}
+      searchLabel={t.image.searchCommons}
+      searchQuery={searchQuery || `${artwork} ${artist}`.trim()}
+    />
+  );
   const activeHotspot = hotspots.find(h => h.id === activeHotspotId) ?? null;
 
   useEffect(() => {
@@ -3505,6 +3515,7 @@ export default function HomeClient({
                 <ArtworkStage
                   key={displayImageUrl}
                   imageUrl={displayImageUrl}
+                  imageFallback={imageUnavailablePlaque}
                   alt={artwork}
                   hotspots={stageHotspots}
                   activeHotspotId={stageActiveId}
@@ -3512,7 +3523,8 @@ export default function HomeClient({
                   kenBurns={isPlaying}
                 />
               ) : (
-                <img
+                <ResilientArtworkImage
+                  fallback={imageUnavailablePlaque}
                   src={displayImageUrl}
                   alt={artwork}
                   className={`absolute inset-0 w-full h-full object-contain transition-all duration-700 ease-out ${isPlaying ? 'animate-ken-burns' : ''
@@ -3594,13 +3606,14 @@ export default function HomeClient({
               <ArtworkStage
                 key={displayImageUrl}
                 imageUrl={displayImageUrl}
+                imageFallback={imageUnavailablePlaque}
                 alt={artwork}
                 hotspots={stageHotspots}
                 activeHotspotId={stageActiveId}
                 onSelect={selectStageHotspot}
               />
             ) : (
-              <img src={displayImageUrl} alt={artwork} className="absolute inset-0 w-full h-full object-contain" />
+              <ResilientArtworkImage fallback={imageUnavailablePlaque} src={displayImageUrl} alt={artwork} className="absolute inset-0 w-full h-full object-contain" />
             )}
           </div>
 

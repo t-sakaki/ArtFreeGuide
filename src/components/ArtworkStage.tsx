@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import ResilientArtworkImage from './ResilientArtworkImage';
 import { Hotspot } from '@/lib/hotspots';
 import { artworkViewport } from '@/lib/artworkViewport';
 
@@ -20,6 +21,7 @@ interface ArtworkStageProps {
   /** Slow drift while the narration plays; suppressed while a point is focused. */
   kenBurns?: boolean;
   className?: string;
+  imageFallback?: ReactNode;
 }
 
 /**
@@ -42,6 +44,7 @@ export default function ArtworkStage({
   onSelect,
   kenBurns = false,
   className = '',
+  imageFallback,
 }: ArtworkStageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -100,10 +103,12 @@ export default function ArtworkStage({
             : { inset: 0, transform: stageTransform }
         }
       >
-        <img
+        <ResilientArtworkImage
           ref={imageRef}
           src={imageUrl}
           alt={alt}
+          fallback={imageFallback}
+          onError={() => { setNatural(null); setFrame(null); }}
           onLoad={event => {
             const img = event.currentTarget;
             setNatural({ w: img.naturalWidth || 1, h: img.naturalHeight || 1 });
