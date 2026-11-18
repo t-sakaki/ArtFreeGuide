@@ -1,0 +1,75 @@
+name: Weekly Art Scout
+
+on:
+  schedule:
+    - cron: '0 0 * * 1' # Every Monday 09:00 JST
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: 'Comma-separated source IDs'
+        required: false
+        default: 'nmwa,tobikan,nact,bijutsutecho'
+      follow_links:
+        description: 'Number of exhibition/news links per source to inspect'
+        required: false
+        default: '2'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run art curation scout
+        env:
+          SOURCES: ${{ inputs.sources || 'nmwa,tobikan,nact,bijutsutecho' }}
+          FOLLOW_LINKS: ${{ inputs.follow_links || '2' }}
+        run: |
+          node scripts/scout_art_topics.mjs \
+            --sources="$SOURCES" \
+            --follow-links="$FOLLOW_LINKS" \
+            --out=/tmp/weekly-scout-report.md
+
+      - name: Upload scout report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-art-scout-report
+          path: /tmp/weekly-scout-report.md
+          retention-days: 30
+
+      - name: Publish weekly GitHub Issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TODAY=$(date -u +%Y-%m-%d)
+          TITLE="[Weekly Art Scout] ${TODAY} 今週のアート話題・コンテンツ候補"
+          EXISTING=$(gh issue list --repo "$GH_REPO" --search "\"${TITLE}\" in:title" --state all --json number --jq '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            echo "Issue #${EXISTING} already exists for ${TODAY}; skipping creation."
+            exit 0
+          fi
+
+          BODY_FILE=/tmp/weekly-scout-issue-body.md
+          {
+            echo "Refs #163"
+            echo ""
+            echo "週次の美術館展示・アートニュース収集およびカタログ突合レポートです（Human-in-the-loop レビュー用）。"
+            echo ""
+            cat /tmp/weekly-scout-report.md
+          } > "$BODY_FILE"
+
+          gh issue create \
+            --repo "$GH_REPO" \
+            --title "$TITLE" \
+            --body-file "$BODY_FILE"
