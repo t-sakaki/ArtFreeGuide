@@ -75,9 +75,9 @@ describe('artScout catalog cross-checking', () => {
     expect(montorgueilAlias.inArtists).toBe(true);
     expect(montorgueilAlias.inTours).toContain('orsay-joy-of-living');
 
-    const unknownTurner = matchCatalog('戦艦テメレール', 'J.M.W. ターナー', catalog);
-    expect(unknownTurner.inArtworks).toBe(false);
-    expect(unknownTurner.inTours).toEqual([]);
+    const unknownWork = matchCatalog('未知の仮想作品_テスト', '架空の画家_テスト', catalog);
+    expect(unknownWork.inArtworks).toBe(false);
+    expect(unknownWork.inTours).toEqual([]);
   });
 
   it('detects known artists in Japanese text', () => {
