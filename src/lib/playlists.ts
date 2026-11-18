@@ -611,6 +611,65 @@ export const PLAYLISTS: Playlist[] = [
       },
     },
   },
+  {
+    id: 'louvre-renaissance',
+    title: 'ルーヴル、ルネサンスのまなざし',
+    subtitle: '技法の革新、肖像の魂、そして旅する知性',
+    emoji: '🖼️',
+    items: [
+      { title: '岩窟の聖母', artist: 'レオナルド・ダ・ヴィンチ', cue: 'スフマートと光影が聖なる情景を一変させた、レオナルドの革新から始めます' },
+      { title: '美しきフェロニエール', artist: 'レオナルド・ダ・ヴィンチ', cue: '静かな視線の奥に、人物の複雑な心まで描き出す肖像芸術の極みへ' },
+      { title: '田園の合奏', artist: 'ティツィアーノ・ヴェチェッリオ', cue: '光と色彩の都ヴェネツィアが奏でる、詩情ゆたかな田園の響き' },
+      { title: 'サイ', artist: 'アルブレヒト・デューラー', cue: '実物を見ずに、旅人の言葉と版画の力で世界を描き出した知性の冒険' },
+      { title: 'カナの婚礼', artist: 'パオロ・ヴェロネーゼ', cue: '最後は祝祭のにぎわいに満ちた、ルーヴル最大のルネサンス大作で締めくくります' },
+    ],
+    i18n: {
+      en: {
+        title: 'Louvre: Visions of the Renaissance',
+        subtitle: 'New techniques, living portraits, and travelling minds',
+        cues: [
+          'We begin with Leonardo’s revolution in sfumato and shadow inside a sacred cave',
+          'Into a portrait whose quiet gaze reveals a living mind within',
+          'To the poetic colour and music of Venice in the open countryside',
+          'Drawn from travellers’ tales alone, a print that carried an unseen animal across Europe',
+          'We close at a grand Renaissance feast, the largest canvas in the Louvre',
+        ],
+      },
+      fr: {
+        title: 'Louvre : regards de la Renaissance',
+        subtitle: 'Invention technique, âme du portrait et curiosité du monde',
+        cues: [
+          'Commençons par la révolution du sfumato et de l’ombre chez Léonard',
+          'Vers un portrait dont le regard silencieux laisse affleurer la vie intérieure',
+          'À la couleur et à la poésie vénitiennes, au cœur d’un paysage pastoral',
+          'Dessiné d’après de simples récits, une estampe qui fit voyager l’inconnu à travers l’Europe',
+          'Terminons au cœur d’un festin vénitien, la plus vaste toile du Louvre',
+        ],
+      },
+      zh: {
+        title: '卢浮宫：文艺复兴的凝视',
+        subtitle: '技法的革新、肖像的灵魂与远行的求知欲',
+        cues: [
+          '从达·芬奇以晕涂法与明暗革新圣像画的时刻开始',
+          '走进一幅静谧肖像的深邃目光，感受人物内心的波澜',
+          '来到威尼斯画派的田园诗境，倾听色彩与乐声的合奏',
+          '仅凭旅人传述与版画之力，在纸上重现未曾亲见的远方奇兽',
+          '最后在卢浮宫最宏大的文艺复兴盛宴画卷中收尾',
+        ],
+      },
+      es: {
+        title: 'Louvre: miradas del Renacimiento',
+        subtitle: 'Técnica, alma del retrato y curiosidad por el mundo',
+        cues: [
+          'Empezamos con la revolución del sfumato y la sombra en Leonardo',
+          'Hacia un retrato cuya mirada serena deja entrever la vida interior',
+          'Al color y la poesía de Venecia en un paisaje pastoral',
+          'Dibujado solo a partir de relatos, un grabado que llevó lo desconocido por toda Europa',
+          'Cerramos en un gran banquete renacentista, el lienzo más monumental del Louvre',
+        ],
+      },
+    },
+  },
 ];
 
 /** A tour with its wording, titles and artists in the visitor's language. */

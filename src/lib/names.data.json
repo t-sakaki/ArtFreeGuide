@@ -314,6 +314,27 @@
       "fr": "J.M.W. Turner",
       "zh": "J.M.W. 透纳",
       "es": "J.M.W. Turner"
+    },
+    {
+      "ja": "ティツィアーノ・ヴェチェッリオ",
+      "en": "Titian",
+      "fr": "Titien",
+      "zh": "提香",
+      "es": "Tiziano"
+    },
+    {
+      "ja": "アルブレヒト・デューラー",
+      "en": "Albrecht Dürer",
+      "fr": "Albrecht Dürer",
+      "zh": "阿尔布雷希特·丢勒",
+      "es": "Albrecht Dürer"
+    },
+    {
+      "ja": "パオロ・ヴェロネーゼ",
+      "en": "Paolo Veronese",
+      "fr": "Paul Véronèse",
+      "zh": "保罗·委罗内塞",
+      "es": "Paolo Veronese"
     }
   ],
   "artworks": [
@@ -876,6 +897,41 @@
       "fr": "Le Château de Norham, lever de soleil",
       "zh": "诺勒姆城堡，日出",
       "es": "El castillo de Norham, amanecer"
+    },
+    {
+      "ja": "岩窟の聖母",
+      "en": "Virgin of the Rocks",
+      "fr": "La Vierge aux rochers",
+      "zh": "岩间圣母",
+      "es": "La Virgen de las rocas"
+    },
+    {
+      "ja": "美しきフェロニエール",
+      "en": "La Belle Ferronnière",
+      "fr": "La Belle Ferronnière",
+      "zh": "美丽的费罗妮叶",
+      "es": "La Belle Ferronnière"
+    },
+    {
+      "ja": "田園の合奏",
+      "en": "Pastoral Concert",
+      "fr": "Le Concert champêtre",
+      "zh": "田园合奏",
+      "es": "Concierto campestre"
+    },
+    {
+      "ja": "サイ",
+      "en": "Dürer's Rhinoceros",
+      "fr": "Le Rhinocéros",
+      "zh": "犀牛",
+      "es": "El rinoceronte de Durero"
+    },
+    {
+      "ja": "カナの婚礼",
+      "en": "The Wedding at Cana",
+      "fr": "Les Noces de Cana",
+      "zh": "迦拿的婚礼",
+      "es": "Las bodas de Caná"
     }
   ],
   "aliases": [
@@ -926,6 +982,14 @@
     {
       "spoken": "解体されるために最後の停泊地に曳かれてゆく戦艦テメレール",
       "catalogue": "戦艦テメレール"
+    },
+    {
+      "spoken": "女性の肖像（美しきフェロニエール）",
+      "catalogue": "美しきフェロニエール"
+    },
+    {
+      "spoken": "デューラーのサイ",
+      "catalogue": "サイ"
     }
   ]
 }
