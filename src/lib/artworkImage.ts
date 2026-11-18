@@ -142,6 +142,10 @@ function namesOverlap(candidateNames: string[], artist: string): boolean {
   return wanted.some(token => haystack.includes(token));
 }
 
+/** Commons also holds photographs of the artist and machine-made pastiches. */
+const NOT_AN_ARTWORK =
+  /\b(sd|stable diffusion|ai[- ]generated|midjourney|photo(graph)? of|exhibition|museum visitors?|geograph\.org\.uk)\b/i;
+
 /**
  * Wikidata knows who painted what, so a candidate can be rejected when the
  * creator is someone else — this is what keeps 「ひまわり」 from resolving to a
@@ -164,7 +168,7 @@ async function fromWikidata(titles: string[], artist: string, width: number): Pr
   for (const [id, entity] of Object.entries(entities)) {
     const claims = ((entity as { claims?: Claims }).claims ?? {}) as Claims;
     const file = claimString(claims, 'P18');
-    if (!file) continue;
+    if (!file || NOT_AN_ARTWORK.test(file)) continue;
     candidates.push({ id, file, creatorId: claimEntityId(claims, 'P170') });
   }
   if (candidates.length === 0) return null;
@@ -241,7 +245,7 @@ async function fromJapaneseSearch(
     const claims = ((entity as { claims?: Claims }).claims ?? {}) as Claims;
     const file = claimString(claims, 'P18');
     const creatorId = claimEntityId(claims, 'P170');
-    if (!file || !creatorId) continue;
+    if (!file || !creatorId || NOT_AN_ARTWORK.test(file)) continue;
     if (!entityLabels(entity).some(label => titlesOverlap(label, title))) continue;
     candidates.push({ id, file, creatorId });
   }
@@ -284,9 +288,6 @@ const GENERIC_WORDS = new Set([
   'from',
   'for'
 ]);
-
-/** Commons also holds photographs of the artist and machine-made pastiches. */
-const NOT_AN_ARTWORK = /\b(sd|stable diffusion|ai[- ]generated|midjourney|photo(graph)? of|exhibition|museum visitors?)\b/i;
 
 /**
  * A file only counts when its name carries the title. Naming the artist is not
