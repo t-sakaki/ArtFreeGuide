@@ -2,9 +2,11 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   checkArtworkImage,
+  extractArticleText,
   extractArtworkMentions,
   extractKnownArtists,
   formatDraftReport,
+  inferMentionArtist,
   loadCatalog,
   matchCatalog,
   parseBijutsuTecho,
@@ -80,12 +82,63 @@ describe('artScout catalog cross-checking', () => {
     expect(unknownWork.inTours).toEqual([]);
   });
 
-  it('detects known artists in Japanese text', () => {
+  it('detects known artists in Japanese text without false-matching loanwords or unrelated names', () => {
     const catalog = loadCatalog(REPO_ROOT);
-    const artists = extractKnownArtists('モネやカイユボット、そしてゴッホの名画が並ぶ。', catalog);
+    const artists = extractKnownArtists('モネやカイユボット、そしてゴッホの名画が並ぶ。北斎やレンブラントも注目。', catalog);
     expect(artists).toContain('クロード・モネ');
     expect(artists).toContain('ギュスターヴ・カイユボット');
     expect(artists).toContain('フィンセント・ファン・ゴッホ');
+    expect(artists).toContain('葛飾北斎');
+    expect(artists).toContain('レンブラント・ファン・レイン');
+
+    const noise = extractKnownArtists(
+      '電子マネーやマネジメント、エドガーを主人公にした漫画、ラスボス、レインコートの話。',
+      catalog
+    );
+    expect(noise).toEqual([]);
+
+    const shortSurnames = extractKnownArtists('マネの《オランピア》とドガの踊り子。', catalog);
+    expect(shortSurnames).toContain('エドゥアール・マネ');
+    expect(shortSurnames).toContain('エドガー・ドガ');
+  });
+
+  it('extracts primary <article> / <main> text while stripping header/nav/footer/aside noise', () => {
+    const html = `
+      <html><body>
+        <header><nav>ゴッホ《星月夜》 ミレー《落ち穂拾い》</nav></header>
+        <main>
+          <aside>関連記事: 草間彌生とアンディ・ウォーホル</aside>
+          <article>
+            <h1>ターナー展</h1>
+            <p>${'英国の風景画家J.M.W. ターナーの《戦艦テメレール》を中心に紹介する特別展です。'.repeat(6)}</p>
+          </article>
+        </main>
+        <footer>電子マネーがご利用いただけます。</footer>
+      </body></html>
+    `;
+    const text = extractArticleText(html);
+    expect(text).toContain('《戦艦テメレール》');
+    expect(text).not.toContain('星月夜');
+    expect(text).not.toContain('草間彌生');
+    expect(text).not.toContain('電子マネー');
+  });
+
+  it('infers artist from catalog tours, local mention context, or sole page artist', () => {
+    const catalog = loadCatalog(REPO_ROOT);
+    expect(inferMentionArtist('名作《美しきフェロニエール》が来日。', '美しきフェロニエール', catalog, [])).toBe(
+      'レオナルド・ダ・ヴィンチ'
+    );
+    expect(
+      inferMentionArtist(
+        '本展ではフェルメールが手がけた《未知の真珠の絵》とレンブラント作品を比較する。',
+        '未知の真珠の絵',
+        catalog,
+        ['ヨハネス・フェルメール', 'レンブラント・ファン・レイン']
+      )
+    ).toBe('ヨハネス・フェルメール');
+    expect(
+      inferMentionArtist('代表作《未知の風景》を展示。', '未知の風景', catalog, ['クロード・モネ'])
+    ).toBe('クロード・モネ');
   });
 });
 

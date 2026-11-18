@@ -17,9 +17,11 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import {
   BUILTIN_SOURCES,
   checkArtworkImage,
+  extractArticleText,
   extractArtworkMentions,
   extractKnownArtists,
   formatDraftReport,
+  inferMentionArtist,
   loadCatalog,
   matchCatalog,
   parseCandidateList,
@@ -149,9 +151,12 @@ for (const url of urlsToInspect) {
     const html = await fetchHtml(url);
     const titleRaw = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
     const title = titleRaw ? stripHtml(titleRaw) : url;
-    const text = stripHtml(html);
-    const mentions = extractArtworkMentions(text).map(m => matchCatalog(m, '', catalog));
+    const text = extractArticleText(html);
     const artists = extractKnownArtists(text, catalog);
+    const mentions = extractArtworkMentions(text).map(m => {
+      const inferred = inferMentionArtist(text, m, catalog, artists);
+      return matchCatalog(m, inferred, catalog);
+    });
     inspectedPages.push({ url, title, mentions, artists });
   } catch (error) {
     inspectedPages.push({ url, title: url, mentions: [], artists: [], error: error.message });
@@ -163,11 +168,13 @@ if (candidates.length === 0 && inspectedPages.length > 0) {
   // Auto-promote extracted mentions from inspected pages when no explicit list was given.
   const seen = new Set();
   for (const page of inspectedPages) {
-    const inferredArtist = page.artists.length === 1 ? page.artists[0] : '';
     for (const mention of page.mentions) {
       if (seen.has(mention.canonicalTitle)) continue;
       seen.add(mention.canonicalTitle);
-      candidates.push({ title: mention.canonicalTitle, artist: inferredArtist });
+      candidates.push({
+        title: mention.canonicalTitle,
+        artist: mention.canonicalArtist || (page.artists.length === 1 ? page.artists[0] : ''),
+      });
     }
   }
   candidates = candidates.slice(0, 12);

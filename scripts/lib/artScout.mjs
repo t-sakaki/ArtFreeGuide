@@ -72,8 +72,7 @@ export function decodeHtmlEntities(input) {
 export function stripHtml(html) {
   const cleaned = String(html ?? '')
     .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr)\b[^>]*>/gi, '\n')
     .replace(/<[^>]+>/g, ' ');
   return decodeHtmlEntities(cleaned)
@@ -81,6 +80,44 @@ export function stripHtml(html) {
     .replace(/\n\s+/g, '\n')
     .replace(/\n{2,}/g, '\n')
     .trim();
+}
+
+function stripChromeTags(html) {
+  return String(html ?? '')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<(script|style|noscript|template|header|nav|footer|aside|form)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ');
+}
+
+function pickSubstantialBlock(html, tagName, minTextLen) {
+  const regex = new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'gi');
+  let best = '';
+  let bestLen = 0;
+  for (const m of html.matchAll(regex)) {
+    const inner = stripChromeTags(m[1]);
+    const textLen = stripHtml(inner).length;
+    if (textLen >= minTextLen && textLen > bestLen) {
+      best = inner;
+      bestLen = textLen;
+    }
+  }
+  return best;
+}
+
+/**
+ * Isolates the primary editorial content from an HTML page, preferring
+ * `<article>` then `<main>` when substantial, and stripping site chrome
+ * (`<header>`, `<nav>`, `<footer>`, `<aside>`, `<form>`) so related-article
+ * sidebars and payment/footer notices do not pollute artist/artwork extraction.
+ */
+export function extractArticleText(html) {
+  const raw = String(html ?? '');
+  const withoutScripts = raw
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ');
+  const articleBlock = pickSubstantialBlock(withoutScripts, 'article', 200);
+  const mainBlock = articleBlock ? '' : pickSubstantialBlock(withoutScripts, 'main', 150);
+  const target = articleBlock || mainBlock || stripChromeTags(withoutScripts);
+  return stripHtml(target);
 }
 
 function resolveUrl(href, baseUrl) {
@@ -215,35 +252,91 @@ export function extractArtworkMentions(text) {
   return found;
 }
 
+const AMBIGUOUS_SURNAME_TOKENS = new Set(['レイン', 'ウッド', 'ボス', 'ミロ', 'サンティ', 'ヴィンチ']);
+const ICONIC_GIVEN_OR_MONONYM_JA = new Set(['ミケランジェロ', 'ラファエロ', 'レンブラント', 'ティツィアーノ']);
+const NOBILIARY_PARTICLES_JA = new Set(['ダ', 'デ', 'デル', 'ド', 'ファン', 'フォン']);
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function matchesJapaneseToken(haystack, token) {
+  if (!token) return false;
+  if (/^[ァ-ヴー]+$/.test(token)) {
+    return new RegExp(`(?<![ァ-ヴー])${escapeRegExp(token)}(?![ァ-ヴー])`).test(haystack);
+  }
+  return haystack.includes(token);
+}
+
 /**
  * Finds known artists from names.data.json mentioned in free text.
- * Matches full Japanese/English names as well as distinctive surname tokens
- * (>= 3 chars for kana/kanji surnames like ターナー / モネ / ゴッホ / 北斎).
+ * Uses katakana boundaries for katakana-only surnames so short names like
+ * `マネ` or `ドガ` do not false-match `電子マネー` or `エドガー`.
  */
 export function extractKnownArtists(text, catalog) {
   const haystack = String(text ?? '');
-  const lower = haystack.toLowerCase();
   const matched = [];
   const seen = new Set();
 
   for (const artist of catalog.artists) {
     const ja = artist.ja;
     const en = artist.en ?? '';
-    const surnameJa = ja.includes('・') ? ja.split('・').at(-1) : ja;
+    const parts = ja.split('・').filter(Boolean);
+    const surnameJa = parts.length > 1 ? parts.at(-1) : ja;
+    const particleSurnameJa =
+      parts.length >= 3 && NOBILIARY_PARTICLES_JA.has(parts.at(-2))
+        ? `${parts.at(-2)}・${parts.at(-1)}`
+        : '';
+    const firstPartJa = parts[0] ?? '';
     const surnameEn = en.split(/\s+/).at(-1) ?? '';
 
-    const hit =
-      haystack.includes(ja) ||
-      (surnameJa && surnameJa.length >= 2 && haystack.includes(surnameJa)) ||
-      (en && lower.includes(en.toLowerCase())) ||
-      (surnameEn && surnameEn.length >= 5 && lower.includes(surnameEn.toLowerCase()));
+    const jaCandidates = [ja];
+    if (surnameJa && surnameJa.length >= 2 && !AMBIGUOUS_SURNAME_TOKENS.has(surnameJa)) {
+      jaCandidates.push(surnameJa);
+    }
+    if (particleSurnameJa) jaCandidates.push(particleSurnameJa);
+    if (ICONIC_GIVEN_OR_MONONYM_JA.has(firstPartJa)) jaCandidates.push(firstPartJa);
+    if (/^(葛飾北斎|歌川広重)$/.test(ja)) jaCandidates.push(ja.slice(2));
 
-    if (hit && !seen.has(ja)) {
+    const hitJa = jaCandidates.some(token => matchesJapaneseToken(haystack, token));
+    const hitEn =
+      (en && new RegExp(`\\b${escapeRegExp(en)}\\b`, 'i').test(haystack)) ||
+      (surnameEn &&
+        surnameEn.length >= 5 &&
+        new RegExp(`\\b${escapeRegExp(surnameEn)}\\b`, 'i').test(haystack));
+
+    if ((hitJa || hitEn) && !seen.has(ja)) {
       seen.add(ja);
       matched.push(ja);
     }
   }
   return matched;
+}
+
+/**
+ * Infers the artist for a `《title》` mention using (1) existing catalog tour
+ * items, (2) known artists appearing within ±100 chars of the title in the
+ * surrounding text, or (3) the sole artist mentioned on the page.
+ */
+export function inferMentionArtist(text, rawTitle, catalog, pageArtists = []) {
+  const matched = matchCatalog(rawTitle, '', catalog);
+  const fromTour = catalog.artworkArtistMap?.get(matched.canonicalTitle);
+  if (fromTour) return fromTour;
+
+  const haystack = String(text ?? '');
+  const needle = `《${rawTitle}》`;
+  const idx = haystack.indexOf(needle);
+  if (idx !== -1) {
+    const before = haystack.slice(Math.max(0, idx - 100), idx);
+    const after = haystack.slice(idx + needle.length, idx + needle.length + 60);
+    const beforeArtists = extractKnownArtists(before, catalog);
+    if (beforeArtists.length >= 1) return beforeArtists.at(-1);
+    const afterArtists = extractKnownArtists(after, catalog);
+    if (afterArtists.length === 1) return afterArtists[0];
+  }
+
+  if (pageArtists.length === 1) return pageArtists[0];
+  return '';
 }
 
 /** Reads names.data.json and parses tour items from src/lib/playlists.ts without compiling TS. */
@@ -275,6 +368,14 @@ export function loadCatalog(repoRoot = process.cwd()) {
       if (row[key]) canonicalArtist.set(row[key].toLowerCase(), row.ja);
     }
   }
+  const artworkArtistMap = new Map();
+  for (const tour of tours) {
+    for (const item of tour.items) {
+      if (!artworkArtistMap.has(item.title)) {
+        artworkArtistMap.set(item.title, item.artist);
+      }
+    }
+  }
 
   return {
     artists: names.artists ?? [],
@@ -286,6 +387,7 @@ export function loadCatalog(repoRoot = process.cwd()) {
     artistByJa,
     canonicalArtwork,
     canonicalArtist,
+    artworkArtistMap,
   };
 }
 
