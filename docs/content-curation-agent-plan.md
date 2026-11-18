@@ -47,6 +47,13 @@
 ### Phase 2: 下書き生成の半自動化
 - **進め方**: 週次などで Scout + Curator を自動実行し、GitHub Issue または Draft PR として「今週のツアー候補」を提案させる。
 - 画像解決チェック（`/api/artwork-image` または Wikidata/Commons 疎通）までスクリプト化し、人間が「画像あり/なし」「表記妥当性」を一目で判断できる形にする。
+- **実装スクリプト**: `scripts/scout_art_topics.mjs`
+  ```bash
+  # 美術館・美術メディアを巡回し、候補作品の辞書突合・画像可否を Markdown 出力
+  node scripts/scout_art_topics.mjs \
+    --url=https://www.nmwa.go.jp/jp/exhibitions/2026turner.html \
+    --candidates="戦艦テメレール/J.M.W. ターナー,雨、蒸気、速度――グレート・ウェスタン鉄道/J.M.W. ターナー"
+  ```
 
 ### Phase 3: 再デプロイ不要の動的特集ツアー（手応えが出たら検討）
 - 現在は `src/lib/playlists.ts` と `names.data.json` がビルド時確定のため、ツアー追加のたびにデプロイが必要。
