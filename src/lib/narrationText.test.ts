@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildNarrationSynthesisInput,
+  buildSegmentTimingsFromDurations,
   cleanSegmentForSpeech,
   composeGuideModeText,
   extractSpeakableSegments,
   findSegmentIndexForTimeMs,
+  mapBoundaryEventsToSegments,
   mapCharacterAlignmentToSegments,
   parseGuideSegments,
   toNarrationSpokenText,
@@ -96,5 +98,40 @@ describe('narrationText segmentation and spoken mapping', () => {
     expect(timings[0].endMs).toBe(750);
     expect(timings[1].startMs).toBe(750);
     expect(timings[1].endMs).toBe(1550);
+  });
+
+  it('builds cumulative segment timings from per-segment durations and gaps', () => {
+    const input = buildNarrationSynthesisInput('第一文です。第二文です。', 'ja');
+    const timings = buildSegmentTimingsFromDurations(input.segments, [1200, 1800], 150, 3200);
+    expect(timings).toEqual([
+      { index: 0, startMs: 0, endMs: 1200 },
+      { index: 1, startMs: 1350, endMs: 3200 },
+    ]);
+  });
+
+  it('maps boundary events (Azure WordBoundary style) and falls back cleanly when absent', () => {
+    const input = buildNarrationSynthesisInput('一文目です。二文目です。', 'ja');
+    const seg0 = input.segments[0];
+    const seg1 = input.segments[1];
+
+    const mapped = mapBoundaryEventsToSegments(
+      input,
+      [
+        { textOffset: seg0.startChar, audioOffsetMs: 0, durationMs: 400 },
+        { textOffset: seg0.endChar - 1, audioOffsetMs: 900, durationMs: 300 },
+        { textOffset: seg1.startChar, audioOffsetMs: 1350, durationMs: 500 },
+        { textOffset: seg1.endChar - 1, audioOffsetMs: 2400, durationMs: 400 },
+      ],
+      3000,
+    );
+    expect(mapped).toEqual([
+      { index: 0, startMs: 0, endMs: 1200 },
+      { index: 1, startMs: 1350, endMs: 3000 },
+    ]);
+
+    const fallback = mapBoundaryEventsToSegments(input, [], 2000);
+    expect(fallback).toHaveLength(2);
+    expect(fallback[0].startMs).toBe(0);
+    expect(fallback[1].endMs).toBe(2000);
   });
 });

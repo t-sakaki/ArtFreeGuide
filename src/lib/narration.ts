@@ -5,6 +5,14 @@ import type { ExplanationMode, NarrationSegmentTiming } from './narrationText';
 
 export type NarrationEnvironment = 'staging' | 'production';
 
+export type NarrationProvider =
+  | 'elevenlabs'
+  | 'azure'
+  | 'gemini'
+  | 'edge-tts'
+  | 'nim'
+  | (string & {});
+
 export interface NarrationManifest {
   version: 1;
   artworkId: string;
@@ -14,7 +22,7 @@ export interface NarrationManifest {
   mode: ExplanationMode;
   contentHash: string;
   voiceConfigHash: string;
-  provider: 'elevenlabs';
+  provider: NarrationProvider;
   modelId: string;
   voiceId: string;
   outputFormat: string;
