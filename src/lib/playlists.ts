@@ -493,6 +493,65 @@ export const PLAYLISTS: Playlist[] = [
       },
     },
   },
+  {
+    id: 'orsay-joy-of-living',
+    title: 'オルセー、いまを生きる歓び',
+    subtitle: '働くこと、祝うこと、そして夜空を見上げること',
+    emoji: '✨',
+    items: [
+      { title: '落ち穂拾い', artist: 'ジャン＝フランソワ・ミレー', cue: '夕暮れの畑で身をかがめる、静かな暮らしの祈りから始めます' },
+      { title: '床削り', artist: 'ギュスターヴ・カイユボット', cue: 'パリの室内へ。光のなかで働く人々の力強い背中を見つめます' },
+      { title: 'パリ、モントルグイユ通り、1878年6月30日の祝祭', artist: 'クロード・モネ', cue: '仕事の手を止め、三色旗がはためく祝祭の街角へ繰り出しましょう' },
+      { title: 'アレアレア', artist: 'ポール・ゴーギャン', cue: '遠くタヒチの楽園で、赤い大地と音色に身を委ねます' },
+      { title: 'ローヌ川の星月夜', artist: 'フィンセント・ファン・ゴッホ', cue: '最後は水面に星がゆらめく、アルルの静かな夜空で締めくくります' },
+    ],
+    i18n: {
+      en: {
+        title: 'Orsay: The joy of living now',
+        subtitle: 'Working, celebrating, and looking up at the night sky',
+        cues: [
+          'We begin at dusk in the fields, with a quiet prayer of daily labour',
+          'Indoors in Paris, watching the strong backs of men at work in the light',
+          'Stepping out into a street alive with tricolour flags on a festival day',
+          'Far away in Tahiti, surrendering to red earth and gentle music',
+          'We close beneath the quiet night sky of Arles, where stars shimmer on the water',
+        ],
+      },
+      fr: {
+        title: 'Orsay : la joie de vivre au présent',
+        subtitle: 'Travailler, célébrer et lever les yeux vers la nuit',
+        cues: [
+          'Commençons au crépuscule dans les champs, par une prière silencieuse du labeur',
+          'À l’intérieur à Paris, devant le dos vigoureux des ouvriers dans la lumière',
+          'Sortons dans une rue pavoisée de drapeaux un jour de fête',
+          'Loin à Tahiti, au rythme de la terre rouge et d’une douce mélodie',
+          'Terminons sous la nuit paisible d’Arles, où les étoiles miroitent sur le fleuve',
+        ],
+      },
+      zh: {
+        title: '奥赛：活在当下的欢愉',
+        subtitle: '劳作、欢庆，然后仰望星空',
+        cues: [
+          '从暮色田野里俯身劳作的静谧祈祷开始',
+          '走进巴黎的室内，凝视光影中劳动者坚实的背影',
+          '停下手中的活，走向三色旗飘扬的欢庆街头',
+          '远赴塔希提的乐园，沉醉于红土与悠扬乐声之中',
+          '最后在星光摇曳于河面的阿尔勒静夜里收尾',
+        ],
+      },
+      es: {
+        title: 'Orsay: la alegría de vivir el presente',
+        subtitle: 'Trabajar, celebrar y mirar el cielo nocturno',
+        cues: [
+          'Empezamos al caer la tarde en el campo, con la quietud del trabajo diario',
+          'Entramos en un piso de París para ver a los obreros trabajar bajo la luz',
+          'Salimos a una calle festiva, vibrante de banderas tricolores',
+          'Lejos, en Tahití, dejándonos llevar por la tierra roja y la música',
+          'Cerramos bajo la noche serena de Arlés, con estrellas reflejadas en el río',
+        ],
+      },
+    },
+  },
 ];
 
 /** A tour with its wording, titles and artists in the visitor's language. */
