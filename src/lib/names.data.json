@@ -307,6 +307,13 @@
       "fr": "Gustave Caillebotte",
       "zh": "古斯塔夫·卡耶博特",
       "es": "Gustave Caillebotte"
+    },
+    {
+      "ja": "J.M.W. ターナー",
+      "en": "J.M.W. Turner",
+      "fr": "J.M.W. Turner",
+      "zh": "J.M.W. 透纳",
+      "es": "J.M.W. Turner"
     }
   ],
   "artworks": [
@@ -834,6 +841,41 @@
       "fr": "La Nuit étoilée",
       "zh": "罗纳河上的星夜",
       "es": "Noche estrellada sobre el Ródano"
+    },
+    {
+      "ja": "グリゾン州の雪崩",
+      "en": "The Fall of an Avalanche in the Grisons",
+      "fr": "Chute d'une avalanche dans les Grisons",
+      "zh": "格里松的雪崩",
+      "es": "La caída de una avalancha en los Grisones"
+    },
+    {
+      "ja": "戦艦テメレール",
+      "en": "The Fighting Temeraire",
+      "fr": "Le Dernier Voyage du Téméraire",
+      "zh": "战舰无畏号",
+      "es": "El último viaje del Temerario"
+    },
+    {
+      "ja": "奴隷船",
+      "en": "The Slave Ship",
+      "fr": "Le Négrier",
+      "zh": "奴隶船",
+      "es": "El barco de esclavos"
+    },
+    {
+      "ja": "雨、蒸気、速度――グレート・ウェスタン鉄道",
+      "en": "Rain, Steam and Speed – The Great Western Railway",
+      "fr": "Pluie, Vapeur et Vitesse",
+      "zh": "雨、蒸汽和速度",
+      "es": "Lluvia, vapor y velocidad"
+    },
+    {
+      "ja": "ノラム城、日の出",
+      "en": "Norham Castle, Sunrise",
+      "fr": "Le Château de Norham, lever de soleil",
+      "zh": "诺勒姆城堡，日出",
+      "es": "El castillo de Norham, amanecer"
     }
   ],
   "aliases": [
@@ -872,6 +914,18 @@
     {
       "spoken": "モントルギュイユ街、1878年6月30日の祝日",
       "catalogue": "パリ、モントルグイユ通り、1878年6月30日の祝祭"
+    },
+    {
+      "spoken": "雨、蒸気、速度",
+      "catalogue": "雨、蒸気、速度――グレート・ウェスタン鉄道"
+    },
+    {
+      "spoken": "テメレール号",
+      "catalogue": "戦艦テメレール"
+    },
+    {
+      "spoken": "解体されるために最後の停泊地に曳かれてゆく戦艦テメレール",
+      "catalogue": "戦艦テメレール"
     }
   ]
 }

@@ -552,6 +552,65 @@ export const PLAYLISTS: Playlist[] = [
       },
     },
   },
+  {
+    id: 'turner-sublime',
+    title: 'ターナーと崇高の光',
+    subtitle: '荒れ狂う自然から、蒸気と光の抽象へ',
+    emoji: '⛵',
+    items: [
+      { title: 'グリゾン州の雪崩', artist: 'J.M.W. ターナー', cue: '自然が牙をむく一瞬の恐怖——ロマン主義が語った「崇高」から始めます' },
+      { title: '戦艦テメレール', artist: 'J.M.W. ターナー', cue: '帆船の時代が終わり、蒸気船に曳かれてゆく夕暮れの海へ' },
+      { title: '奴隷船', artist: 'J.M.W. ターナー', cue: '嵐の海に浮かぶのは、近代の歴史が抱えた深い痛みでした' },
+      { title: '雨、蒸気、速度――グレート・ウェスタン鉄道', artist: 'J.M.W. ターナー', cue: '雨と煙を突き抜ける蒸気機関車。産業革命のスピードが画面を溶かします' },
+      { title: 'ノラム城、日の出', artist: 'J.M.W. ターナー', cue: '最後は輪郭さえ溶け出し、光そのものになった朝の風景で締めくくります' },
+    ],
+    i18n: {
+      en: {
+        title: 'Turner and the sublime light',
+        subtitle: 'From untamed nature to steam and pure light',
+        cues: [
+          'We begin with nature’s sudden terror — what Romanticism called the sublime',
+          'A sailing warship towed away by steam under a burning evening sky',
+          'Out on the stormy sea floats a dark reckoning with modern history',
+          'A locomotive cuts through rain and smoke, dissolving speed into atmosphere',
+          'We close where even outlines melt away into morning light itself',
+        ],
+      },
+      fr: {
+        title: 'Turner et la lumière sublime',
+        subtitle: 'De la nature déchaînée à la vapeur et à la lumière pure',
+        cues: [
+          'Commençons par la terreur soudaine de la nature : le sublime romantique',
+          'Un navire de guerre à voile remorqué par la vapeur au crépuscule',
+          'Dans la mer déchaînée affleure une blessure profonde de l’histoire moderne',
+          'Une locomotive perce la pluie et la fumée, mêlant vitesse et atmosphère',
+          'Terminons là où les contours mêmes se dissolvent dans la lumière du matin',
+        ],
+      },
+      zh: {
+        title: '透纳与崇高之光',
+        subtitle: '从狂暴的自然，走向蒸汽与光的抽象',
+        cues: [
+          '从自然骤然露出的惊惧力量开始——浪漫主义所言的「崇高」',
+          '暮色海面上，旧时代的风帆战舰正被蒸汽船拖向终点',
+          '风暴汹涌的大海中，浮现出近代历史深沉的伤痛',
+          '蒸汽机车穿过暴雨与浓烟，工业革命的速度融化了画面',
+          '最后，连轮廓也消融在晨光之中，只留下纯粹的光本身',
+        ],
+      },
+      es: {
+        title: 'Turner y la luz sublime',
+        subtitle: 'De la naturaleza indómita al vapor y a la luz pura',
+        cues: [
+          'Empezamos con el terror súbito de la naturaleza: lo que el romanticismo llamó sublime',
+          'Un navío de vela remolcado por el vapor bajo un cielo encendido',
+          'En el mar tempestuoso aflora una herida profunda de la historia moderna',
+          'Una locomotora atraviesa la lluvia y el humo, disolviendo la velocidad en luz',
+          'Cerramos donde incluso los contornos se funden en la luz de la mañana',
+        ],
+      },
+    },
+  },
 ];
 
 /** A tour with its wording, titles and artists in the visitor's language. */
