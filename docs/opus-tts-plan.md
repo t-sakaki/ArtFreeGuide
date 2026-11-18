@@ -45,7 +45,7 @@ narration/{NARRATION_ENV}/{artworkId}/{locale}/{mode}/{contentHash}/{voiceConfig
 - Safety controls:
   - `--dry-run`: inspects D1 `artwork_guides`, prints locale/mode counts and estimated character usage without calling ElevenLabs.
   - `--max-chars=<N>`: hard stop before submitting a request that would exceed the cap.
-  - `--deadline=<ISO>`: hard UTC stop timestamp (default `2026-11-18T00:00:00Z`).
+  - `--deadline=<ISO>`: optional hard UTC stop timestamp (omitted by default; pass explicitly when running time-boxed batches).
   - `--confirm-budget`: required when `GET /v1/user/subscription` returns `401 missing_permissions` (`user_read`).
   - **No blind retries** on timeout or 5xx to prevent duplicate credit billing.
   - Local backup under `tmp/narration-archive/` (gitignored) + R2 upload in `audio.opus` -> `manifest.json` -> `latest.json` order.
@@ -53,29 +53,37 @@ narration/{NARRATION_ENV}/{artworkId}/{locale}/{mode}/{contentHash}/{voiceConfig
 ### Multi-TTS Provider Adapters (`scripts/tts-adapters/`)
 - `scripts/pregenerate_narration.mjs` supports pluggable adapters via `--provider=<name>` and per-locale overrides (`--provider-<loc>=<name>`, `--voice-<loc>=<id>` or comma-separated pool `--voice-<loc>=id1,id2`, `--model-<loc>=<id>`):
   - `elevenlabs` (`scripts/tts-adapters/elevenlabs.mjs`): `/with-timestamps` + automatic chunking above 9,000 chars.
-  - `azure` (`scripts/tts-adapters/azure.mjs`): Azure AI Speech SSML (`ogg-48khz-16bit-mono-opus`) via `AZURE_SPEECH_KEY` / `AZURE_SPEECH_REGION` (single-request F0-safe default or `strategy: 'per-segment'`).
-  - `gemini` (`scripts/tts-adapters/gemini.mjs`): Gemini Flash TTS (`gemini-2.5-flash-preview-tts`) via `GEMINI_API_KEY`, transcoded + concatenated to Ogg/Opus via `ffmpeg`.
+  - `azure` (`scripts/tts-adapters/azure.mjs`): Azure AI Speech SSML (`ogg-48khz-16bit-mono-opus`) via `AZURE_SPEECH_KEY` / `AZURE_SPEECH_REGION` (adapter retained for reference; Azure AI Speech is not enabled in this project).
+  - `gemini` (`scripts/tts-adapters/gemini.mjs`): Gemini Flash TTS (`gemini-2.5-flash-preview-tts`) via `GEMINI_API_KEY` (or `GOOGLE_AI_API_KEY`), transcoded + concatenated to Ogg/Opus via `ffmpeg`.
 - Because `voiceConfigHash` hashes `{ provider, modelId, voiceId, outputFormat, voiceSettings }`, multiple providers coexist in R2 and `latest.json` switches the active voice per `(artworkId, locale, mode, contentHash)` without redeploying the worker.
 
-### Initial Staging Verification (2026-11-17)
-- Selected voice: **Ren** (`d4Vuj6wQOxvRyQ320L3k`, `eleven_multilingual_v2`, `opus_48000_64`).
-- Pre-generated **24** top-priority `ja/standard` guides (`19,865` input chars; ~`7,568` ElevenLabs `character-cost`) and verified on `art-free-guide-staging.taira-sakakibara.workers.dev`:
-  - `/api/narration` returns `200 { status: "ready", audioUrl, manifest }` for pre-generated works and `{ status: "none" }` for non-generated modes/hashes.
-  - `/api/narration/audio` returns `206 Partial Content` (`Accept-Ranges: bytes`, `Content-Type: audio/ogg; codecs=opus`, `OggS` + `OpusHead`).
-  - Browser verification confirmed automatic segment progression (`1/20` -> `12/20`), skip forward/backward, pause, and `mode=short` Web Speech fallback.
+### ElevenLabs Creator Completion & Production Promotion (2026-11-18)
+- Before the ElevenLabs Creator plan expired (`2026-11-18`), pre-generation shifted to `eleven_v4` (~0.44 credits/char) with deterministic `EIKO` (`GR4dBIFsYe57TxyrHKXz`) / `Takashi` (`ok4ERsdqy0XfV8XdOi3U`) voice rotation for `ja/standard` and `George` (`JBFqnCBsd6RMkjVDRZzb`) for `en/standard`.
+- Promoted **209 unique `eleven_v4` tracks** (`ja/standard`: **180** works; `en/standard`: **29** works including 100% of valid playlist/tour works; `631` R2 objects = `422` immutable artifacts + `209` `latest.json` pointers) to `production` R2, filtering out legacy `Ren` (`d4Vuj6wQOxvRyQ320L3k` / `eleven_multilingual_v2`) objects via `--filter-voices` and `--filter-model=eleven_v4`.
+- Audio synthesized during the paid Creator subscription retains commercial rights indefinitely and remains served from `production` R2.
 
 ### Promoting Staging Audio to Production
-After PR merge to `main`, copy the verified local archive under `narration/production/...` (zero ElevenLabs calls):
+After verifying staging tracks, copy the filtered local archive under `narration/production/...` (zero TTS API calls):
 ```bash
-node scripts/pregenerate_narration.mjs --copy-to-prod --from-env=staging --to-env=production
+node scripts/pregenerate_narration.mjs --copy-to-prod --from-env=staging --to-env=production --filter-voices=GR4dBIFsYe57TxyrHKXz,ok4ERsdqy0XfV8XdOi3U,JBFqnCBsd6RMkjVDRZzb --filter-model=eleven_v4 --concurrency=4
 ```
 
-## 5. Post-Creator Free / Low-Cost TTS Comparison
-Once the ElevenLabs Creator plan ends (`2026-11-18`), bulk generation or on-demand archival can transition to one of these providers while keeping the exact same `narration/{env}/...` R2 manifest & Opus pipeline (encoding to Ogg/Opus via `ffmpeg` when the provider outputs MP3/WAV/PCM):
+## 5. Post-Creator Operations (Plan A: Gemini Flash TTS + Web Speech Fallback)
+ElevenLabs has downgraded to the **Free plan (10,000 credits/month)**. Verified ElevenLabs Free tier constraints:
+- **Voice Library restriction**: Community/professional Voice Library voices (`EIKO`, `Takashi`, `Hana`) are unavailable via API on the Free tier (only `premade` voices such as `George` are accessible, and Default voices are scheduled for retirement on `2026-12-31`).
+- **License restriction**: Free-tier generations do not include a commercial license and require `elevenlabs.io` attribution.
+- **Quota**: 10,000 credits/month (~22,700 `eleven_v4` chars/month).
 
-| Provider / Model | Free Tier | Paid Pricing (approx.) | Japanese Quality & Speed Control | Timestamps / Alignment | Recommended Role |
-|---|---|---|---|---|---|
-| **Azure AI Speech (Neural TTS, F0)** | **500,000 chars / month** free (`F0`) | ~$16 / 1M chars (`S0`) | Very strong `ja-JP` (`Nanami`, `Keita`, `Shiori`, `Daichi`), natural prosody, SSML support | Native `WordBoundary` / `SentenceBoundary` events (exact ms offsets!) | **Best primary post-Creator choice** for free monthly batch pre-generation of Japanese + English guides |
-| **Gemini Flash TTS (`gemini-2.5-flash-preview-tts`)** | Free tier quota via Google AI Studio (rate-limited) | Low cost per token (~$0.50 input / $10 output audio tokens per 1M) | Expressive multilingual (`ja`/`en`/`fr`/`zh`/`es`), style prompting | Outputs PCM/WAV (no character alignment API; segment by sentence or VAD/forced alignment) | Good fallback for expressive multi-language snippets or single-sentence synthesis |
-| **NVIDIA NIM Magpie TTS** | Free developer credits (shared NIM quota) | Pay-as-you-go / enterprise | Strong `en-US` and growing multilingual support | Audio output; sentence-level splitting recommended | Useful if already standardized on NVIDIA NIM quota |
-| **Web Speech API (Client Fallback)** | Unlimited ($0) | $0 | Device-dependent (`Kyoko`/`Otoya` on Apple, Google voices on Android/Chrome, minimal on headless) | Native utterance `onend` per segment | Always retained as zero-cost fallback for Q&A, Safari `< 18.4`, and uncached works |
+**Adopted Policy (Plan A, Refs #175)**:
+1. **Stop production ElevenLabs synthesis** to avoid Free-tier licensing/voice restrictions; continue serving the 209 paid-tier `eleven_v4` R2 tracks and fall back to the zero-cost **Web Speech API** for uncached works.
+2. **Use `Gemini Flash TTS` (`--provider=gemini`)** for expanding remaining works (`ja/standard`: ~119 remaining; `en/standard`: ~97 remaining) and future tour additions once `GEMINI_API_KEY` is configured (Azure AI Speech is not pursued).
+   ```bash
+   node scripts/pregenerate_narration.mjs --dry-run --env=staging --provider=gemini --locales=ja,en --modes=standard --require-artist --dedupe-artwork --skip-existing-latest --check-env=production
+   ```
+
+| Provider / Model | Tier / Quota | Japanese Quality & Voices | Timestamps / Alignment | Status in ArtFreeGuide |
+|---|---|---|---|---|
+| **ElevenLabs (`eleven_v4`, paid archive)** | 209 tracks cached in R2 (Creator complete; Free tier = 10k credits/mo, non-commercial) | `EIKO` / `Takashi` (`ja`), `George` (`en`) | Native character-level alignment | **Archive retained in production R2; new synthesis stopped** |
+| **Gemini Flash TTS (`gemini-2.5-flash-preview-tts`)** | Google AI Studio quota via `GEMINI_API_KEY` | Multilingual (`Kore`, `Puck`, `Aoede`, `Charon`), transcoded to Ogg/Opus via `ffmpeg` | Segment-by-segment duration timings (`buildSegmentTimingsFromDurations`) | **Primary choice for post-Creator expansion (`--provider=gemini`)** |
+| **Web Speech API (Client Fallback)** | Unlimited ($0) | Device-dependent | Native utterance `onend` per segment | **Always active zero-cost fallback for uncached works, Q&A, Safari `< 18.4`** |
+| **Azure AI Speech (Neural TTS, F0)** | 500k chars/mo free (`F0`) | `Nanami`, `Keita`, etc. | Native `WordBoundary` / `SentenceBoundary` | Adapter implemented, **not enabled** |
