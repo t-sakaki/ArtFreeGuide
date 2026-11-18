@@ -85,6 +85,9 @@ function parseArgs(argv) {
     filterVoices: [],
     filterModel: '',
     filterProvider: '',
+    requireArtist: false,
+    playlistOnly: false,
+    dedupeArtwork: false,
     localD1Json: '',
   };
 
@@ -94,6 +97,9 @@ function parseArgs(argv) {
     else if (raw === '--check-remote-r2') opts.checkRemoteR2 = true;
     else if (raw === '--confirm-budget') opts.confirmBudget = true;
     else if (raw === '--copy-to-prod') opts.copyToProd = true;
+    else if (raw === '--require-artist') opts.requireArtist = true;
+    else if (raw === '--playlist-only') opts.playlistOnly = true;
+    else if (raw === '--dedupe-artwork') opts.dedupeArtwork = true;
     else if (raw.startsWith('--env=')) opts.env = raw.slice('--env='.length);
     else if (raw.startsWith('--from-env=')) opts.fromEnv = raw.slice('--from-env='.length);
     else if (raw.startsWith('--to-env=')) opts.toEnv = raw.slice('--to-env='.length);
@@ -183,6 +189,9 @@ function printUsage() {
   --filter-voices=id1,id2  Only copy artifacts/pointers whose manifest.voiceId is in this list
   --filter-model=<id>      Only copy artifacts/pointers whose manifest.modelId matches
   --filter-provider=<name> Only copy artifacts/pointers whose manifest.provider matches
+  --require-artist         Skip D1 rows without an artist (avoids legacy empty-artist duplicates)
+  --playlist-only          Only include curated/playlist artworks
+  --dedupe-artwork         Keep at most one D1 row per (artworkId, locale, mode), skipping works already cached
 `);
 }
 
@@ -240,7 +249,7 @@ function parseGuidePayload(payload, sanitizeGuideText) {
     standard = typeof parsed.standard === 'string' ? parsed.standard : '';
     deep = typeof parsed.deep === 'string' ? parsed.deep : '';
   } catch {
-    short = raw;
+    return null;
   }
   return {
     short: sanitizeGuideText(short),
@@ -286,24 +295,38 @@ function remoteR2Exists(key) {
 }
 
 async function uploadR2FileAsync(key, localPath, contentType, cacheControl) {
-  await execFileAsync(
-    'npx',
-    [
-      'wrangler',
-      'r2',
-      'object',
-      'put',
-      `${R2_BUCKET}/${key}`,
-      '--file',
-      localPath,
-      '--content-type',
-      contentType,
-      '--cache-control',
-      cacheControl,
-      '--remote',
-    ],
-    { cwd: REPO_ROOT },
-  );
+  const existingNodeOpts = process.env.NODE_OPTIONS || '';
+  const nodeOpts = existingNodeOpts.includes('--dns-result-order')
+    ? existingNodeOpts
+    : `${existingNodeOpts} --dns-result-order=ipv4first`.trim();
+  const env = { ...process.env, NODE_OPTIONS: nodeOpts };
+  const args = [
+    'wrangler',
+    'r2',
+    'object',
+    'put',
+    `${R2_BUCKET}/${key}`,
+    '--file',
+    localPath,
+    '--content-type',
+    contentType,
+    '--cache-control',
+    cacheControl,
+    '--remote',
+  ];
+  let lastErr;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await execFileAsync('npx', args, { cwd: REPO_ROOT, env });
+      return;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < 3) {
+        await new Promise(r => setTimeout(r, 1500 * attempt));
+      }
+    }
+  }
+  throw lastErr;
 }
 
 function uploadR2File(key, localPath, contentType, cacheControl) {
@@ -570,9 +593,17 @@ async function main() {
     const locale = parseLocaleFromCacheKey(row.cache_key);
     localeTotals[locale] = (localeTotals[locale] || 0) + 1;
     if (!opts.locales.includes(locale)) continue;
+    if (opts.requireArtist && !(row.artist || '').trim()) continue;
 
     const canonicalTitle = helpers.canonicalName(helpers.catalogueTitle(row.title));
     const canonicalArtist = row.artist ? helpers.canonicalName(row.artist) : '';
+    if (
+      opts.playlistOnly &&
+      !playlistTitleSet.has(canonicalTitle) &&
+      !PRIORITY_TITLES.includes(canonicalTitle)
+    ) {
+      continue;
+    }
     if (
       titleFilters.length > 0 &&
       !titleFilters.some(
@@ -659,7 +690,27 @@ async function main() {
       buildPriorityScore(b, opts, playlistTitleSet, helpers.canonicalName),
   );
 
-  const pendingJobs = jobs.filter(j => !j.alreadyCached);
+  let effectiveJobs = jobs;
+  if (opts.dedupeArtwork) {
+    const cachedArtworkKeys = new Set();
+    for (const j of jobs) {
+      if (j.alreadyCached) cachedArtworkKeys.add(`${j.artworkId}:${j.locale}:${j.mode}`);
+    }
+    const seenArtworkKeys = new Set();
+    effectiveJobs = [];
+    for (const j of jobs) {
+      const k = `${j.artworkId}:${j.locale}:${j.mode}`;
+      if (seenArtworkKeys.has(k)) continue;
+      seenArtworkKeys.add(k);
+      if (cachedArtworkKeys.has(k) && !j.alreadyCached) {
+        effectiveJobs.push({ ...j, alreadyCached: true });
+      } else {
+        effectiveJobs.push(j);
+      }
+    }
+  }
+
+  const pendingJobs = effectiveJobs.filter(j => !j.alreadyCached);
   const limitedJobs = opts.limit > 0 ? pendingJobs.slice(0, opts.limit) : pendingJobs;
 
   const summaryByLocaleMode = {};
@@ -674,7 +725,7 @@ async function main() {
 
   console.log('D1 rows by locale:', JSON.stringify(localeTotals));
   console.log(
-    `Total matching jobs: ${jobs.length} | Already cached: ${jobs.length - pendingJobs.length} | Pending: ${pendingJobs.length} | Selected: ${limitedJobs.length}`,
+    `Total matching jobs: ${effectiveJobs.length} | Already cached: ${effectiveJobs.length - pendingJobs.length} | Pending: ${pendingJobs.length} | Selected: ${limitedJobs.length}`,
   );
   console.log('Selected breakdown:', JSON.stringify(summaryByLocaleMode, null, 2));
   console.log(`Estimated total input chars: ${totalInputChars}`);
