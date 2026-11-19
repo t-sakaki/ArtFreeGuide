@@ -81,6 +81,16 @@ ElevenLabs has downgraded to the **Free plan (10,000 credits/month)**. Verified 
    node scripts/pregenerate_narration.mjs --dry-run --env=staging --provider=gemini --locales=ja,en --modes=standard --require-artist --dedupe-artwork --skip-existing-latest --check-env=production
    ```
 
+### Gemini dual-key operation (`--key-tier`, default: `free`)
+Two Gemini API keys are configured in `.env.local` (never committed; keys are never logged):
+- `GEMINI_API_KEY`: Tier 1 key (`artfreeguide-tts-local`, ~RPM 10 / RPD 100).
+- `GEMINI_API_KEY_FREE`: Free-tier key (`artfreeguide-tts-free`, ~RPM 3 / **RPD 10**).
+- `GOOGLE_AI_API_KEY` is treated as an alias of `GEMINI_API_KEY`.
+
+**Daily gradual mode (default, `--key-tier=free`)**: synthesis starts on the free key with a 20s request interval (RPM 3) and a hard cap of **10 free-key API requests per run** (matching RPD 10; counted per segment request, not per artwork). When the budget is hit or the free key returns `429` / `RESOURCE_EXHAUSTED`, the run **stops safely, reports the remaining unprocessed artworks, and never silently consumes the paid primary key**. Re-run daily to expand coverage gradually.
+**Bulk mode (`--key-tier=primary`)**: starts on the Tier 1 key with a 6s request interval (RPM 10). On a primary quota/rate error, remaining jobs fall back to the free key (subject to the same free-budget cap).
+Key usage is logged only as `[key:free]` / `[key:primary]` tier labels — never key values.
+
 | Provider / Model | Tier / Quota | Japanese Quality & Voices | Timestamps / Alignment | Status in ArtFreeGuide |
 |---|---|---|---|---|
 | **ElevenLabs (`eleven_v4`, paid archive)** | 209 tracks cached in R2 (Creator complete; Free tier = 10k credits/mo, non-commercial) | `EIKO` / `Takashi` (`ja`), `George` (`en`) | Native character-level alignment | **Archive retained in production R2; new synthesis stopped** |

@@ -90,6 +90,7 @@ function parseArgs(argv) {
     dedupeArtwork: false,
     skipExistingLatest: false,
     checkEnv: '',
+    geminiKeyTier: 'free',
     localD1Json: '',
   };
 
@@ -103,6 +104,8 @@ function parseArgs(argv) {
     else if (raw === '--playlist-only') opts.playlistOnly = true;
     else if (raw === '--dedupe-artwork') opts.dedupeArtwork = true;
     else if (raw === '--skip-existing-latest') opts.skipExistingLatest = true;
+    else if (raw.startsWith('--key-tier=')) opts.geminiKeyTier = raw.slice('--key-tier='.length).trim().toLowerCase();
+    else if (raw.startsWith('--gemini-tier=')) opts.geminiKeyTier = raw.slice('--gemini-tier='.length).trim().toLowerCase();
     else if (raw.startsWith('--env=')) opts.env = raw.slice('--env='.length);
     else if (raw.startsWith('--check-env=')) opts.checkEnv = raw.slice('--check-env='.length);
     else if (raw.startsWith('--from-env=')) opts.fromEnv = raw.slice('--from-env='.length);
@@ -198,6 +201,9 @@ function printUsage() {
   --dedupe-artwork         Keep at most one D1 row per (artworkId, locale, mode), skipping works already cached
   --skip-existing-latest   Treat any valid latest.json (regardless of provider/voice) as already cached
   --check-env=<env>        Environment to inspect when checking --skip-existing-latest (default: --env)
+  --key-tier=free|primary  Initial Gemini API key tier (default: free = daily gradual runs capped at
+                           10 free API requests/run; primary = Tier 1 key for bulk runs, falls back
+                           to free on quota errors)
 `);
 }
 
@@ -480,7 +486,7 @@ async function copyArchiveEnvironment(opts, helpers) {
   );
 }
 
-async function synthesizeAndPersist(job, opts, helpers) {
+async function synthesizeAndPersist(job, opts, helpers, extraAdapterOpts = {}) {
   const {
     narrationAudioKey,
     narrationManifestKey,
@@ -488,7 +494,7 @@ async function synthesizeAndPersist(job, opts, helpers) {
   } = helpers;
 
   const adapter = getTtsAdapter(job.provider);
-  const synth = await adapter.synthesize(job, { helpers, repoRoot: REPO_ROOT });
+  const synth = await adapter.synthesize(job, { helpers, repoRoot: REPO_ROOT, ...extraAdapterOpts });
   if (synth.status !== 'ok') {
     return synth;
   }
@@ -776,6 +782,32 @@ async function main() {
   }
 
   const activeProviders = [...new Set(limitedJobs.map(j => j.provider))];
+  const geminiKeyContext = activeProviders.includes('gemini')
+    ? {
+        activeTier: opts.geminiKeyTier === 'primary' || opts.geminiKeyTier === 'paid' ? 'primary' : 'free',
+        lastRequestAt: 0,
+        requestCounts: { free: 0, primary: 0 },
+        maxFreeRequests: 10, // GEMINI_API_KEY_FREE is ~10 requests/day (RPD); cap per run
+        pendingRateLimit: Promise.resolve(),
+        async waitForRateLimit(tier, minIntervalMs) {
+          const run = this.pendingRateLimit.then(async () => {
+            const now = Date.now();
+            const elapsed = now - this.lastRequestAt;
+            if (elapsed < minIntervalMs) {
+              await new Promise(r => setTimeout(r, minIntervalMs - elapsed));
+            }
+            if (tier === 'free' && this.requestCounts.free >= this.maxFreeRequests) {
+              throw new Error('GEMINI_FREE_BUDGET_EXHAUSTED');
+            }
+            this.lastRequestAt = Date.now();
+            this.requestCounts[tier] = (this.requestCounts[tier] || 0) + 1;
+          });
+          this.pendingRateLimit = run.catch(() => {});
+          return run;
+        },
+      }
+    : null;
+
   for (const providerName of activeProviders) {
     const adapter = getTtsAdapter(providerName);
     const preflight = await adapter.checkPreflight({ repoRoot: REPO_ROOT });
@@ -840,10 +872,19 @@ async function main() {
     if (batch.length === 0) break;
 
     const results = await Promise.all(
-      batch.map(async job => ({
-        job,
-        res: await synthesizeAndPersist(job, opts, helpers),
-      })),
+      batch.map(async job => {
+        const isGemini = job.provider === 'gemini';
+        const minRequestIntervalMs = isGemini
+          ? (geminiKeyContext?.activeTier === 'free' ? 20_000 : 6_000)
+          : 0;
+        return {
+          job,
+          res: await synthesizeAndPersist(job, opts, helpers, {
+            geminiKeyContext,
+            minRequestIntervalMs,
+          }),
+        };
+      }),
     );
 
     let fatalStop = false;
@@ -854,15 +895,28 @@ async function main() {
       }
       if (res.status === 'ok') {
         completed++;
+        const keyTierTag = res.keyTier ? ` [key:${res.keyTier}]` : '';
         console.log(
-          `[OK ${completed}/${limitedJobs.length}] [${job.locale}/${job.mode}] (${job.provider}) ${job.canonicalTitle} | ${(res.durationMs / 1000).toFixed(1)}s | ${(res.bytes / 1024).toFixed(1)} KB | input=${res.inputChars} cost=${res.charCost}`,
+          `[OK ${completed}/${limitedJobs.length}] [${job.locale}/${job.mode}] (${job.provider}${keyTierTag}) ${job.canonicalTitle} | ${(res.durationMs / 1000).toFixed(1)}s | ${(res.bytes / 1024).toFixed(1)} KB | input=${res.inputChars} cost=${res.charCost}`,
         );
       } else {
         errors++;
+        const keyTierTag = res.keyTier ? ` [key:${res.keyTier}]` : '';
         console.error(
-          `[ERR] [${job.locale}/${job.mode}] (${job.provider}) ${job.canonicalTitle}: ${res.error || res.status}`,
+          `[ERR] [${job.locale}/${job.mode}] (${job.provider}${keyTierTag}) ${job.canonicalTitle}: ${res.error || res.status}`,
         );
         if (res.fatal) fatalStop = true;
+        if (job.provider === 'gemini' && res.freeBudgetExhausted) {
+          console.warn(
+            `[gemini-tts] Free key budget reached (${geminiKeyContext?.maxFreeRequests} API requests/run). Stopping remaining items safely; primary key was not used.`,
+          );
+          fatalStop = true;
+        } else if (job.provider === 'gemini' && res.quotaExhausted && res.keyTier === 'free') {
+          console.warn(
+            `[gemini-tts] Quota exhausted on free key. Stopping remaining items safely; primary key was not used.`,
+          );
+          fatalStop = true;
+        }
       }
       report.push({
         artworkId: job.artworkId,
@@ -870,6 +924,7 @@ async function main() {
         locale: job.locale,
         mode: job.mode,
         provider: job.provider,
+        keyTier: res.keyTier || null,
         modelId: job.modelId,
         voiceId: job.voiceId,
         contentHash: job.contentHash,
@@ -887,7 +942,19 @@ async function main() {
     }
 
     if (fatalStop) {
-      console.error('Fatal quota/auth/rate error encountered. Stopping without retrying.');
+      const remainingJobs = limitedJobs.slice(i + batch.length);
+      if (remainingJobs.length > 0) {
+        console.log(
+          `\nUnprocessed items remaining due to quota/stop condition: ${remainingJobs.length} item(s)`,
+        );
+        for (const rem of remainingJobs.slice(0, 10)) {
+          console.log(`  - [${rem.locale}/${rem.mode}] ${rem.canonicalTitle} (${rem.artworkId})`);
+        }
+        if (remainingJobs.length > 10) {
+          console.log(`  ... and ${remainingJobs.length - 10} more`);
+        }
+      }
+      console.log('Stopping batch run safely.');
       break;
     }
   }

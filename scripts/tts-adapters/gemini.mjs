@@ -9,7 +9,28 @@ function parsePcmRate(mimeType) {
   return m ? Number.parseInt(m[1], 10) : 24000;
 }
 
-async function synthesizeGeminiSegment({ text, voiceId, modelId, apiKey }) {
+function isGeminiQuotaOrRateError(httpStatus, errorText) {
+  if (httpStatus === 429) return true;
+  const body = String(errorText || '').toLowerCase();
+  return (
+    body.includes('resource_exhausted') ||
+    body.includes('quota') ||
+    body.includes('rate limit') ||
+    body.includes('too many requests')
+  );
+}
+
+function resolveGeminiKeyConfig(repoRoot) {
+  const primary = loadEnvVar('GEMINI_API_KEY', repoRoot) || loadEnvVar('GOOGLE_AI_API_KEY', repoRoot);
+  const free = loadEnvVar('GEMINI_API_KEY_FREE', repoRoot);
+  return {
+    primary,
+    free,
+    hasFree: Boolean(free && free !== primary),
+  };
+}
+
+async function synthesizeGeminiSegment({ text, voiceId, modelId, apiKey, signal }) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(apiKey)}`;
   let res;
   try {
@@ -21,7 +42,7 @@ async function synthesizeGeminiSegment({ text, voiceId, modelId, apiKey }) {
           {
             parts: [
               {
-                text: `Read the following museum audio guide narration naturally and calmly without adding extra words:\n${text}`,
+                text,
               },
             ],
           },
@@ -35,24 +56,27 @@ async function synthesizeGeminiSegment({ text, voiceId, modelId, apiKey }) {
           },
         },
       }),
-      signal: AbortSignal.timeout(90_000),
+      signal: signal || AbortSignal.timeout(90_000),
     });
   } catch (err) {
     return {
       ok: false,
       httpStatus: 0,
       fatal: false,
+      quotaExhausted: false,
       error: err?.message || String(err),
     };
   }
 
   if (!res.ok) {
     const errBody = await res.text();
-    const fatal = res.status === 401 || res.status === 403 || res.status === 429;
+    const quotaExhausted = isGeminiQuotaOrRateError(res.status, errBody);
+    const fatal = res.status === 401 || res.status === 403;
     return {
       ok: false,
       httpStatus: res.status,
       fatal,
+      quotaExhausted,
       error: errBody.slice(0, 400),
     };
   }
@@ -64,6 +88,7 @@ async function synthesizeGeminiSegment({ text, voiceId, modelId, apiKey }) {
       ok: false,
       httpStatus: 200,
       fatal: false,
+      quotaExhausted: false,
       error: 'Gemini TTS response did not include inlineData audio.',
     };
   }
@@ -98,20 +123,25 @@ export const geminiAdapter = {
   },
 
   async checkPreflight({ repoRoot }) {
-    const key = loadEnvVar('GEMINI_API_KEY', repoRoot) || loadEnvVar('GOOGLE_AI_API_KEY', repoRoot);
-    if (!key) {
+    const { primary, free, hasFree } = resolveGeminiKeyConfig(repoRoot);
+    if (!primary && !free) {
       return {
         ok: false,
         missingKey: true,
         message: 'GEMINI_API_KEY (or GOOGLE_AI_API_KEY) is missing in env or .env.local.',
       };
     }
-    return { ok: true, tier: 'configured' };
+    return {
+      ok: true,
+      tier: 'configured',
+      hasPrimary: Boolean(primary),
+      hasFreeBackup: hasFree,
+    };
   },
 
-  async synthesize(job, { helpers, repoRoot }) {
-    const apiKey = loadEnvVar('GEMINI_API_KEY', repoRoot) || loadEnvVar('GOOGLE_AI_API_KEY', repoRoot);
-    if (!apiKey) {
+  async synthesize(job, { helpers, repoRoot, geminiKeyContext, minRequestIntervalMs = 0 }) {
+    const keyConfig = resolveGeminiKeyConfig(repoRoot);
+    if (!keyConfig.primary && !keyConfig.free) {
       return { status: 'error', fatal: true, error: 'GEMINI_API_KEY is missing.' };
     }
 
@@ -127,68 +157,138 @@ export const geminiAdapter = {
     }
 
     const gapMs = 150;
-    const segBufs = [];
-    const segDurations = [];
 
-    for (const seg of synthInput.segments) {
-      if (!seg.spoken) {
-        segDurations.push(0);
-        continue;
+    const runWithKey = async (tierName, activeKey) => {
+      const segBufs = [];
+      const segDurations = [];
+      for (const seg of synthInput.segments) {
+        if (!seg.spoken) {
+          segDurations.push(0);
+          continue;
+        }
+
+        if (geminiKeyContext && typeof geminiKeyContext.waitForRateLimit === 'function') {
+          try {
+            await geminiKeyContext.waitForRateLimit(tierName, minRequestIntervalMs);
+          } catch (err) {
+            if (err?.message === 'GEMINI_FREE_BUDGET_EXHAUSTED') {
+              return {
+                status: 'error',
+                fatal: false,
+                quotaExhausted: false,
+                freeBudgetExhausted: true,
+                error: 'Free key request budget exhausted for this run.',
+                charCost: job.charCount,
+                keyTier: tierName,
+              };
+            }
+            throw err;
+          }
+        }
+
+        const res = await synthesizeGeminiSegment({
+          text: seg.spoken,
+          voiceId: job.voiceId,
+          modelId: job.modelId,
+          apiKey: activeKey,
+        });
+
+        if (!res.ok) {
+          return {
+            status: 'error',
+            httpStatus: res.httpStatus,
+            fatal: res.fatal,
+            quotaExhausted: res.quotaExhausted,
+            error: res.error,
+            charCost: job.charCount,
+            keyTier: tierName,
+          };
+        }
+
+        const check = verifyOpusBuffer(res.opusBuf);
+        if (!check.valid) {
+          return {
+            status: 'error',
+            fatal: false,
+            quotaExhausted: false,
+            error: `Gemini segment Opus verification failed: ${check.error}`,
+            charCost: job.charCount,
+            keyTier: tierName,
+          };
+        }
+        segBufs.push(res.opusBuf);
+        segDurations.push(check.durationMs);
       }
-      const res = await synthesizeGeminiSegment({
-        text: seg.spoken,
-        voiceId: job.voiceId,
-        modelId: job.modelId,
-        apiKey,
-      });
-      if (!res.ok) {
-        return {
-          status: 'error',
-          httpStatus: res.httpStatus,
-          fatal: res.fatal,
-          error: res.error,
-          charCost: job.charCount,
-        };
-      }
-      const check = verifyOpusBuffer(res.opusBuf);
-      if (!check.valid) {
+
+      const mergedBuf = concatOggOpusBuffers(segBufs, { gapMs });
+      const opusCheck = verifyOpusBuffer(mergedBuf);
+      if (!opusCheck.valid) {
         return {
           status: 'error',
           fatal: false,
-          error: `Gemini segment Opus verification failed: ${check.error}`,
+          quotaExhausted: false,
+          error: `Gemini merged Opus verification failed: ${opusCheck.error}`,
           charCost: job.charCount,
+          keyTier: tierName,
         };
       }
-      segBufs.push(res.opusBuf);
-      segDurations.push(check.durationMs);
-    }
 
-    const mergedBuf = concatOggOpusBuffers(segBufs, { gapMs });
-    const opusCheck = verifyOpusBuffer(mergedBuf);
-    if (!opusCheck.valid) {
+      const segments = buildSegmentTimingsFromDurations(
+        synthInput.segments,
+        segDurations,
+        gapMs,
+        opusCheck.durationMs,
+      );
+
       return {
-        status: 'error',
-        fatal: false,
-        error: `Gemini merged Opus verification failed: ${opusCheck.error}`,
+        status: 'ok',
+        audioBuf: mergedBuf,
+        opusCheck,
+        segments,
+        alignment: null,
         charCost: job.charCount,
+        inputChars: job.charCount,
+        keyTier: tierName,
       };
+    };
+
+    let activeTier = geminiKeyContext?.activeTier || 'primary';
+    let activeKey = activeTier === 'free' && keyConfig.free ? keyConfig.free : (keyConfig.primary || keyConfig.free);
+    if (!keyConfig.primary && keyConfig.free) {
+      // Only the free key is configured: run on it regardless of the requested tier.
+      activeTier = 'free';
+      activeKey = keyConfig.free;
+    } else if (activeTier === 'free' && !keyConfig.free && keyConfig.primary) {
+      // GEMINI_API_KEY_FREE is not set: fall back to primary-only operation (default rate limits).
+      activeTier = 'primary';
+      activeKey = keyConfig.primary;
+      if (geminiKeyContext) {
+        geminiKeyContext.activeTier = 'primary';
+      }
     }
 
-    const segments = buildSegmentTimingsFromDurations(
-      synthInput.segments,
-      segDurations,
-      gapMs,
-      opusCheck.durationMs,
-    );
+    let result = await runWithKey(activeTier, activeKey);
 
-    return {
-      status: 'ok',
-      audioBuf: mergedBuf,
-      opusCheck,
-      segments,
-      alignment: null,
-      charCost: job.charCount,
-      inputChars: job.charCount,
-    };
+    // Fallback trigger (bulk mode): quota/rate error on the primary key switches to the free key.
+    // In free-first daily mode the free key is NOT silently upgraded to the paid primary key;
+    // quota errors surface to the runner, which stops safely and reports unprocessed items.
+    if (
+      result.status !== 'ok' &&
+      result.quotaExhausted &&
+      activeTier === 'primary' &&
+      keyConfig.hasFree
+    ) {
+      console.warn(
+        `[gemini-tts] Rate limit / quota error on primary key (${result.error || result.httpStatus}). Switching to fallback free key.`,
+      );
+      if (geminiKeyContext) {
+        geminiKeyContext.activeTier = 'free';
+      }
+      activeTier = 'free';
+      activeKey = keyConfig.free;
+      result = await runWithKey(activeTier, activeKey);
+    }
+
+    return result;
   },
 };
