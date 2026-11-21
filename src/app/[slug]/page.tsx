@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import HomeClient from '../HomeClient';
 import { guideMetadata, origin } from '@/lib/guideMetadata';
 import { DEFAULT_LOCALE, Locale, isLocale } from '@/lib/i18n';
+import { getCachedPublishedFeaturedTours, getPublishedFeaturedTourBySlug } from '@/lib/featuredTours';
 import { PLAYLISTS, localizePlaylist } from '@/lib/playlists';
 import { SHARE_META } from '@/lib/shareMeta';
 import { SLUG_ARTWORKS, artworkFromSlug, tourFromSlug } from '@/lib/slug';
@@ -47,7 +48,7 @@ export async function generateMetadata({
     });
   }
 
-  const playlist = tourFromSlug(slug);
+  const playlist = tourFromSlug(slug) ?? (await getPublishedFeaturedTourBySlug(slug));
   if (!playlist) return {};
 
   const copy = SHARE_META[locale] ?? SHARE_META['en']!;
@@ -81,7 +82,11 @@ export default async function PermalinkPage({ params }: { params: Params }) {
   if (work) return <HomeClient initialArtwork={work.title} initialArtist={work.artist} />;
 
   const playlist = tourFromSlug(slug);
-  if (!playlist) notFound();
+  if (playlist) return <HomeClient initialTour={playlist.id} />;
 
-  return <HomeClient initialTour={playlist.id} />;
+  const featuredTours = await getCachedPublishedFeaturedTours();
+  const dynamicPlaylist = featuredTours.find(p => p.id === slug.toLowerCase()) ?? null;
+  if (!dynamicPlaylist) notFound();
+
+  return <HomeClient initialTour={dynamicPlaylist.id} featuredTours={featuredTours} />;
 }

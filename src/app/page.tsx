@@ -5,6 +5,8 @@ import { DEFAULT_LOCALE, Locale, isLocale } from '@/lib/i18n';
 import { canonicalName } from '@/lib/names';
 import { artworkPath } from '@/lib/site';
 import { getDailyArtwork, type DailyArtwork } from '@/lib/dailyArtwork';
+import { getCachedPublishedFeaturedTours } from '@/lib/featuredTours';
+import type { Playlist } from '@/lib/playlists';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -59,5 +61,12 @@ export default async function Page({
     daily = null;
   }
 
-  return <HomeClient daily={daily} />;
+  let featuredTours: Playlist[] = [];
+  try {
+    featuredTours = await getCachedPublishedFeaturedTours();
+  } catch {
+    featuredTours = [];
+  }
+
+  return <HomeClient daily={daily} featuredTours={featuredTours} />;
 }
