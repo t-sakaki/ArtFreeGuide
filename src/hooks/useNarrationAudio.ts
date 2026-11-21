@@ -86,6 +86,15 @@ export function useNarrationAudio({
     [baseGuideText],
   );
 
+  const lookupKey = useMemo(
+    () =>
+      enabled && opusSupported && title.trim() && contentHash
+        ? `${title.trim()}::${artist.trim()}::${locale}::${mode}::${contentHash}`
+        : '',
+    [enabled, opusSupported, title, artist, locale, mode, contentHash],
+  );
+  const [resolvedLookupKey, setResolvedLookupKey] = useState('');
+
   const baseSegmentCount = useMemo(
     () => (baseGuideText ? extractSpeakableSegments(baseGuideText).length : 0),
     [baseGuideText],
@@ -93,10 +102,11 @@ export function useNarrationAudio({
 
   // Fetch manifest metadata for (title, artist, locale, mode, contentHash)
   useEffect(() => {
-    if (!enabled || !opusSupported || !title.trim() || !contentHash) {
+    if (!lookupKey) {
       setStatus(opusSupported ? 'none' : 'unavailable');
       setAudioUrl('');
       setManifest(null);
+      setResolvedLookupKey('');
       return;
     }
 
@@ -121,6 +131,7 @@ export function useNarrationAudio({
       })
       .then(data => {
         if (abortController.signal.aborted) return;
+        setResolvedLookupKey(lookupKey);
         if (data.status === 'ready' && data.audioUrl && data.manifest) {
           setAudioUrl(data.audioUrl);
           setManifest(data.manifest);
@@ -133,13 +144,14 @@ export function useNarrationAudio({
       })
       .catch(err => {
         if (err?.name === 'AbortError') return;
+        setResolvedLookupKey(lookupKey);
         setStatus('none');
       });
 
     return () => {
       abortController.abort();
     };
-  }, [enabled, opusSupported, title, artist, locale, mode, contentHash]);
+  }, [lookupKey, opusSupported, title, artist, locale, mode, contentHash]);
 
   // Apply playbackRate + pitch preservation on the active <audio> element
   const applyPlaybackRate = useCallback((a: HTMLAudioElement, rate: number) => {
@@ -224,8 +236,11 @@ export function useNarrationAudio({
     };
   }, [audioUrl, manifest, failedForUrl, applyPlaybackRate]);
 
+  const effectiveStatus: NarrationAudioStatus =
+    lookupKey && resolvedLookupKey !== lookupKey ? 'loading' : status;
+
   const isReady =
-    status === 'ready' &&
+    effectiveStatus === 'ready' &&
     opusSupported &&
     Boolean(audioUrl) &&
     Boolean(manifest) &&
@@ -327,7 +342,7 @@ export function useNarrationAudio({
   }, []);
 
   return {
-    status,
+    status: effectiveStatus,
     opusSupported,
     isReady,
     canPlayOpusSegment,

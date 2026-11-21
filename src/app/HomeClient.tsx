@@ -36,7 +36,6 @@ import { suggestedQuestions } from '@/lib/questions';
 import { loadDynamicReadings, toSpokenText } from '@/lib/pronunciation';
 import {
   DEFAULT_LOCALE,
-  DEFAULT_PLAYBACK_SPEED,
   LOCALE_MENU,
   Locale,
   SPEECH_LANG,
@@ -45,6 +44,14 @@ import {
   AI_PROMPTS,
   themeSongStrings,
 } from '@/lib/i18n';
+import {
+  type TtsEngine,
+  getDefaultPlaybackSpeed,
+  getPlaybackSpeedStorageKey,
+  getRecommendedPlaybackSpeed,
+  parseValidPlaybackSpeed,
+  resolveSpeedForTtsEngine,
+} from '@/lib/ttsSpeed';
 import { canonicalName, localizeName } from '@/lib/names';
 import { artworkPath } from '@/lib/site';
 import type { DailyArtwork } from '@/lib/dailyArtwork';
@@ -510,7 +517,9 @@ export default function HomeClient({
   const [speakableSegments, setSpeakableSegments] = useState<string[]>([]);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState<number>(-1);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState<number>(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE] ?? 1.7);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(() =>
+    getDefaultPlaybackSpeed('web-speech', DEFAULT_LOCALE),
+  );
 
   const [playbackMode, setPlaybackMode] = useState<'narration' | 'song'>('narration');
   const [songFullscreen, setSongFullscreen] = useState(false);
@@ -544,6 +553,20 @@ export default function HomeClient({
       narrationMediaErrorRef.current();
     }, []),
   });
+
+  const activeTtsEngine: TtsEngine =
+    narration.isReady && narration.manifest?.provider
+      ? narration.manifest.provider
+      : 'web-speech';
+
+  const resolvedTtsEngine: TtsEngine | null =
+    loading || !responseShort || !canonicalArtwork.trim()
+      ? null
+      : narration.status === 'loading' || narration.status === 'idle'
+        ? null
+        : narration.isReady && narration.manifest?.provider
+          ? narration.manifest.provider
+          : 'web-speech';
 
   // ── Theme song (MiniMax Week): one player shared with the narration ──────
   const song = useThemeSong({
@@ -791,7 +814,9 @@ export default function HomeClient({
   const localeRef = useRef<Locale>(DEFAULT_LOCALE);
   localeRef.current = locale;
   const isPlayingRef = useRef(false);
-  const speedRef = useRef(DEFAULT_PLAYBACK_SPEED[DEFAULT_LOCALE] ?? 1.7);
+  const speedRef = useRef(getDefaultPlaybackSpeed('web-speech', DEFAULT_LOCALE));
+  const urlSpeedRef = useRef<number | null>(null);
+  const lastResolvedEngineRef = useRef<TtsEngine | null>(null);
   const activeIndexRef = useRef(-1);
   const speakableSegmentsRef = useRef<string[]>([]);
   /** `index::text` of the segment already handed to the speech engine. */
@@ -805,6 +830,26 @@ export default function HomeClient({
   useEffect(() => {
     speedRef.current = playbackSpeed;
   }, [playbackSpeed]);
+
+  // Adjust playback speed when the active TTS engine resolves or changes
+  // (e.g. Web Speech's 1.5x/1.7x vs ElevenLabs pre-generated 1.0x).
+  useEffect(() => {
+    if (!resolvedTtsEngine) return;
+    if (lastResolvedEngineRef.current === resolvedTtsEngine) return;
+    lastResolvedEngineRef.current = resolvedTtsEngine;
+
+    const saved = parseValidPlaybackSpeed(
+      localStorage.getItem(getPlaybackSpeedStorageKey(resolvedTtsEngine)),
+    );
+    const nextSpeed = resolveSpeedForTtsEngine({
+      engine: resolvedTtsEngine,
+      locale,
+      savedSpeed: saved,
+      urlSpeed: urlSpeedRef.current,
+    });
+    urlSpeedRef.current = null;
+    setPlaybackSpeed(nextSpeed);
+  }, [resolvedTtsEngine, locale]);
 
   useEffect(() => {
     activeIndexRef.current = activeSegmentIndex;
@@ -1041,9 +1086,9 @@ export default function HomeClient({
     localeRef.current = next;
     setLocale(next);
     localStorage.setItem('artfreeguide-locale', next);
-    // Until the visitor picks a speed themselves, follow the language's default.
-    if (!localStorage.getItem('art_free_guide_playback_speed')) {
-      setPlaybackSpeed(DEFAULT_PLAYBACK_SPEED[next] ?? 1.2);
+    // Until the visitor picks a speed themselves, follow the active TTS + language default.
+    if (!localStorage.getItem(getPlaybackSpeedStorageKey(activeTtsEngine))) {
+      setPlaybackSpeed(getDefaultPlaybackSpeed(activeTtsEngine, next));
     }
     setGuideCache({});
     if (typeof window !== 'undefined') {
@@ -1111,11 +1156,11 @@ export default function HomeClient({
       const spotParam = params.get('spot') || '';
 
       // 1. Sync speed if present in URL
-      if (speedParam) {
-        const parsedSpeed = parseFloat(speedParam);
-        if (!isNaN(parsedSpeed) && [1.0, 1.2, 1.5, 1.7, 2.0, 2.5].includes(parsedSpeed)) {
-          setPlaybackSpeed(parsedSpeed);
-        }
+      const parsedUrlSpeed = parseValidPlaybackSpeed(speedParam);
+      urlSpeedRef.current = parsedUrlSpeed;
+      lastResolvedEngineRef.current = null;
+      if (parsedUrlSpeed !== null) {
+        setPlaybackSpeed(parsedUrlSpeed);
       }
 
       // 2. Sync mode if present in URL
@@ -1161,11 +1206,15 @@ export default function HomeClient({
     // The language effect above already resolved the locale into the ref.
     // A speed carried in the link is a deliberate choice by whoever shared it, and
     // this effect runs after the deep-link one, so it must not undo it.
-    const linkSpeed = new URLSearchParams(window.location.search).get('speed');
-    if (!linkSpeed) {
-      const savedSpeed = localStorage.getItem('art_free_guide_playback_speed');
+    const linkSpeed = parseValidPlaybackSpeed(
+      new URLSearchParams(window.location.search).get('speed'),
+    );
+    if (linkSpeed === null) {
+      const savedSpeed = parseValidPlaybackSpeed(
+        localStorage.getItem(getPlaybackSpeedStorageKey('web-speech')),
+      );
       setPlaybackSpeed(
-        savedSpeed ? parseFloat(savedSpeed) : (DEFAULT_PLAYBACK_SPEED[localeRef.current] ?? 1.7)
+        savedSpeed ?? getDefaultPlaybackSpeed('web-speech', localeRef.current),
       );
     }
 
@@ -4465,7 +4514,8 @@ export default function HomeClient({
               {/* 🎚️ ウルトラミニマル縦型マグネティック・アナログ倍速スライダー */}
               {showSpeedMenu && (
                 (() => {
-                  const recommendedSpeed = locale === 'ja' ? 1.7 : 1.2;
+                  const recommendedSpeed = getRecommendedPlaybackSpeed(activeTtsEngine, locale);
+                  const speedStorageKey = getPlaybackSpeedStorageKey(activeTtsEngine);
                   const snapNotches = [2.5, 2.0, 1.7, 1.5, 1.2, 1.0, 0.8]; // 逆順（上が高速2.5x、下が低速0.8x）
 
                   const snapSpeed = (rawVal: number): number => {
@@ -4494,7 +4544,7 @@ export default function HomeClient({
                     const raw = 0.8 + ratio * (2.5 - 0.8);
                     const snapped = snapSpeed(raw);
                     setPlaybackSpeed(snapped);
-                    localStorage.setItem('art_free_guide_playback_speed', String(snapped));
+                    localStorage.setItem(speedStorageKey, String(snapped));
                   };
 
                   return (
@@ -4530,7 +4580,7 @@ export default function HomeClient({
                                   type="button"
                                   onClick={() => {
                                     setPlaybackSpeed(notch);
-                                    localStorage.setItem('art_free_guide_playback_speed', String(notch));
+                                    localStorage.setItem(speedStorageKey, String(notch));
                                     setShowSpeedMenu(false);
                                   }}
                                   className={`flex items-center gap-1.5 text-left text-[11px] font-mono transition-all active:scale-95 ${
