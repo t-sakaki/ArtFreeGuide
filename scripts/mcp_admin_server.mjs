@@ -135,5 +135,103 @@ server.registerTool(
     )
 );
 
+server.registerTool(
+  'list_featured_tours',
+  {
+    title: 'List dynamic featured tours',
+    description: 'List D1-backed featured tours, optionally filtered by status (all | draft | published | archived).',
+    inputSchema: {
+      status: z.enum(['all', 'draft', 'published', 'archived']).optional()
+    }
+  },
+  async ({ status }) =>
+    textResult(await adminFetch(`/api/admin/featured-tours?status=${encodeURIComponent(status ?? 'all')}`))
+);
+
+server.registerTool(
+  'upsert_featured_tour',
+  {
+    title: 'Create or update a dynamic featured tour',
+    description:
+      'Create or update a D1-backed featured tour without redeploying. Defaults to status "draft" so an operator can review before publishing. Titles and artists inside `items` must use canonical Japanese spellings.',
+    inputSchema: {
+      slug: z.string().min(2).max(80),
+      title: z.string().min(1),
+      subtitle: z.string().min(1),
+      emoji: z.string().optional(),
+      status: z.enum(['draft', 'published', 'archived']).optional(),
+      sortOrder: z.number().int().optional(),
+      sourceUrl: z.string().url().optional(),
+      startsAt: z.string().optional(),
+      endsAt: z.string().optional(),
+      items: z
+        .array(
+          z.object({
+            title: z.string().min(1),
+            artist: z.string().default(''),
+            cue: z.string().default('')
+          })
+        )
+        .min(1)
+        .max(12),
+      i18n: z
+        .record(
+          z.string(),
+          z.object({
+            title: z.string().min(1),
+            subtitle: z.string().min(1),
+            cues: z.array(z.string())
+          })
+        )
+        .optional()
+    }
+  },
+  async input =>
+    textResult(
+      await adminFetch('/api/admin/featured-tours', {
+        method: 'POST',
+        body: input
+      })
+    )
+);
+
+server.registerTool(
+  'publish_featured_tour',
+  {
+    title: 'Change status of a dynamic featured tour',
+    description:
+      'Transition an existing featured tour to published, draft, or archived. Status change is immediate (within 60s isolate cache TTL) and does not block on guide warming.',
+    inputSchema: {
+      slug: z.string().min(2).max(80),
+      status: z.enum(['draft', 'published', 'archived']).default('published')
+    }
+  },
+  async ({ slug, status }) =>
+    textResult(
+      await adminFetch('/api/admin/featured-tours', {
+        method: 'POST',
+        body: { action: 'set_status', slug, status }
+      })
+    )
+);
+
+server.registerTool(
+  'delete_featured_tour',
+  {
+    title: 'Delete a dynamic featured tour',
+    description: 'Permanently delete a D1-backed featured tour by slug.',
+    inputSchema: {
+      slug: z.string().min(2).max(80)
+    }
+  },
+  async ({ slug }) =>
+    textResult(
+      await adminFetch('/api/admin/featured-tours', {
+        method: 'DELETE',
+        body: { slug }
+      })
+    )
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);

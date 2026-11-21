@@ -752,7 +752,23 @@ export function localizePlaylist(playlist: Playlist, locale: Locale): Playlist {
   };
 }
 
-export function findPlaylist(id: string | null | undefined): Playlist | null {
+export function findPlaylist(id: string | null | undefined, playlists: Playlist[] = PLAYLISTS): Playlist | null {
   if (!id) return null;
-  return PLAYLISTS.find(p => p.id === id) ?? null;
+  return playlists.find(p => p.id === id) ?? null;
+}
+
+/**
+ * Combine dynamic D1 featured tours ahead of bundled static tours,
+ * deduplicating by `id` so a dynamic tour can also override a static one.
+ */
+export function mergePlaylists(dynamicTours: Playlist[], staticTours: Playlist[] = PLAYLISTS): Playlist[] {
+  if (!dynamicTours.length) return staticTours;
+  const seen = new Set<string>();
+  const merged: Playlist[] = [];
+  for (const tour of [...dynamicTours, ...staticTours]) {
+    if (seen.has(tour.id)) continue;
+    seen.add(tour.id);
+    merged.push(tour);
+  }
+  return merged;
 }

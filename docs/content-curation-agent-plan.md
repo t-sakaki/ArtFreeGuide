@@ -56,9 +56,16 @@
   ```
 - **週次自動実行**: `.github/workflows/weekly-art-scout.yml`（毎週月曜 09:00 JST および手動実行）により、`scripts/scout_art_topics.mjs --follow-links=2` の結果を GitHub Issue として自動提案する。
 
-### Phase 3: 再デプロイ不要の動的特集ツアー（手応えが出たら検討）
-- 現在は `src/lib/playlists.ts` と `names.data.json` がビルド時確定のため、ツアー追加のたびにデプロイが必要。
-- 頻繁に時事特集を入れ替えたくなった場合、D1 に特集ツアー用テーブル（例: `featured_tours`、`status = draft | published`）を設け、管理画面（`/admin/*`）または `scripts/mcp_admin_server.mjs` 経由で下書き登録 → 人間が承認すると即時公開＆ウォームされる仕組みへ拡張する。
+### Phase 3: 再デプロイ不要の動的特集ツアー（実装済み）
+- D1 テーブル `featured_tours`（`d1/migrations/0007_featured_tours.sql`）を追加し、`status = 'draft' | 'published' | 'archived'` および公開期間（`starts_at` / `ends_at`）・表示順（`sort_order`）で動的特集ツアーを管理可能にした。
+- **データ・キャッシュ層**: `src/lib/featuredTours.ts` が D1 から公開中ツアーを読み込み（Worker isolate ごとに 60 秒キャッシュ）、`mergePlaylists()`（`src/lib/playlists.ts`）で静的 `PLAYLISTS` の先頭へ重複排除マージする。
+- **公開 API / SSR ルーティング**:
+  - `GET /api/featured-tours`: 公開中・期間内の動的ツアー一覧を返却。
+  - `src/app/page.tsx` および `src/app/[slug]/page.tsx`: 動的ツアーのトップ表示・パーマリンク（`/<slug>`）・OGP メタデータ生成に対応。
+- **管理手段（Human-in-the-loop）**:
+  - 管理 UI `/admin/tours`（`AdminGate` + `FeaturedToursAdmin`）および API `/api/admin/featured-tours`（`GET` / `POST` / `DELETE`）
+  - MCP 管理ツール（`scripts/mcp_admin_server.mjs`）: `list_featured_tours`, `upsert_featured_tour`, `publish_featured_tour`, `delete_featured_tour`
+  - 公開操作は D1 ステータス更新のみを即時実行し、`/api/chat` 事前ウォームはタイムアウト回避のため従来通り別ステップ（`scripts/warm_cache.mjs` 等）で実行する。
 
 ## 5. エージェントに出力させる下書きフォーマット（Phase 1 用）
 

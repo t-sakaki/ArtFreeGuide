@@ -29,7 +29,7 @@ import {
   normalizeMusicSpec,
   specFromLegacyMood,
 } from '@/lib/ambient';
-import { PLAYLISTS, Playlist, localizePlaylist } from '@/lib/playlists';
+import { PLAYLISTS, Playlist, localizePlaylist, mergePlaylists } from '@/lib/playlists';
 import { getWorkNavigationState } from '@/lib/workNavigation';
 import { looksLikeModelScaffolding, sanitizeGuideText } from '@/lib/guideText';
 import { suggestedQuestions } from '@/lib/questions';
@@ -419,12 +419,14 @@ export default function HomeClient({
   initialArtwork = '',
   initialArtist = '',
   initialTour = '',
-  daily = null
+  daily = null,
+  featuredTours
 }: {
   initialArtwork?: string;
   initialArtist?: string;
   initialTour?: string;
   daily?: DailyArtwork | null;
+  featuredTours?: Playlist[];
 } = {}) {
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
   // The reading approval queue is a moderator tool, so it stays out of the way
@@ -676,6 +678,27 @@ export default function HomeClient({
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
 
   // Curated tour (playlist) state
+  const [dynamicTours, setDynamicTours] = useState<Playlist[]>(featuredTours ?? []);
+  const allPlaylists = useMemo(() => mergePlaylists(dynamicTours), [dynamicTours]);
+  const allPlaylistsRef = useRef<Playlist[]>(allPlaylists);
+  useEffect(() => {
+    allPlaylistsRef.current = allPlaylists;
+  }, [allPlaylists]);
+  useEffect(() => {
+    if (featuredTours !== undefined) return;
+    let cancelled = false;
+    fetch('/api/featured-tours')
+      .then(res => (res.ok ? res.json() : null))
+      .then((data: { tours?: Playlist[] } | null) => {
+        if (!cancelled && Array.isArray(data?.tours)) {
+          setDynamicTours(data.tours);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [featuredTours]);
   const [activePlaylist, setActivePlaylist] = useState<Playlist | null>(null);
   const [playlistIndex, setPlaylistIndex] = useState(0);
   const [nextUpCue, setNextUpCue] = useState<string | null>(null);
@@ -1104,7 +1127,7 @@ export default function HomeClient({
       pendingHotspotRef.current = spotParam || null;
 
       // 4. Sync and generate guide if present in URL
-      const sharedTour = tourParam ? PLAYLISTS.find(p => p.id === tourParam) ?? null : null;
+      const sharedTour = tourParam ? allPlaylistsRef.current.find(p => p.id === tourParam) ?? null : null;
       if (sharedTour) {
         const index = sharedTour.items.findIndex(item => item.title === artworkParam);
         startTour(sharedTour, index >= 0 ? index : 0);
@@ -3237,7 +3260,7 @@ export default function HomeClient({
             {t.hub.tours}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {PLAYLISTS.map(canonicalTour => {
+            {allPlaylists.map(canonicalTour => {
               const tour = localizePlaylist(canonicalTour, locale);
               return (
                 <button
