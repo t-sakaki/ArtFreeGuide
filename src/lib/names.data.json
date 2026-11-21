@@ -335,6 +335,20 @@
       "fr": "Paul Véronèse",
       "zh": "保罗·委罗内塞",
       "es": "Paolo Veronese"
+    },
+    {
+      "ja": "オノレ・ドーミエ",
+      "en": "Honoré Daumier",
+      "fr": "Honoré Daumier",
+      "zh": "奥诺雷·杜米埃",
+      "es": "Honoré Daumier"
+    },
+    {
+      "ja": "アンリ・ド・トゥールーズ＝ロートレック",
+      "en": "Henri de Toulouse-Lautrec",
+      "fr": "Henri de Toulouse-Lautrec",
+      "zh": "亨利·德·图卢兹-洛特雷克",
+      "es": "Henri de Toulouse-Lautrec"
     }
   ],
   "artworks": [
@@ -932,6 +946,41 @@
       "fr": "Les Noces de Cana",
       "zh": "迦拿的婚礼",
       "es": "Las bodas de Caná"
+    },
+    {
+      "ja": "墓地のハムレットとホレイショー",
+      "en": "Hamlet and Horatio in the Graveyard",
+      "fr": "Hamlet et Horatio au cimetière",
+      "zh": "墓地的哈姆雷特与霍拉旭",
+      "es": "Hamlet y Horacio en el cementerio"
+    },
+    {
+      "ja": "クリスパンとスカパン",
+      "en": "Crispin and Scapin",
+      "fr": "Crispin et Scapin",
+      "zh": "克里斯潘与斯卡潘",
+      "es": "Crispin y Scapin"
+    },
+    {
+      "ja": "舞台の踊り子",
+      "en": "L'Étoile",
+      "fr": "L'Étoile",
+      "zh": "舞台上的舞者",
+      "es": "La estrella"
+    },
+    {
+      "ja": "フォリー・ベルジェールのバー",
+      "en": "A Bar at the Folies-Bergère",
+      "fr": "Un bar aux Folies-Bergère",
+      "zh": "女神游乐厅的吧台",
+      "es": "Un bar del Folies-Bergère"
+    },
+    {
+      "ja": "ムーラン・ルージュにて",
+      "en": "At the Moulin Rouge",
+      "fr": "Au Moulin-Rouge",
+      "zh": "在红磨坊",
+      "es": "En el Moulin Rouge"
     }
   ],
   "aliases": [
@@ -990,6 +1039,14 @@
     {
       "spoken": "デューラーのサイ",
       "catalogue": "サイ"
+    },
+    {
+      "spoken": "エトワール",
+      "catalogue": "舞台の踊り子"
+    },
+    {
+      "spoken": "フォリー＝ベルジェールのバー",
+      "catalogue": "フォリー・ベルジェールのバー"
     }
   ]
 }

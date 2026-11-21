@@ -670,6 +670,65 @@ export const PLAYLISTS: Playlist[] = [
       },
     },
   },
+  {
+    id: 'paris-theater',
+    title: '劇場をめぐる19世紀パリ',
+    subtitle: 'ロマン派の悲劇から、舞台袖と夜のカフェ＝コンセールへ',
+    emoji: '🎭',
+    items: [
+      { title: '墓地のハムレットとホレイショー', artist: 'ウジェーヌ・ドラクロワ', cue: 'シェイクスピアの悲劇に心を震わせた、ロマン主義のドラマから幕を開けます' },
+      { title: 'クリスパンとスカパン', artist: 'オノレ・ドーミエ', cue: '喜劇の役者たちの巧みな駆け引きを、鋭い明暗と風刺の筆でとらえます' },
+      { title: '舞台の踊り子', artist: 'エドガー・ドガ', cue: '照明を浴びる華やかなエトワールと、舞台袖のわずかな緊張感' },
+      { title: 'フォリー・ベルジェールのバー', artist: 'エドゥアール・マネ', cue: '鏡の奥に広がる観客席。華やかな娯楽場の喧騒と、ひとりの孤独なまなざし' },
+      { title: 'ムーラン・ルージュにて', artist: 'アンリ・ド・トゥールーズ＝ロートレック', cue: '最後はガス灯と緑の影が揺れるモンマルトルの夜へご案内します' },
+    ],
+    i18n: {
+      en: {
+        title: 'Stage and spotlight in 19th-century Paris',
+        subtitle: 'From Shakespearean drama to backstage dancers and cabaret nights',
+        cues: [
+          'We raise the curtain on Romantic drama inspired by Shakespeare’s tragic stage',
+          'To comic actors caught mid-scheme under Daumier’s sharp theatrical light',
+          'Into the footlights of the Opéra, where a star dancer glides past the wings',
+          'Behind the marble bar of a lively music hall, a quiet gaze meets the mirrored crowd',
+          'We close in the gaslit shadows and nightlife of Montmartre’s Moulin Rouge',
+        ],
+      },
+      fr: {
+        title: 'Scènes et coulisses du Paris du XIXe siècle',
+        subtitle: 'Du drame shakespearien aux danseuses de l’Opéra et aux cabarets',
+        cues: [
+          'Levons le rideau sur le drame romantique inspiré par le théâtre de Shakespeare',
+          'Place aux comédiens surpris en pleine intrigue dans le clair-obscur de Daumier',
+          'Sous les feux de la rampe à l’Opéra, une étoile s’élance devant les coulisses',
+          'Derrière le comptoir d’un café-concert animé, un regard silencieux face au miroir',
+          'Terminons dans les ombres électriques et la nuit du Moulin-Rouge à Montmartre',
+        ],
+      },
+      zh: {
+        title: '剧场与聚光灯下的十九世纪巴黎',
+        subtitle: '从莎士比亚悲剧，走向歌剧院后台与蒙马特夜色',
+        cues: [
+          '从受莎士比亚戏剧启发的浪漫主义悲剧拉开帷幕',
+          '走近杜米埃笔下明暗交错的喜剧舞台与狡黠对白',
+          '步入巴黎歌剧院的聚光灯下，看首席舞者在舞台侧幕间起舞',
+          '在喧闹游乐厅的大理石吧台后，静谧目光与镜中人群交错',
+          '最后置身蒙马特红磨坊摇曳的煤气灯光与夜色之中',
+        ],
+      },
+      es: {
+        title: 'Escena y candilejas en el París del siglo XIX',
+        subtitle: 'Del drama shakespeariano a los bastidores de la Ópera y el cabaret',
+        cues: [
+          'Alzamos el telón con el drama romántico inspirado en el teatro de Shakespeare',
+          'A dos actores cómicos sorprendidos en plena intriga bajo la luz de Daumier',
+          'Bajo las candilejas de la Ópera, una bailarina estrella se desliza ante los bastidores',
+          'Tras la barra de un bullicioso café-concierto, una mirada serena frente al espejo',
+          'Cerramos entre las sombras y luces de gas del Moulin Rouge en Montmartre',
+        ],
+      },
+    },
+  },
 ];
 
 /** A tour with its wording, titles and artists in the visitor's language. */
