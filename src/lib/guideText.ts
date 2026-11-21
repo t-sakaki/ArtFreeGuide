@@ -43,23 +43,68 @@ export function looksLikeModelScaffolding(text: string): boolean {
 }
 
 const GREETING_PATTERNS: Record<string, RegExp> = {
-  ja: /^[　\s]*(こんにちは|こんばんは|ようこそ|皆様|視聴者の皆様|初めまして|はじめまして)[。、！!？?]?[　\s]*/,
-  en: /^[　\s]*(hello|hi|welcome|dear listeners|greetings)[,.!?]?[　\s]*/i,
-  fr: /^[　\s]*(bonjour|bonsoir|bienvenue|salut)[,.!?]?[　\s]*/i,
-  zh: /^[　\s]*(你好|欢迎|您好)[，。！？]?[　\s]*/,
-  es: /^[　\s]*(hola|bienvenido)[,.!?]?[　\s]*/i,
-  de: /^[　\s]*(hallo|guten tag|willkommen)[,.!?]?[　\s]*/i,
-  it: /^[　\s]*(ciao|buongiorno|benvenuto)[,.!?]?[　\s]*/i,
-  ko: /^[　\s]*(안녕하세요|환영합니다)[,.!?]?[　\s]*/,
+  ja: /^[　\s]*(こんにちは|こんばんは|ようこそ|皆様|視聴者の皆様|みなさん|皆さん|初めまして|はじめまして)(?:[。、！!？?]+[　\s]*|[　\s]+|$)/,
+  en: /^[　\s]*(hello|hi|welcome(?!\s+to\b)|dear listeners|greetings)(?:[,.!?]+[　\s]*|[　\s]+|$)/i,
+  fr: /^[　\s]*(bonjour|bonsoir|bienvenue(?!\s+(?:à|au|aux|dans|sur|chez)\b)|salut)(?:[,.!?]+[　\s]*|[　\s]+|$)/i,
+  zh: /^[　\s]*(你好|欢迎|您好|大家好)(?:[，。！？!]+[　\s]*|[　\s]+|$)/,
+  es: /^[　\s]*(hola|bienvenido)(?:[,.!?]+[　\s]*|[　\s]+|$)/i,
+  de: /^[　\s]*(hallo|guten tag|willkommen)(?:[,.!?]+[　\s]*|[　\s]+|$)/i,
+  it: /^[　\s]*(ciao|buongiorno|benvenuto)(?:[,.!?]+[　\s]*|[　\s]+|$)/i,
+  ko: /^[　\s]*(안녕하세요|환영합니다)(?:[,.!?]+[　\s]*|[　\s]+|$)/,
 };
 
 const COMBINED_GREETING_PATTERN =
-  /^[　\s]*(こんにちは|こんばんは|ようこそ|皆様|視聴者の皆様|初めまして|はじめまして|hello|hi|welcome|dear listeners|greetings|bonjour|bonsoir|bienvenue|salut|你好|欢迎|您好|hola|bienvenido|hallo|guten tag|willkommen|ciao|buongiorno|benvenuto|안녕하세요|환영합니다)[。、，,.!！?？]?[　\s]*/i;
+  /^[　\s]*(こんにちは|こんばんは|ようこそ|皆様|視聴者の皆様|みなさん|皆さん|初めまして|はじめまして|hello|hi|welcome(?!\s+to\b)|dear listeners|greetings|bonjour|bonsoir|bienvenue(?!\s+(?:à|au|aux|dans|sur|chez)\b)|salut|你好|欢迎|您好|大家好|hola|bienvenido|hallo|guten tag|willkommen|ciao|buongiorno|benvenuto|안녕하세요|환영합니다)(?:[。、，,.!！?？]+[　\s]*|[　\s]+|$)/i;
+
+function stripGreetingPrefixLoop(input: string, pattern: RegExp): string {
+  let current = input;
+  while (true) {
+    const next = current.replace(pattern, '');
+    if (next === current) return current;
+    current = next;
+  }
+}
+
+function normalizePromptLeakedHeading(line: string): string {
+  return line
+    .replace(/^(\s*#{1,6}\s+)作品への歓迎と導入\s*$/, '$1導入')
+    .replace(/^(\s*#{1,6}\s+)Accueil et introduction\s*$/i, '$1Introduction');
+}
 
 export function stripLeadingGreeting(text: string, locale?: string): string {
   if (!text) return text;
   const pattern = (locale && GREETING_PATTERNS[locale]) || COMBINED_GREETING_PATTERN;
-  return text.replace(pattern, '');
+
+  const lines = text.split('\n');
+  let expectSectionStart = true;
+  const cleanedLines: string[] = [];
+
+  for (const rawLine of lines) {
+    const line = normalizePromptLeakedHeading(rawLine);
+    if (/^\s*$/.test(line)) {
+      if (cleanedLines.length > 0) cleanedLines.push('');
+      continue;
+    }
+
+    if (/^\s*#{1,6}\s+/.test(line)) {
+      cleanedLines.push(line);
+      expectSectionStart = true;
+      continue;
+    }
+
+    if (expectSectionStart) {
+      const stripped = stripGreetingPrefixLoop(line, pattern);
+      if (stripped.trim().length === 0) {
+        continue;
+      }
+      cleanedLines.push(stripped);
+      expectSectionStart = false;
+    } else {
+      cleanedLines.push(line);
+    }
+  }
+
+  return cleanedLines.join('\n').replace(/^\n+/, '');
 }
 
 /**
