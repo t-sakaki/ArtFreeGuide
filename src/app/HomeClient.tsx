@@ -30,6 +30,7 @@ import {
   specFromLegacyMood,
 } from '@/lib/ambient';
 import { PLAYLISTS, Playlist, localizePlaylist } from '@/lib/playlists';
+import { getWorkNavigationState } from '@/lib/workNavigation';
 import { looksLikeModelScaffolding, sanitizeGuideText } from '@/lib/guideText';
 import { suggestedQuestions } from '@/lib/questions';
 import { loadDynamicReadings, toSpokenText } from '@/lib/pronunciation';
@@ -1296,6 +1297,7 @@ export default function HomeClient({
     // Leaving whatever guide was playing — send its partial listen before
     // switching, or it is lost the moment the new entry's state overwrites it.
     finalizeListening(false);
+    exitTour();
     setHistoryIndex(index);
     localStorage.setItem('art_free_guide_history_index', String(index));
 
@@ -1716,7 +1718,7 @@ export default function HomeClient({
     advanceTimerRef.current = setTimeout(() => {
       setNextUpCue(null);
       setPlaylistIndex(playlistIndex + 1);
-      tourTargetRef.current = `${next.title}::${next.artist}`;
+      tourTargetRef.current = `${canonicalName(next.title)}::${canonicalName(next.artist)}`;
       generateGuide(next.title, next.artist);
     }, 4000);
   };
@@ -1740,7 +1742,7 @@ export default function HomeClient({
     if (!item) return;
     setActivePlaylist(tour);
     setPlaylistIndex(index);
-    tourTargetRef.current = `${item.title}::${item.artist}`;
+    tourTargetRef.current = `${canonicalName(item.title)}::${canonicalName(item.artist)}`;
     generateGuide(item.title, item.artist);
   };
 
@@ -1767,6 +1769,33 @@ export default function HomeClient({
     tourTargetRef.current = null;
     setActivePlaylist(null);
     setPlaylistIndex(0);
+  };
+
+  const workNav = getWorkNavigationState({
+    hasActiveTour: activePlaylist !== null,
+    tourIndex: playlistIndex,
+    tourLength: activePlaylist?.items.length ?? 0,
+    historyIndex,
+    historyLength: history.length,
+    loading,
+  });
+
+  const handlePrevWork = () => {
+    if (!workNav.canGoPrev) return;
+    if (workNav.mode === 'tour' && activePlaylist) {
+      startTour(activePlaylist, workNav.prevIndex);
+    } else {
+      loadHistoryEntry(workNav.prevIndex);
+    }
+  };
+
+  const handleNextWork = () => {
+    if (!workNav.canGoNext) return;
+    if (workNav.mode === 'tour' && activePlaylist) {
+      startTour(activePlaylist, workNav.nextIndex);
+    } else {
+      loadHistoryEntry(workNav.nextIndex);
+    }
   };
 
   /** Leaves the guide behind and shows the entrance hall again. */
@@ -3730,15 +3759,15 @@ export default function HomeClient({
                   </span>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={() => startTour(activePlaylist, playlistIndex - 1)}
-                      disabled={playlistIndex === 0 || loading}
+                      onClick={handlePrevWork}
+                      disabled={!workNav.canGoPrev}
                       className="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-300 hover:text-teal-400 disabled:opacity-30 active:scale-95 transition-all"
                     >
                       {t.tour.prev}
                     </button>
                     <button
-                      onClick={() => startTour(activePlaylist, playlistIndex + 1)}
-                      disabled={playlistIndex >= activePlaylist.items.length - 1 || loading}
+                      onClick={handleNextWork}
+                      disabled={!workNav.canGoNext}
                       className="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-300 hover:text-teal-400 disabled:opacity-30 active:scale-95 transition-all"
                     >
                       {t.tour.next}
@@ -4550,10 +4579,10 @@ export default function HomeClient({
         {/* 【下段】 メイン操作コントロールボタン群 */}
         <div className="flex items-center justify-between w-full max-w-lg mx-auto px-1 font-sans">
 
-          {/* 履歴：前の作品へ戻る */}
+          {/* 前の作品へ戻る（ツアー中はツアー順、通常時は履歴順） */}
           <button
-            onClick={() => loadHistoryEntry(historyIndex - 1)}
-            disabled={historyIndex <= 0}
+            onClick={handlePrevWork}
+            disabled={!workNav.canGoPrev}
             className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90 disabled:pointer-events-none"
             title={t.player.prevWork}
           >
@@ -4624,10 +4653,10 @@ export default function HomeClient({
             <span className="text-[8px] sm:text-[9px] font-semibold truncate max-w-full">{t.player.forwardSentence}</span>
           </button>
 
-          {/* 履歴：次の作品へ進む */}
+          {/* 次の作品へ進む（ツアー中はツアー順、通常時は履歴順） */}
           <button
-            onClick={() => loadHistoryEntry(historyIndex + 1)}
-            disabled={historyIndex >= history.length - 1}
+            onClick={handleNextWork}
+            disabled={!workNav.canGoNext}
             className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-slate-400 hover:text-teal-400 disabled:opacity-20 transition-all active:scale-90 disabled:pointer-events-none"
             title={t.player.nextWork}
           >
