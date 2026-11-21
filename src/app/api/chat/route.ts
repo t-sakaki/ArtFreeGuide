@@ -6,6 +6,7 @@ import { getLLMProvider, Message } from '@/lib/llm';
 import { logChatRequest } from '@/lib/llm/logger';
 import { findHistoryGraphConnections } from '../../../lib/graph/queries';
 import type { GraphConnectionHint } from '../../../lib/graph/types';
+import { sanitizeGuideText } from '../../../lib/guideText';
 
 const DEFAULT_CURATOR_SYSTEM_PROMPT = `あなたは美術館の情熱的で知識豊富な音声ガイド・キュレーターです。
 ユーザーから入力された美術作品（およびその作者）に対して、親しみやすくかつ知的なトーンで、以下の要件を満たす素晴らしい音声ガイドを提供してください。
@@ -134,6 +135,25 @@ function parseGuide(payload: string): { standard: string; deep: string } | null 
   }
 }
 
+function sanitizeGuidePayload(payload: string, locale: Locale): string {
+  try {
+    const parsed = JSON.parse(payload);
+    let changed = false;
+    for (const key of ['short', 'standard', 'deep'] as const) {
+      if (typeof parsed?.[key] === 'string') {
+        const cleaned = sanitizeGuideText(parsed[key], locale);
+        if (cleaned !== parsed[key]) {
+          parsed[key] = cleaned;
+          changed = true;
+        }
+      }
+    }
+    return changed ? JSON.stringify(parsed) : payload;
+  } catch {
+    return payload;
+  }
+}
+
 export async function POST(req: Request) {
   let requestStartedAt = 0;
   let cacheStatus: 'hit' | 'miss-generating' | 'miss-error' = 'miss-generating';
@@ -188,7 +208,7 @@ export async function POST(req: Request) {
           cacheStatus = 'hit';
           const graphConnections = await graphConnectionsPromise;
           return NextResponse.json({
-            text: cached.payload,
+            text: sanitizeGuidePayload(cached.payload, locale),
             cached: true,
             store: store.name,
             ...(graphConnections.length > 0 ? { graphConnections } : {}),
@@ -240,6 +260,8 @@ export async function POST(req: Request) {
       if (isFullLengthGuide(cleanText) || attempt >= 1) break;
       console.warn(`Guide unusable or too short on attempt ${attempt + 1} for "${title}"`);
     }
+
+    cleanText = sanitizeGuidePayload(cleanText, locale);
 
     // A parseable but incomplete payload is returned for the client to salvage —
     // but archiving it would serve the same broken guide to everyone after.

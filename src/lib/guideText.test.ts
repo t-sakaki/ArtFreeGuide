@@ -81,4 +81,31 @@ describe('sanitizeGuideText and stripLeadingGreeting', () => {
     expect(stripLeadingGreeting('Hallo Welt', 'de')).toBe('Welt');
     expect(stripLeadingGreeting('Ciao mondo', 'it')).toBe('mondo');
   });
+
+  it('strips greetings that appear right after markdown section headings', () => {
+    expect(
+      sanitizeGuideText('## 導入\nこんにちは。今、私たちの目の前にあるのはクロード・モネが1872年に描いた『印象・日の出』です。')
+    ).toBe('## 導入\n今、私たちの目の前にあるのはクロード・モネが1872年に描いた『印象・日の出』です。');
+
+    expect(
+      sanitizeGuideText('## 作品への歓迎と導入\nこんにちは。今、私たちの目の前にあるのは、クロード・モネの『睡蓮』です。')
+    ).toBe('## 導入\n今、私たちの目の前にあるのは、クロード・モネの『睡蓮』です。');
+
+    expect(
+      sanitizeGuideText('## 導入\n\nみなさん、こんにちは。\n本作は静かな光に満ちています。')
+    ).toBe('## 導入\n\n本作は静かな光に満ちています。');
+
+    expect(
+      sanitizeGuideText('\n## Accueil et introduction\nBonjour. Devant vous se trouve « Impression, soleil levant ».', 'fr')
+    ).toBe('## Introduction\nDevant vous se trouve « Impression, soleil levant ».');
+  });
+
+  it('does not corrupt non-greeting words or "Welcome to <Title>" phrases', () => {
+    expect(sanitizeGuideText('History shows this canvas was repainted twice.', 'en')).toBe(
+      'History shows this canvas was repainted twice.'
+    );
+    expect(
+      sanitizeGuideText("## Introduction\nWelcome to Vincent van Gogh's The Starry Night, painted in 1889.", 'en')
+    ).toBe("## Introduction\nWelcome to Vincent van Gogh's The Starry Night, painted in 1889.");
+  });
 });

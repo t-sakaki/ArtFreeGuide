@@ -92,4 +92,22 @@ describe('guide JSON regeneration', () => {
     expect((await POST(request())).status).toBe(500);
     expect(generateResponse).toHaveBeenCalledTimes(1);
   });
+
+  it('strips leading and post-heading greetings before archiving and returning', async () => {
+    const dirtyGuide = JSON.stringify({
+      short: 'こんにちは。星月夜の概要です。',
+      standard: `## 導入\nこんにちは。${'文'.repeat(300)}`,
+      deep: `## 作品への歓迎と導入\nこんにちは。${'文'.repeat(400)}`,
+    });
+    const cleanGuide = JSON.stringify({
+      short: '星月夜の概要です。',
+      standard: `## 導入\n${'文'.repeat(300)}`,
+      deep: `## 導入\n${'文'.repeat(400)}`,
+    });
+    generateResponse.mockResolvedValue(dirtyGuide);
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect((await response.json()).text).toBe(cleanGuide);
+    expect(put).toHaveBeenCalledExactlyOnceWith('星月夜', '', cleanGuide, 'ja');
+  });
 });
