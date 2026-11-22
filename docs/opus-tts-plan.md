@@ -82,12 +82,12 @@ ElevenLabs has downgraded to the **Free plan (10,000 credits/month)**. Verified 
    ```
 
 ### Gemini dual-key operation (`--key-tier`, default: `free`)
-Two Gemini API keys are configured in `.env.local` (never committed; keys are never logged):
+Configure Gemini API keys in `.env.local` as needed (never committed; keys are never logged). The names below describe intended roles, not verified billing status:
 - `GEMINI_API_KEY`: Tier 1 key (`artfreeguide-tts-local`, ~RPM 10 / RPD 100).
 - `GEMINI_API_KEY_FREE`: Free-tier key (`artfreeguide-tts-free`, ~RPM 3 / **RPD 10**).
 - `GOOGLE_AI_API_KEY` is treated as an alias of `GEMINI_API_KEY`.
 
-**Daily gradual mode (default, `--key-tier=free`)**: synthesis starts on the free key with a 20s request interval (RPM 3) and a hard cap of **10 free-key API requests per run** (matching RPD 10; counted per segment request, not per artwork). When the budget is hit or the free key returns `429` / `RESOURCE_EXHAUSTED`, the run **stops safely, reports the remaining unprocessed artworks, and never silently consumes the paid primary key**. Re-run daily to expand coverage gradually.
+**Daily gradual mode (default, `--key-tier=free`)**: synthesis requires `GEMINI_API_KEY_FREE` and stops before any TTS API call when it is absent, even if a primary key exists. Confirm billing is disabled on that key's project in Google AI Studio before configuring it; the script cannot infer billing status from a key. Synthesis starts on the free key with a 20s request interval (RPM 3) and a hard cap of **10 free-key API requests per run** (matching RPD 10; counted per segment request, not per artwork). When the budget is hit or the free key returns `429` / `RESOURCE_EXHAUSTED`, the run **stops safely, reports the remaining unprocessed artworks, and never silently consumes the paid primary key**. Re-run daily to expand coverage gradually.
 **Bulk mode (`--key-tier=primary`)**: starts on the Tier 1 key with a 6s request interval (RPM 10). On a primary quota/rate error, remaining jobs fall back to the free key (subject to the same free-budget cap).
 Key usage is logged only as `[key:free]` / `[key:primary]` tier labels — never key values.
 
@@ -97,3 +97,31 @@ Key usage is logged only as `[key:free]` / `[key:primary]` tier labels — never
 | **Gemini Flash TTS (`gemini-2.5-flash-preview-tts`)** | Google AI Studio quota via `GEMINI_API_KEY` | Multilingual (`Kore`, `Puck`, `Aoede`, `Charon`), transcoded to Ogg/Opus via `ffmpeg` | Segment-by-segment duration timings (`buildSegmentTimingsFromDurations`) | **Primary choice for post-Creator expansion (`--provider=gemini`)** |
 | **Web Speech API (Client Fallback)** | Unlimited ($0) | Device-dependent | Native utterance `onend` per segment | **Always active zero-cost fallback for uncached works, Q&A, Safari `< 18.4`** |
 | **Azure AI Speech (Neural TTS, F0)** | 500k chars/mo free (`F0`) | `Nanami`, `Keita`, etc. | Native `WordBoundary` / `SentenceBoundary` | Adapter implemented, **not enabled** |
+
+
+### No-charge setup verification (2026-11-22, Refs #175)
+The local checkout has a primary Gemini key, but no free-key setting was found.
+Its billing status is unknown, so no synthesis request was made. Do not copy an
+unverified primary key into `GEMINI_API_KEY_FREE` to bypass the check.
+
+1. In Google AI Studio, confirm an unbilled project, the available TTS models,
+   and its actual quota. Key names and per-run request caps do not prove zero cost.
+2. Set `GEMINI_API_KEY_FREE` locally for that verified project. No Worker secret
+   is needed for offline synthesis. Do not commit or send keys in chat.
+3. Inspect the existing archive without calling any TTS provider:
+   ```bash
+   node scripts/pregenerate_narration.mjs --dry-run --provider=gemini --env=staging --locales=ja,en --modes=standard --require-artist --dedupe-artwork --limit=1
+   ```
+   Dry-run reads D1 and plans jobs; it does not verify Gemini credentials or
+   synthesize audio. For a complete uncached inventory add
+   `--skip-existing-latest --check-env=production` (R2 reads can take time).
+4. After billing and model availability are confirmed, generate one staging
+   track with `--key-tier=free --limit=1 --max-chars=3000`, listen and verify
+   `/api/narration` plus its audio URL. A track may need more than 10 segment
+   requests and stop before completion. The cap is per run, not a daily ledger.
+5. Human review and production promotion follow staging verification. This
+   session does not perform production promotion.
+
+The adapter retains `gemini-2.5-flash-preview-tts` and its `generateContent`
+request schema. Newer Gemini TTS models can require a different API/schema;
+do not switch model IDs blindly. See the [official TTS guide](https://ai.google.dev/gemini-api/docs/speech-generation).

@@ -122,13 +122,15 @@ export const geminiAdapter = {
     zh: 'Kore',
   },
 
-  async checkPreflight({ repoRoot }) {
+  async checkPreflight({ repoRoot, keyTier = 'free' }) {
     const { primary, free, hasFree } = resolveGeminiKeyConfig(repoRoot);
-    if (!primary && !free) {
+    if (keyTier === 'free' ? !free : !primary) {
       return {
         ok: false,
         missingKey: true,
-        message: 'GEMINI_API_KEY (or GOOGLE_AI_API_KEY) is missing in env or .env.local.',
+        message: keyTier === 'free'
+          ? 'Free mode requires GEMINI_API_KEY_FREE from a verified unbilled project; primary key will not be used.'
+          : 'Primary mode requires GEMINI_API_KEY (or GOOGLE_AI_API_KEY).',
       };
     }
     return {
@@ -141,8 +143,15 @@ export const geminiAdapter = {
 
   async synthesize(job, { helpers, repoRoot, geminiKeyContext, minRequestIntervalMs = 0 }) {
     const keyConfig = resolveGeminiKeyConfig(repoRoot);
-    if (!keyConfig.primary && !keyConfig.free) {
-      return { status: 'error', fatal: true, error: 'GEMINI_API_KEY is missing.' };
+    const activeTier = geminiKeyContext?.activeTier || 'free';
+    const activeKey = activeTier === 'free' ? keyConfig.free : keyConfig.primary;
+    if (!activeKey) {
+      return {
+        status: 'error', fatal: true, keyTier: activeTier,
+        error: activeTier === 'free'
+          ? 'Free mode requires GEMINI_API_KEY_FREE; primary key will not be used.'
+          : 'Primary mode requires GEMINI_API_KEY (or GOOGLE_AI_API_KEY).',
+      };
     }
 
     const {
@@ -252,21 +261,6 @@ export const geminiAdapter = {
       };
     };
 
-    let activeTier = geminiKeyContext?.activeTier || 'primary';
-    let activeKey = activeTier === 'free' && keyConfig.free ? keyConfig.free : (keyConfig.primary || keyConfig.free);
-    if (!keyConfig.primary && keyConfig.free) {
-      // Only the free key is configured: run on it regardless of the requested tier.
-      activeTier = 'free';
-      activeKey = keyConfig.free;
-    } else if (activeTier === 'free' && !keyConfig.free && keyConfig.primary) {
-      // GEMINI_API_KEY_FREE is not set: fall back to primary-only operation (default rate limits).
-      activeTier = 'primary';
-      activeKey = keyConfig.primary;
-      if (geminiKeyContext) {
-        geminiKeyContext.activeTier = 'primary';
-      }
-    }
-
     let result = await runWithKey(activeTier, activeKey);
 
     // Fallback trigger (bulk mode): quota/rate error on the primary key switches to the free key.
@@ -284,9 +278,7 @@ export const geminiAdapter = {
       if (geminiKeyContext) {
         geminiKeyContext.activeTier = 'free';
       }
-      activeTier = 'free';
-      activeKey = keyConfig.free;
-      result = await runWithKey(activeTier, activeKey);
+      result = await runWithKey('free', keyConfig.free);
     }
 
     return result;

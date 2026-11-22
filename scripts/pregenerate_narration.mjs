@@ -167,6 +167,9 @@ function parseArgs(argv) {
       process.exit(1);
     }
   }
+  if (!['free', 'primary'].includes(opts.geminiKeyTier)) {
+    throw new Error('Invalid --key-tier: use free or primary.');
+  }
   return opts;
 }
 
@@ -810,7 +813,7 @@ async function main() {
 
   for (const providerName of activeProviders) {
     const adapter = getTtsAdapter(providerName);
-    const preflight = await adapter.checkPreflight({ repoRoot: REPO_ROOT });
+    const preflight = await adapter.checkPreflight({ repoRoot: REPO_ROOT, keyTier: opts.geminiKeyTier });
     if (preflight.missingKey) {
       console.error(preflight.message);
       process.exit(1);
